@@ -681,3 +681,24 @@
     transition: none;
   }
 }
+
+/* Gallery Mode Transitions */
+.cosmos-stage {
+  transition: opacity 0.5s ease, filter 0.5s ease;
+}
+
+.cosmos-stage.hidden-behind-gallery {
+  opacity: 0;
+  filter: blur(10px);
+  pointer-events: none;
+}
+
+.sidebar {
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+}
+
+.sidebar.hidden {
+  transform: translateX(-120%);
+  opacity: 0;
+  pointer-events: none;
+}

@@ -3,6 +3,7 @@ import StarField from './components/Graph/StarField';
 import ConstellationGraph, { DEMO_PEOPLE } from './components/Graph/ConstellationGraph';
 import PersonModal from './components/PersonModal/PersonModal';
 import AddPersonModal from './components/AddPersonModal/AddPersonModal';
+import MemoryCarousel from './components/MemoryCarousel/MemoryCarousel';
 import './App.css';
 
 const FILTERS = [
@@ -42,6 +43,20 @@ function App() {
   const [deletedHistory, setDeletedHistory] = useState([]); // undo stack: [{type:'person'|'category', ids:[]}]
   const [photosByPerson, setPhotosByPerson] = useState({}); // { personId: [ { public_id, secure_url, ... }, ... ] }
   const [people, setPeople] = useState(DEMO_PEOPLE);
+  
+  const [viewMode, setViewMode] = useState('graph'); // 'graph' | 'gallery'
+
+  const allPhotos = useMemo(() => {
+    const photos = [];
+    Object.entries(photosByPerson).forEach(([personId, pList]) => {
+      const person = people.find(p => p.id === personId);
+      if (person) {
+        pList.forEach(photo => photos.push({ ...photo, personName: person.name }));
+      }
+    });
+    // Sort by upload date, newest first
+    return photos.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+  }, [photosByPerson, people]);
 
   const peopleByCategory = useMemo(() => {
     const map = {};
@@ -158,7 +173,7 @@ function App() {
 
   return (
     <div className="app">
-      <div className={`cosmos-stage ${cinematicState}`} style={stageStyle}>
+      <div className={`cosmos-stage ${cinematicState} ${viewMode === 'gallery' ? 'hidden-behind-gallery' : ''}`} style={stageStyle}>
         <StarField />
         <div className="graph-container">
           <ConstellationGraph
@@ -175,6 +190,13 @@ function App() {
         </div>
       </div>
 
+      {viewMode === 'gallery' && (
+        <MemoryCarousel 
+          photos={allPhotos} 
+          onClose={() => setViewMode('graph')} 
+        />
+      )}
+
       <header className="header">
         <div className="logo">
           <svg className="logo-glyph" width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -190,8 +212,19 @@ function App() {
         {/* Center Toolbar */}
         <div className="toolbar">
           <button
+            className={`tool-btn ${viewMode === 'gallery' ? 'active' : ''}`}
+            onClick={() => setViewMode(v => v === 'gallery' ? 'graph' : 'gallery')}
+            title="Memory Gallery — view all uploaded photos"
+          >
+            📸
+          </button>
+          <div className="toolbar-divider" />
+          <button
             className={`tool-btn ${activeTool === 'snip' ? 'active' : ''}`}
-            onClick={() => setActiveTool(t => t === 'snip' ? null : 'snip')}
+            onClick={() => {
+              setActiveTool(t => t === 'snip' ? null : 'snip');
+              setViewMode('graph'); // exit gallery if entering snip tool
+            }}
             title="Snip tool — cut a connection to delete a node"
           >
             ✂️
@@ -211,7 +244,7 @@ function App() {
         </div>
       </header>
 
-      <aside className="sidebar">
+      <aside className={`sidebar ${viewMode === 'gallery' ? 'hidden' : ''}`}>
         <div className="sidebar-label">EXPLORER</div>
         <div className="sidebar-tree">
           <div className="tree-group">
