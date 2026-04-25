@@ -4,6 +4,7 @@ import ConstellationGraph, { DEMO_PEOPLE } from './components/Graph/Constellatio
 import PersonModal from './components/PersonModal/PersonModal';
 import AddPersonModal from './components/AddPersonModal/AddPersonModal';
 import MemoryCarousel from './components/MemoryCarousel/MemoryCarousel';
+import Landing from './components/Landing/Landing';
 import './App.css';
 
 const FILTERS = [
@@ -28,6 +29,7 @@ const CATEGORY_COLORS = {
 };
 
 function App() {
+  const [view, setView] = useState('landing');
   const [activeFilters, setActiveFilters] = useState(() => new Set());
   const [attachedNodes, setAttachedNodes] = useState([]);
   const [promptText, setPromptText] = useState('');
@@ -182,6 +184,10 @@ function App() {
     : undefined;
 
   const showModal = !!selectedPerson || modalPhase === 'zooming-out';
+
+  if (view === 'landing') {
+    return <Landing onEnter={() => setView('app')} />;
+  }
 
   return (
     <div className="app">

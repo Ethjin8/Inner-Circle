@@ -1,0 +1,40 @@
+.landing {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #020108;
+}
+
+.landing-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.landing-foreground {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+  z-index: 2;
+  object-fit: cover;
+  object-position: bottom center;
+}
+
+.landing-hint {
+  position: absolute;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  z-index: 3;
+  color: rgba(255, 220, 180, 0.55);
+  font-family: var(--font-display, ui-serif, Georgia, serif);
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
