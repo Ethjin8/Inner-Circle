@@ -1,3 +1,13 @@
+import {
+  TENURE_KEYS,
+  FREQUENCY_KEYS,
+  LAST_INTERACTION_KEYS,
+  CHANNEL_KEYS,
+  SUPPORT_KEYS,
+  KNOWS_KEYS,
+  RELATIONSHIP_TYPE_KEYS,
+} from '../constants/personSchema.js';
+
 const LIVE_MODEL = 'models/gemini-3.1-flash-live-preview';
 const EXTRACT_MODEL = 'models/gemini-2.5-flash';
 
@@ -89,8 +99,9 @@ Style:
 When the user sends the text "EXTRACT_JSON", respond ONLY with these labeled sentences — no extra commentary, say "unknown" for anything not mentioned, and ALWAYS use exactly these labels in this exact order:
 "Name is [full name]. Relationship type is [family|friend|classmate|coworker|professional|romantic|mentor|other]. Tenure is [just_met|months|one_year|few_years|five_plus|lifetime|unknown]. Frequency is [daily|weekly|monthly|few_times_a_year|rarely|unknown]. Last interaction is [today|this_week|this_month|this_season|this_year|over_a_year|unknown]. Channels are [comma list of in_person|text|call|video_call|dm|email|other, or unknown]. They show up for me is [yes|sometimes|not_really|not_sure|unknown]. I show up for them is [yes|sometimes|not_really|not_sure|unknown]. Knows about me is [most_of_it|some_of_it|not_really|not_sure|unknown]. Birthday is [YYYY-MM-DD or unknown]. Notes are [a 1-3 sentence prose summary of the relationship in the user's own framing — closeness, cadence, emotional tone — or unknown]. How we met is [value or unknown]. School is [value or unknown]. Work is [value or unknown]. Hobbies are [comma list or unknown]. Sports are [comma list or unknown]. Favorite foods are [comma list or unknown]. Favorite music is [comma list or unknown]. Memories are [comma list or unknown]. Important events are [comma list or unknown]. Future plans are [comma list or unknown]."`;
 
-// Parse the labeled-sentence response spoken by the model (ASR-friendly, no JSON needed)
-function parseLabeledSpeech(raw) {
+// Parse the labeled-sentence response spoken by the model (ASR-friendly,
+// no JSON needed). Exported for unit tests.
+export function parseLabeledSpeech(raw) {
   const t = raw.toLowerCase().replace(/["""]/g, '');
 
   const field = (pattern) => {
@@ -108,11 +119,27 @@ function parseLabeledSpeech(raw) {
     return v.split(',').map((s) => s.trim()).filter(Boolean);
   };
 
+  const enumField = (pattern, allowed) => {
+    const v = field(pattern);
+    return v && allowed.includes(v) ? v : null;
+  };
+
   const name = field(/name is ([^.]+)/);
-  const relType = field(/relationship type is ([^.]+)/);
+  const relTypeRaw = field(/relationship type is ([^.]+)/);
+  const relType = RELATIONSHIP_TYPE_KEYS.find((r) => relTypeRaw?.includes(r)) ?? 'friend';
+
+  const tenure           = enumField(/tenure is ([^.]+)/,           TENURE_KEYS);
+  const frequency        = enumField(/frequency is ([^.]+)/,        FREQUENCY_KEYS);
+  const lastInteraction  = enumField(/last interaction is ([^.]+)/, LAST_INTERACTION_KEYS);
+  const channels         = list(/channels are ([^.]+)/).filter((c) => CHANNEL_KEYS.includes(c));
+  const theyShowUp       = enumField(/they show up for me is ([^.]+)/, SUPPORT_KEYS);
+  const iShowUp          = enumField(/i show up for them is ([^.]+)/,  SUPPORT_KEYS);
+  const knowsAboutMe     = enumField(/knows about me is ([^.]+)/,      KNOWS_KEYS);
+
   const birthday = field(/birthday is ([\d-]+)/);
-  // Notes can span multiple sentences (and contain periods), so terminate on
-  // the next labeled field instead of on the first period.
+
+  // Notes can span multiple sentences (and contain periods), so terminate
+  // on the next labeled field instead of on the first period.
   const notesMatch = t.match(/notes are (.+?)\s+how we met is /);
   const notesRaw = notesMatch?.[1]?.trim().replace(/\.$/, '') ?? null;
   const notes = (notesRaw === 'unknown' || !notesRaw) ? null : notesRaw;
@@ -122,8 +149,14 @@ function parseLabeledSpeech(raw) {
     birthday: birthday || null,
     ...(notes ? { notes } : {}),
     relationship: {
-      type: ['family','friend','classmate','coworker','professional','romantic','mentor','other']
-        .find((r) => relType?.includes(r)) ?? 'friend',
+      type: relType,
+      tenure,
+      frequency,
+      last_interaction: lastInteraction,
+      channels,
+      they_show_up_for_me: theyShowUp,
+      i_show_up_for_them: iShowUp,
+      knows_about_me: knowsAboutMe,
     },
     context: {
       how_we_met: field(/how we met is ([^.]+)/),
