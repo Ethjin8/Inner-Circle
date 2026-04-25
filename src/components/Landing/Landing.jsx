@@ -149,12 +149,10 @@ export default function Landing({ onEnter, user }) {
   const canvasRef = useRef(null);
   const zoomTimerRef = useRef(null);
   const zoomingRef = useRef(false);
-  const zoomStartRef = useRef(0);
 
   const triggerEnter = () => {
     if (zoomingRef.current) return;
     zoomingRef.current = true;
-    zoomStartRef.current = performance.now();
     setZooming(true);
     onEnter();
   };
@@ -227,13 +225,7 @@ export default function Landing({ onEnter, user }) {
       ctx.clearRect(0, 0, w, h);
       drawSkyGradient(ctx, w, h);
 
-      let yRatio = 0.25;
-      if (zoomingRef.current) {
-        const elapsed = performance.now() - zoomStartRef.current;
-        const p = Math.min(1, elapsed / 1400);
-        yRatio = 0.25 + (0.5 - 0.25) * easeInOutCubic(p);
-      }
-      drawNorthStar(ctx, w, h, t, yRatio);
+      drawNorthStar(ctx, w, h, t, 0.45);
 
       // // Ambient stars
       // ambient.forEach((s) => {
