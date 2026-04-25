@@ -28,13 +28,12 @@ const CATEGORY_COLORS = {
 };
 
 function App() {
-  const [activeFilter, setActiveFilter] = useState(null);
+  const [activeFilters, setActiveFilters] = useState(() => new Set());
   const [attachedNodes, setAttachedNodes] = useState([]);
   const [promptText, setPromptText] = useState('');
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [addPersonOpen, setAddPersonOpen] = useState(false);
   const [zoomTarget, setZoomTarget] = useState(null);
-  const [cinematicState, setCinematicState] = useState('idle');
   const [focusedCategory, setFocusedCategory] = useState(null);
   const [expandedCats, setExpandedCats] = useState(new Set());
   const [expandedPeople, setExpandedPeople] = useState(new Set());
@@ -89,29 +88,31 @@ function App() {
   const handleNodeClick = useCallback((node) => {
     if (node.isCategory) {
       setFocusedCategory(node.category);
-      setExpandedCats(prev => new Set(prev).add(node.category)); // Ensure sidebar folder opens
       return;
     }
-    setZoomTarget({ x: node.x, y: node.y });
-    setCinematicState('zooming-in');
     setSelectedPerson(node);
-    setTimeout(() => setCinematicState('open'), 380);
   }, []);
 
   const handleNodeDoubleClick = useCallback((node) => {
+    if (node.isCategory) return;
     setAttachedNodes((prev) => {
       if (prev.some((n) => n.id === node.id)) return prev;
       return [...prev, node];
     });
   }, []);
 
+  const toggleBranchHighlight = useCallback((catKey) => {
+    setActiveFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(catKey)) next.delete(catKey);
+      else next.add(catKey);
+      return next;
+    });
+  }, []);
+
   const closeModal = useCallback(() => {
-    setCinematicState('zooming-out');
-    setTimeout(() => {
-      setSelectedPerson(null);
-      setZoomTarget(null);
-      setCinematicState('idle');
-    }, 280);
+    setSelectedPerson(null);
+    setZoomTarget(null);
   }, []);
 
   const removeAttachedNode = useCallback((nodeId) => {
@@ -169,15 +170,15 @@ function App() {
     ? { transformOrigin: `${zoomTarget.x}px ${zoomTarget.y}px` }
     : undefined;
 
-  const showModal = cinematicState !== 'idle' && selectedPerson;
+  const showModal = !!selectedPerson;
 
   return (
     <div className="app">
-      <div className={`cosmos-stage ${cinematicState} ${viewMode === 'gallery' ? 'hidden-behind-gallery' : ''}`} style={stageStyle}>
+      <div className={`cosmos-stage ${showModal ? 'modal-open' : ''} ${viewMode === 'gallery' ? 'hidden-behind-gallery' : ''}`} style={stageStyle}>
         <StarField />
         <div className="graph-container">
           <ConstellationGraph
-            activeFilter={activeFilter}
+            activeFilters={activeFilters}
             focusedCategory={focusedCategory}
             onZoomOut={() => setFocusedCategory(null)}
             onNodeClick={handleNodeClick}
@@ -216,7 +217,10 @@ function App() {
             onClick={() => setViewMode(v => v === 'gallery' ? 'graph' : 'gallery')}
             title="Memory Gallery — view all uploaded photos"
           >
-            📸
+            <svg className="tool-icon" width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2.5 5.5h2.2l1.1-1.6h4.4l1.1 1.6h2.2a1.5 1.5 0 0 1 1.5 1.5v6.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 13.5V7a1.5 1.5 0 0 1 1.5-1.5z" />
+              <circle cx="8" cy="10" r="2.8" />
+            </svg>
           </button>
           <div className="toolbar-divider" />
           <button
@@ -227,7 +231,13 @@ function App() {
             }}
             title="Snip tool — cut a connection to delete a node"
           >
-            ✂️
+            <svg className="tool-icon" width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="4" cy="13" r="2.2" />
+              <circle cx="14" cy="13" r="2.2" />
+              <line x1="5.6" y1="11.4" x2="15.5" y2="2.5" />
+              <line x1="12.4" y1="11.4" x2="2.5" y2="2.5" />
+              <line x1="9" y1="9" x2="11" y2="7" />
+            </svg>
           </button>
           <button
             className={`tool-btn ${deletedHistory.length === 0 ? 'disabled' : ''}`}
@@ -260,45 +270,45 @@ function App() {
           {Object.entries(peopleByCategory).map(([catKey, data]) => {
             const isExpanded = expandedCats.has(catKey);
             if (data.people.length === 0) return null;
-            const isCatFocused = focusedCategory === catKey;
+            const isBranchActive = activeFilters.has(catKey);
             return (
-              <div key={catKey} className="tree-group">
+              <div key={catKey} className="tree-group cat-group">
                 <div
                   className="tree-item node-cat level-1"
-                  style={{ background: `${data.color}22`, marginBottom: '2px' }}
+                  style={{ background: `${data.color}22` }}
                   onClick={() => toggleCat(catKey)}
                 >
                   <div className={`chevron ${isExpanded ? 'expanded' : ''}`}>›</div>
                   <span className="filter-dot" style={{ background: data.color }} />
                   <span style={{ flex: 1 }}>{data.label}</span>
-                  <div
-                    className={`zoom-icon ${isCatFocused ? 'zoom-out' : ''}`}
-                    onClick={(e) => { e.stopPropagation(); setFocusedCategory(isCatFocused ? null : catKey); }}
-                    title={isCatFocused ? 'Back to Galaxy' : 'Focus Category'}
-                  >
-                    {isCatFocused ? '🔎' : '🔍'}
-                  </div>
+                  <button
+                    type="button"
+                    className={`branch-toggle ${isBranchActive ? 'active' : ''}`}
+                    style={{
+                      borderColor: data.color,
+                      background: isBranchActive ? data.color : 'transparent',
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleBranchHighlight(catKey);
+                    }}
+                    title={isBranchActive ? 'Clear highlight' : `Highlight ${data.label}`}
+                    aria-pressed={isBranchActive}
+                  />
                 </div>
                 {isExpanded && (
                   <div className="tree-children">
                     {data.people.map(person => {
                       const isPersonExpanded = expandedPeople.has(person.id);
                       return (
-                        <div key={person.id} className="tree-group">
+                        <div key={person.id} className="tree-group person-group">
                           <div
                             className="tree-item node-person level-2"
-                            style={{ background: `${data.color}15`, marginBottom: '1px' }}
+                            style={{ background: `${data.color}15` }}
                             onClick={() => togglePerson(person.id)}
                           >
                             <div className={`chevron ${isPersonExpanded ? 'expanded' : ''}`}>›</div>
                             <span style={{ flex: 1 }}>{person.name}</span>
-                            <div
-                              className="zoom-icon"
-                              onClick={(e) => { e.stopPropagation(); handleNodeClick(person); }}
-                              title="View Card"
-                            >
-                              🔍
-                            </div>
                           </div>
                           {isPersonExpanded && (
                             <div className="person-info-panel level-3">
@@ -330,15 +340,11 @@ function App() {
         </button>
       )}
 
-      {cinematicState !== 'idle' && (
-        <div className={`bokeh-overlay ${cinematicState}`} />
-      )}
-
       {showModal && (
         <PersonModal
           person={selectedPerson}
           originPoint={zoomTarget}
-          phase={cinematicState}
+          phase="open"
           onClose={closeModal}
           photosByPerson={photosByPerson}
           onPhotosChange={handlePhotosChange}

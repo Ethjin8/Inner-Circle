@@ -207,7 +207,13 @@ function clampToBounds(node, width, height) {
   node.baseY = Math.max(PADDING_TOP + r, Math.min(height - PADDING_BOTTOM - r, node.baseY));
 }
 
-export default function ConstellationGraph({ activeFilter, focusedCategory, onZoomOut, people = DEMO_PEOPLE, onNodeClick, onNodeDoubleClick, activeTool, onSnip, deletingIds = [] }) {
+export default function ConstellationGraph({ activeFilters, focusedCategory, onZoomOut, people = DEMO_PEOPLE, onNodeClick, onNodeDoubleClick, activeTool, onSnip, deletingIds = [] }) {
+  const filterSet = activeFilters instanceof Set ? activeFilters : new Set();
+  const hasFilter = filterSet.size > 0;
+  const isDimmed = (cat) => {
+    if (focusedCategory) return cat !== focusedCategory;
+    return hasFilter && !filterSet.has(cat);
+  };
   const canvasRef = useRef(null);
   const nodesRef = useRef([]);
   const animRef = useRef(null);
@@ -216,20 +222,20 @@ export default function ConstellationGraph({ activeFilter, focusedCategory, onZo
   const timeRef = useRef(0);
   const mouseRef = useRef({ x: 0, y: 0 });
   const clickTimerRef = useRef(null);
-  const globalPanRef = useRef({ x: 0, y: 0 });
+  const userPanRef = useRef({ x: 0, y: 0 });
+  const youPosRef = useRef({ x: 0, y: 0 });
   const camRef = useRef({ x: 0, y: 0, scale: 1, targetX: 0, targetY: 0, targetScale: 1 });
-  const dragStateRef = useRef({ active: false, nodeId: null, startMx: 0, startMy: 0, startNx: 0, startNy: 0 });
+  const dragStateRef = useRef({ active: false, nodeId: null, startMx: 0, startMy: 0, startNx: 0, startNy: 0, moved: false, suppressClick: false });
   const particlesRef = useRef([]); // [{x,y,vx,vy,r,alpha,color,life,maxLife}]
   const prevDeletingRef = useRef([]); // track when ids newly enter deleting
 
   const initNodes = useCallback((width, height) => {
-    const cx = width / 2 + globalPanRef.current.x;
-    const cy = height / 2 - Math.min(width, height) * 0.05 + globalPanRef.current.y;
+    const cx = width / 2;
+    const cy = height / 2 - Math.min(width, height) * 0.05;
 
     const grouped = {};
     for (const p of people) {
       const cat = p.relationship?.type ?? 'other';
-      if (activeFilter && activeFilter !== cat) continue;
       if (!grouped[cat]) grouped[cat] = [];
       grouped[cat].push(p);
     }
@@ -321,7 +327,14 @@ export default function ConstellationGraph({ activeFilter, focusedCategory, onZo
     });
 
     nodesRef.current = nodes;
-  }, [people, activeFilter]);
+  }, [people]);
+
+  // Whenever focus mode changes, reset user pan so the focused cat (or galaxy)
+  // lands cleanly centered regardless of prior panning.
+  useEffect(() => {
+    userPanRef.current.x = 0;
+    userPanRef.current.y = 0;
+  }, [focusedCategory]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -342,8 +355,8 @@ export default function ConstellationGraph({ activeFilter, focusedCategory, onZo
     resize();
 
     const getCenter = () => ({
-      cx: width / 2 + globalPanRef.current.x,
-      cy: height / 2 - Math.min(width, height) * 0.05 + globalPanRef.current.y,
+      cx: width / 2,
+      cy: height / 2 - Math.min(width, height) * 0.05,
     });
 
     const screenToWorld = (sx, sy) => {
@@ -357,8 +370,11 @@ export default function ConstellationGraph({ activeFilter, focusedCategory, onZo
     const hitTest = (mx, my) => {
       const { cx, cy } = getCenter();
       const { wx, wy } = screenToWorld(mx, my);
-      const cdist = Math.sqrt((wx - cx) ** 2 + (wy - cy) ** 2);
-      if (cdist < 44 && !focusedCategory) return { id: 'center', isCenter: true };
+      // YOU lives in world space at (cx + youOffset)
+      const youX = cx + youPosRef.current.x;
+      const youY = cy + youPosRef.current.y;
+      const ydist = Math.sqrt((wx - youX) ** 2 + (wy - youY) ** 2);
+      if (ydist < 44 && !focusedCategory) return { id: 'center', isCenter: true };
       for (const node of [...nodesRef.current].reverse()) {
         if (Math.sqrt((wx - node.x) ** 2 + (wy - node.y) ** 2) < node.radius + 6) return node;
       }
@@ -389,21 +405,31 @@ export default function ConstellationGraph({ activeFilter, focusedCategory, onZo
       if (activeTool === 'snip') return;
       const rect = canvas.getBoundingClientRect();
       const node = hitTest(e.clientX - rect.left, e.clientY - rect.top);
-      if (!node) return;
       dragState.active = true;
-      dragState.nodeId = node.id ?? 'center';
       dragState.startMx = e.clientX;
       dragState.startMy = e.clientY;
-      if (node.isCenter) {
-        dragState.startNx = globalPanRef.current.x;
-        dragState.startNy = globalPanRef.current.y;
+      dragState.moved = false;
+      dragState.suppressClick = false;
+      if (!node) {
+        dragState.nodeId = 'pan';
+        dragState.startNx = userPanRef.current.x;
+        dragState.startNy = userPanRef.current.y;
+      } else if (node.isCenter) {
+        dragState.nodeId = 'you';
+        dragState.startNx = youPosRef.current.x;
+        dragState.startNy = youPosRef.current.y;
       } else {
+        dragState.nodeId = node.id;
         dragState.startNx = node.manualOffX ?? 0;
         dragState.startNy = node.manualOffY ?? 0;
       }
     };
 
-    const onMouseUp = () => { dragState.active = false; dragState.nodeId = null; };
+    const onMouseUp = () => {
+      if (dragState.active && dragState.moved) dragState.suppressClick = true;
+      dragState.active = false;
+      dragState.nodeId = null;
+    };
 
     const onMouseMove = (e) => {
       const rect = canvas.getBoundingClientRect();
@@ -412,13 +438,29 @@ export default function ConstellationGraph({ activeFilter, focusedCategory, onZo
       if (dragState.active && dragState.nodeId) {
         const dxPx = e.clientX - dragState.startMx;
         const dyPx = e.clientY - dragState.startMy;
+        if (!dragState.moved && (Math.abs(dxPx) > 4 || Math.abs(dyPx) > 4)) dragState.moved = true;
         const dxW = dxPx / camRef.current.scale;
         const dyW = dyPx / camRef.current.scale;
 
-        if (dragState.nodeId === 'center') {
-          globalPanRef.current.x = dragState.startNx + dxPx;
-          globalPanRef.current.y = dragState.startNy + dyPx;
-          initNodes(width, height);
+        if (dragState.nodeId === 'pan') {
+          userPanRef.current.x = dragState.startNx + dxPx;
+          userPanRef.current.y = dragState.startNy + dyPx;
+          // Snap camera to the correct target (focusOffset + userPan when focused, else userPan)
+          // so cursor tracks 1:1 with no spring lag.
+          if (focusedCategory) {
+            const catNode = nodesRef.current.find(n => n.isCategory && n.category === focusedCategory);
+            if (catNode) {
+              const s = camRef.current.scale;
+              camRef.current.x = (width / 2 - catNode.x) * s + userPanRef.current.x;
+              camRef.current.y = (height / 2 - Math.min(width, height) * 0.05 - catNode.y) * s + userPanRef.current.y;
+            }
+          } else {
+            camRef.current.x = userPanRef.current.x;
+            camRef.current.y = userPanRef.current.y;
+          }
+        } else if (dragState.nodeId === 'you') {
+          youPosRef.current.x = dragState.startNx + dxW;
+          youPosRef.current.y = dragState.startNy + dyW;
         } else {
           const node = nodesRef.current.find(n => n.id === dragState.nodeId);
           if (node) {
@@ -455,12 +497,13 @@ export default function ConstellationGraph({ activeFilter, focusedCategory, onZo
         hoveredEdgeRef.current = null;
         const found = hitTest(mouseRef.current.x, mouseRef.current.y);
         hoveredRef.current = found;
-        canvas.style.cursor = found ? (found.isCenter ? 'grab' : 'pointer') : 'default';
+        canvas.style.cursor = found ? (found.isCenter ? 'grab' : 'pointer') : 'grab';
       }
     };
 
     const onClick = (e) => {
       if (dragState.active) return;
+      if (dragState.suppressClick) { dragState.suppressClick = false; return; }
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left; const my = e.clientY - rect.top;
       if (activeTool === 'snip') { const edge = hitTestEdge(mx, my); if (edge) onSnip?.(edge); return; }
@@ -486,25 +529,74 @@ export default function ConstellationGraph({ activeFilter, focusedCategory, onZo
       if (focusedCategory) {
         const catNode = nodesRef.current.find(n => n.isCategory && n.category === focusedCategory);
         if (catNode) {
-          camRef.current.targetX = cx - catNode.x;
-          camRef.current.targetY = cy - catNode.y;
-          camRef.current.targetScale = 1.9;
+          const focusScale = 2.6;
+          // Position so cat lands at screen center; userPan is added on top so further
+          // panning during focus still works (it's reset to 0 on focus enter/exit).
+          camRef.current.targetX = (cx - catNode.x) * focusScale + userPanRef.current.x;
+          camRef.current.targetY = (cy - catNode.y) * focusScale + userPanRef.current.y;
+          camRef.current.targetScale = focusScale;
         }
       } else {
-        camRef.current.targetX = 0; camRef.current.targetY = 0; camRef.current.targetScale = 1;
+        camRef.current.targetX = userPanRef.current.x;
+        camRef.current.targetY = userPanRef.current.y;
+        camRef.current.targetScale = 1;
       }
       camRef.current.x += (camRef.current.targetX - camRef.current.x) * 0.08;
       camRef.current.y += (camRef.current.targetY - camRef.current.y) * 0.08;
       camRef.current.scale += (camRef.current.targetScale - camRef.current.scale) * 0.08;
 
+      // Collision pass: nudge overlapping nodes apart through their target offsets
+      const draggedId = dragStateRef.current.active ? dragStateRef.current.nodeId : null;
+      const collidable = nodesRef.current.filter(n => !deletingIds.includes(n.id) && n.id !== draggedId);
+      const youR = 44;
+      const youWX = cx + youPosRef.current.x;
+      const youWY = cy + youPosRef.current.y;
+      for (let i = 0; i < collidable.length; i++) {
+        const a = collidable[i];
+        // YOU obstacle (constellation origin, follows youPos)
+        {
+          const dx = a.x - youWX, dy = a.y - youWY;
+          const d = Math.sqrt(dx * dx + dy * dy) || 0.01;
+          const minD = a.radius + youR + 8;
+          if (d < minD) {
+            const push = (minD - d) * 0.12;
+            const nx = dx / d, ny = dy / d;
+            a.manualOffX = (a.manualOffX ?? 0) + nx * push;
+            a.manualOffY = (a.manualOffY ?? 0) + ny * push;
+            a.targetX = a.baseX + a.manualOffX;
+            a.targetY = a.baseY + a.manualOffY;
+          }
+        }
+        for (let j = i + 1; j < collidable.length; j++) {
+          const b = collidable[j];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const d = Math.sqrt(dx * dx + dy * dy) || 0.01;
+          const minD = a.radius + b.radius + 8;
+          if (d < minD) {
+            const overlap = (minD - d) * 0.06;
+            const nx = dx / d, ny = dy / d;
+            a.manualOffX = (a.manualOffX ?? 0) - nx * overlap;
+            a.manualOffY = (a.manualOffY ?? 0) - ny * overlap;
+            b.manualOffX = (b.manualOffX ?? 0) + nx * overlap;
+            b.manualOffY = (b.manualOffY ?? 0) + ny * overlap;
+            a.targetX = a.baseX + a.manualOffX;
+            a.targetY = a.baseY + a.manualOffY;
+            b.targetX = b.baseX + b.manualOffX;
+            b.targetY = b.baseY + b.manualOffY;
+          }
+        }
+      }
+
+      // Spring step — node target is its base layout + manual offset + youPos shift
+      const yox = youPosRef.current.x, yoy = youPosRef.current.y;
       for (const a of nodesRef.current) {
         let swayX = 0; let swayY = 0;
         if (!a.isCategory) {
           swayX = Math.sin(timeRef.current * a.orbitSpeed * 15 + a.orbitAngle) * 1.5;
           swayY = Math.cos(timeRef.current * a.orbitSpeed * 17 + a.orbitAngle) * 1.5;
         }
-        a.x += ((a.targetX + swayX) - a.x) * 0.1;
-        a.y += ((a.targetY + swayY) - a.y) * 0.1;
+        a.x += ((a.targetX + yox + swayX) - a.x) * 0.1;
+        a.y += ((a.targetY + yoy + swayY) - a.y) * 0.1;
       }
 
       // Spawn particles for newly-deleting nodes
@@ -544,21 +636,35 @@ export default function ConstellationGraph({ activeFilter, focusedCategory, onZo
       ctx.scale(camRef.current.scale, camRef.current.scale);
       ctx.translate(-cx, -cy);
 
-      // Edges
+      const youWorldX = cx + youPosRef.current.x;
+      const youWorldY = cy + youPosRef.current.y;
+
+      // YOU → cat trunk edges (world space)
       for (const node of nodesRef.current) {
         if (deletingIds.includes(node.id)) continue;
+        if (!node.isCategory) continue;
         const isHovEdge = hoveredEdgeRef.current?.id === node.id;
-        if (node.isCategory) {
-          const ea = isHovEdge ? 0.95 : 0.1 + (node.avgStrength / 100) * 0.3;
-          const ew = 0.5 + (node.avgStrength / 100) * 4;
-          ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(node.x, node.y);
-          ctx.lineWidth = ew;
-          if (isHovEdge && activeTool === 'snip') {
-            ctx.setLineDash([6, 4]); ctx.strokeStyle = 'rgba(255,80,80,0.95)';
-            ctx.shadowColor = 'rgba(255,80,80,0.8)'; ctx.shadowBlur = 12;
-          } else { ctx.strokeStyle = `rgba(255,255,255,${ea})`; }
-          ctx.stroke(); ctx.setLineDash([]); ctx.shadowBlur = 0;
-        } else {
+        const edgeDimmed = isDimmed(node.category);
+        const dimMul = edgeDimmed ? 0.12 : 1;
+        const ea = isHovEdge ? 0.95 : (0.1 + (node.avgStrength / 100) * 0.3) * dimMul;
+        const ew = 0.5 + (node.avgStrength / 100) * 4;
+        ctx.beginPath(); ctx.moveTo(youWorldX, youWorldY); ctx.lineTo(node.x, node.y);
+        ctx.lineWidth = ew;
+        if (isHovEdge && activeTool === 'snip') {
+          ctx.setLineDash([6, 4]); ctx.strokeStyle = 'rgba(255,80,80,0.95)';
+          ctx.shadowColor = 'rgba(255,80,80,0.8)'; ctx.shadowBlur = 12;
+        } else { ctx.strokeStyle = `rgba(255,255,255,${ea})`; }
+        ctx.stroke(); ctx.setLineDash([]); ctx.shadowBlur = 0;
+      }
+
+      // Cat→Person edges (world space)
+      for (const node of nodesRef.current) {
+        if (deletingIds.includes(node.id)) continue;
+        if (node.isCategory) continue;
+        const isHovEdge = hoveredEdgeRef.current?.id === node.id;
+        const edgeDimmed = isDimmed(node.category);
+        const dimMul = edgeDimmed ? 0.12 : 1;
+        {
           const p = node.parentCat;
           if (!p || deletingIds.includes(p.id)) continue;
           const isHovPEdge = hoveredEdgeRef.current?.id === node.id;
@@ -569,6 +675,8 @@ export default function ConstellationGraph({ activeFilter, focusedCategory, onZo
           if (isHovPEdge && activeTool === 'snip') {
             ctx.setLineDash([6, 4]); ctx.strokeStyle = 'rgba(255,80,80,0.95)';
             ctx.shadowColor = 'rgba(255,80,80,0.8)'; ctx.shadowBlur = 12;
+          } else if (edgeDimmed) {
+            ctx.strokeStyle = `rgba(140,140,150,0.18)`;
           } else { ctx.strokeStyle = `rgba(${rgb}, 0.55)`; }
           ctx.stroke(); ctx.setLineDash([]); ctx.shadowBlur = 0;
         }
@@ -578,23 +686,25 @@ export default function ConstellationGraph({ activeFilter, focusedCategory, onZo
       for (const node of nodesRef.current) {
         if (deletingIds.includes(node.id)) continue;
         const cat = CATEGORIES[node.category] || CATEGORIES.other;
-        const isFiltered = activeFilter && activeFilter !== node.category;
+        const isFiltered = isDimmed(node.category);
         const isHov = hoveredRef.current?.id === node.id;
-        const nodeAlpha = isFiltered ? 0.15 : 1;
+        const nodeAlpha = isFiltered ? 0.18 : 1;
         const r = node.radius * (isHov ? 1.12 : 1);
+        const renderColor = isFiltered ? '#6a6f7a' : cat.color;
 
         if (node.isCategory) {
           ctx.beginPath(); ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-          ctx.fillStyle = hexWithAlpha(cat.color, nodeAlpha); ctx.fill();
-          ctx.strokeStyle = hexWithAlpha(cat.color, nodeAlpha); ctx.lineWidth = 1.5; ctx.stroke();
+          ctx.fillStyle = hexWithAlpha(renderColor, nodeAlpha); ctx.fill();
+          ctx.strokeStyle = hexWithAlpha(renderColor, nodeAlpha); ctx.lineWidth = 1.5; ctx.stroke();
           ctx.fillStyle = `rgba(11,15,25,${0.95 * nodeAlpha})`;
-          let cfs = Math.max(9, r * 0.52);
-          if (cfs * 0.6 * node.name.length > r * 1.75) cfs = Math.max(9, (r * 1.75) / (node.name.length * 0.6));
+          const maxTextWidth = r * 1.45;
+          let cfs = Math.max(9, r * 0.46);
+          if (cfs * 0.6 * node.name.length > maxTextWidth) cfs = Math.max(9, maxTextWidth / (node.name.length * 0.6));
           ctx.font = `600 ${cfs}px 'Inter',sans-serif`;
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.fillText(node.name, node.x, node.y);
         } else {
-          drawMinimalNode(ctx, node, r, cat.color, nodeAlpha, isHov);
+          drawMinimalNode(ctx, node, r, renderColor, nodeAlpha, isHov);
           const nameFits = node.name.length <= 11;
           const textInside = nameFits ? node.name : node.initials;
           ctx.fillStyle = `rgba(11,15,25,${0.95 * nodeAlpha})`;
@@ -611,14 +721,14 @@ export default function ConstellationGraph({ activeFilter, focusedCategory, onZo
         }
       }
 
-      // YOU node always on top
-      ctx.beginPath(); ctx.arc(cx, cy, 44, 0, Math.PI * 2);
+      // YOU drawn in world space, last so it stays on top
+      ctx.beginPath(); ctx.arc(youWorldX, youWorldY, 44, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(232,232,240,1)'; ctx.fill();
       ctx.strokeStyle = 'rgba(232,232,240,0.95)'; ctx.lineWidth = 2; ctx.stroke();
       ctx.fillStyle = 'rgba(11,15,25,0.95)';
       ctx.font = "600 16px 'Inter',sans-serif";
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('YOU', cx, cy);
+      ctx.fillText('YOU', youWorldX, youWorldY);
 
       ctx.restore();
 
@@ -653,7 +763,7 @@ export default function ConstellationGraph({ activeFilter, focusedCategory, onZo
       window.removeEventListener('keydown', onKeyDown);
       canvas.removeEventListener('wheel', onWheel);
     };
-  }, [activeFilter, focusedCategory, activeTool, initNodes, onNodeClick, onNodeDoubleClick, onSnip, onZoomOut, deletingIds]);
+  }, [activeFilters, focusedCategory, activeTool, initNodes, onNodeClick, onNodeDoubleClick, onSnip, onZoomOut, deletingIds]);
 
   return <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, zIndex: 1 }} />;
 }
