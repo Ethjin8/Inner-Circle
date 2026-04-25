@@ -16,7 +16,7 @@ The result is part PRM, part visual playground: rigorous on the data side, expre
    - Shared history — important events, favorite memories, and things to look forward to
    - The agent knows when to cut off. Thin signal ("met this prof once at a research meeting") closes the conversation early instead of forcing depth.
 2. **Persist.** Conversation output is normalized into structured JSON and stored in Firebase as the source of truth.
-3. **Score.** A separate Claude grading agent (Opus 4.7 with extended thinking) runs the **Anchored Rubric Pipeline**:
+3. **Score.** A separate Claude grading agent (Opus 4.6 with extended thinking) runs the **Anchored Rubric Pipeline**:
    - Five scoring dimensions: *depth of knowledge*, *emotional intimacy*, *recency / frequency*, *shared history density*, *reciprocity*
    - Each dimension is graded against few-shot anchor exemplars (a "2" looks like X, a "7" looks like Y) so the scale stays consistent across people
    - Self-consistency: the score runs three times and the median is taken; high variance flags the node as "uncertain" in the UI
@@ -38,7 +38,7 @@ The result is part PRM, part visual playground: rigorous on the data side, expre
 - **Frontend:** React + Vite, vanilla CSS with custom `requestAnimationFrame` loops (no Tailwind, no heavyweight physics engine)
 - **Backend / Persistence:** Firebase (Firestore for relationship data; Cloud Functions for the scoring pipeline)
 - **Conversational AI:** Gemini Live API — real-time speech-to-speech onboarding agent
-- **Scoring AI:** Claude Opus 4.7 with extended thinking — anchored rubric pipeline with self-consistency
+- **Scoring AI:** Claude Opus 4.6 with extended thinking — anchored rubric pipeline with self-consistency
 - **Media:** Cloudinary (`@cloudinary/react`, `@cloudinary/url-gen`)
 
 ## Getting Started
@@ -78,7 +78,7 @@ src/
     Onboarding/         # Voice + manual intake flows
   services/
     gemini.js           # Gemini Live voice client (intake)
-    claude.js           # Claude Opus 4.7 client (scoring)
+    claude.js           # Claude Opus 4.6 client (scoring)
     firebase.js         # Firestore data layer
     scoring.js          # Anchored rubric pipeline + self-consistency
   App.jsx               # Application state, sidebar, toolbars
