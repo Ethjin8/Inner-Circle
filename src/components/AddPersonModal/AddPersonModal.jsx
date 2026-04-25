@@ -602,16 +602,16 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
 
                   <div className="apm-field">
                     <label className="apm-label" htmlFor="apm-notes">
-                      Quick note
-                      <span className="apm-label-hint"> — your own words on this relationship (the AI weights this heavily)</span>
+                      Anything else?
+                      <span className="apm-label-hint"> — optional. The next step covers what matters for scoring.</span>
                     </label>
                     <textarea
                       id="apm-notes"
                       className="apm-text-input apm-textarea"
-                      rows="4"
+                      rows="2"
                       value={form.notes}
                       onChange={(e) => set('notes', e.target.value)}
-                      placeholder="e.g. We&apos;ve been close since freshman year. Hang out a few times a week, get coffee, study together — she was there for me when my grandma passed."
+                      placeholder="Optional — a phrase or two if it helps."
                     />
                   </div>
                 </>
