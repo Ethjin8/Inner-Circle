@@ -8,7 +8,7 @@ You are the center of an interactive graph network. Each person in your life is 
 
 ## Key Features
 
-- **Voice-First Onboarding** — Talk to an AI therapist to add people to your graph. No forms, no typing. It asks about your relationships and extracts the details naturally.
+- **Voice-First Onboarding** — Talk to an AI therapist to add people to your graph. No forms, no typing. The agent walks through a progressive question flow — starting simple ("How well do you know this person?") and gradually deepening into richer prompts ("What's your favorite memory together?") — and extracts the details naturally.
 - **Interactive Relationship Graph** — Force-directed graph with you at the center. Edge thickness = relationship strength. Node color = urgency (green/yellow/red). Filter by category (work, school, family) to focus on one area of your life.
 - **Smart Nudges** — The app knows when you should reach out. Birthday reminders, fading relationship alerts, and context-aware suggestions ("Finals coming up — study session with Jake?").
 - **Context-Aware AI Chat** — Drag nodes into the chat to give the AI context about specific people. Ask it to plan a group hangout, draft a message, or suggest a gift — it knows your relationship history.
@@ -18,7 +18,7 @@ You are the center of an interactive graph network. Each person in your life is 
 
 - **Frontend:** React, force-directed graph visualization, Cloudinary (profile photos)
 - **Backend:** Firebase (Firestore, Cloud Functions, Hosting)
-- **AI:** ElevenLabs (voice conversation), Claude API (relationship analysis, recommendations, chat)
+- **AI:** Claude API (voice conversation, relationship analysis, recommendations, chat)
 
 ## Getting Started
 
@@ -28,7 +28,7 @@ npm install
 
 # Set up environment variables
 cp .env.example .env
-# Add your API keys: ANTHROPIC_API_KEY, ELEVENLABS_API_KEY, CLOUDINARY_URL, Firebase config
+# Add your API keys: ANTHROPIC_API_KEY, CLOUDINARY_URL, Firebase config
 
 # Start development server
 npm run dev
@@ -44,8 +44,7 @@ src/
     NodeCard/       # Person info card overlay
     Onboarding/     # Voice-first onboarding flow
   services/
-    ai.js           # Claude API integration
-    elevenlabs.js   # ElevenLabs voice integration
+    ai.js           # Claude API integration (chat + voice)
     firebase.js     # Firestore data layer
     nudges.js       # Recommendation engine
   utils/
