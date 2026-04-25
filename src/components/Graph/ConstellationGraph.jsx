@@ -17,6 +17,192 @@ function strengthToEdgeColor(strength) {
   return '220, 130, 130';                         // dusty rose
 }
 
+function hexWithAlpha(hex, alpha) {
+  const a = Math.max(0, Math.min(1, alpha));
+  const h = hex.startsWith('#') ? hex.slice(1) : hex;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
+function drawSoftStar(ctx, x, y, r, color, alpha, isHovered) {
+  const haloR = r * 1.9;
+  const halo = ctx.createRadialGradient(x, y, r * 0.4, x, y, haloR);
+  halo.addColorStop(0, hexWithAlpha(color, 0.45 * alpha));
+  halo.addColorStop(1, hexWithAlpha(color, 0));
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(x, y, haloR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = hexWithAlpha(color, alpha);
+  ctx.fill();
+  ctx.strokeStyle = `rgba(255, 255, 255, ${(isHovered ? 0.55 : 0.22) * alpha})`;
+  ctx.lineWidth = isHovered ? 2 : 1.5;
+  ctx.stroke();
+}
+
+function drawHaloStar(ctx, x, y, r, color, alpha, isHovered) {
+  const haloR = r * 2.3;
+  const halo = ctx.createRadialGradient(x, y, r * 0.5, x, y, haloR);
+  halo.addColorStop(0, hexWithAlpha(color, 0.55 * alpha));
+  halo.addColorStop(1, hexWithAlpha(color, 0));
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(x, y, haloR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = hexWithAlpha(color, alpha);
+  ctx.fill();
+  ctx.strokeStyle = `rgba(255, 255, 255, ${(isHovered ? 0.55 : 0.22) * alpha})`;
+  ctx.lineWidth = isHovered ? 2 : 1.5;
+  ctx.stroke();
+}
+
+function drawEmberStar(ctx, x, y, r, color, alpha, isHovered) {
+  const haloR = r * 2.5;
+  const halo = ctx.createRadialGradient(x, y, r * 0.3, x, y, haloR);
+  halo.addColorStop(0, hexWithAlpha(color, 0.65 * alpha));
+  halo.addColorStop(0.5, hexWithAlpha(color, 0.25 * alpha));
+  halo.addColorStop(1, hexWithAlpha(color, 0));
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(x, y, haloR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = hexWithAlpha(color, alpha);
+  ctx.fill();
+  ctx.strokeStyle = `rgba(255, 255, 255, ${(isHovered ? 0.55 : 0.25) * alpha})`;
+  ctx.lineWidth = isHovered ? 2 : 1.5;
+  ctx.stroke();
+}
+
+function drawAnamorphicStar(ctx, x, y, r, color, alpha, isHovered) {
+  drawSoftStar(ctx, x, y, r, color, alpha, isHovered);
+
+  const flareLen = r * 3.2;
+  const flareH = ctx.createLinearGradient(x - flareLen, y, x + flareLen, y);
+  flareH.addColorStop(0, hexWithAlpha(color, 0));
+  flareH.addColorStop(0.5, hexWithAlpha(color, 0.55 * alpha));
+  flareH.addColorStop(1, hexWithAlpha(color, 0));
+  ctx.strokeStyle = flareH;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x - flareLen, y);
+  ctx.lineTo(x + flareLen, y);
+  ctx.stroke();
+
+  const flareV = ctx.createLinearGradient(x, y - flareLen, x, y + flareLen);
+  flareV.addColorStop(0, hexWithAlpha(color, 0));
+  flareV.addColorStop(0.5, hexWithAlpha(color, 0.55 * alpha));
+  flareV.addColorStop(1, hexWithAlpha(color, 0));
+  ctx.strokeStyle = flareV;
+  ctx.beginPath();
+  ctx.moveTo(x, y - flareLen);
+  ctx.lineTo(x, y + flareLen);
+  ctx.stroke();
+}
+
+function drawRingedPlanet(ctx, x, y, r, color, alpha, strength) {
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = hexWithAlpha(color, alpha);
+  ctx.fill();
+  ctx.strokeStyle = `rgba(255, 255, 255, ${0.22 * alpha})`;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-0.26);
+
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r * 1.7, r * 0.45, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = hexWithAlpha(color, 0.55 * alpha);
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  if (strength > 70) {
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 2.05, r * 0.55, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = hexWithAlpha(color, 0.3 * alpha);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawQuasar(ctx, x, y, r, color, alpha, idStr) {
+  let h = 0;
+  for (let i = 0; i < idStr.length; i++) h = (h * 31 + idStr.charCodeAt(i)) >>> 0;
+  const angle = ((h % 360) * Math.PI) / 180;
+  const beamLen = r * 8;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  const beamGrad = ctx.createLinearGradient(0, 0, beamLen, 0);
+  beamGrad.addColorStop(0, hexWithAlpha(color, 0.32 * alpha));
+  beamGrad.addColorStop(1, hexWithAlpha(color, 0));
+  ctx.fillStyle = beamGrad;
+  ctx.beginPath();
+  ctx.moveTo(0, -r * 0.3);
+  ctx.lineTo(beamLen, -r * 0.05);
+  ctx.lineTo(beamLen, r * 0.05);
+  ctx.lineTo(0, r * 0.3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  const haloR = r * 1.5;
+  const halo = ctx.createRadialGradient(x, y, 0, x, y, haloR);
+  halo.addColorStop(0, hexWithAlpha(color, 0.95 * alpha));
+  halo.addColorStop(1, hexWithAlpha(color, 0));
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(x, y, haloR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = hexWithAlpha(color, alpha);
+  ctx.fill();
+}
+
+function drawCelestialBody(ctx, node, r, color, alpha, isHovered) {
+  switch (node.category) {
+    case 'family':
+      drawRingedPlanet(ctx, node.x, node.y, r, color, alpha, node.strength);
+      break;
+    case 'romantic':
+      drawSoftStar(ctx, node.x, node.y, r, color, alpha, isHovered);
+      break;
+    case 'friend':
+      drawAnamorphicStar(ctx, node.x, node.y, r, color, alpha, isHovered);
+      break;
+    case 'mentor':
+      drawQuasar(ctx, node.x, node.y, r, color, alpha, String(node.id));
+      break;
+    case 'professional':
+      drawEmberStar(ctx, node.x, node.y, r, color, alpha, isHovered);
+      break;
+    case 'classmate':
+    case 'coworker':
+      drawHaloStar(ctx, node.x, node.y, r, color, alpha, isHovered);
+      break;
+    default:
+      drawSoftStar(ctx, node.x, node.y, r, color, alpha, isHovered);
+  }
+}
+
 const DEMO_PEOPLE = [
   {
     id: '1', name: 'Mom', initials: 'MO', birthday: '1972-03-18',
@@ -373,16 +559,7 @@ export default function ConstellationGraph({ activeFilter, people = DEMO_PEOPLE,
         const nodeAlpha = isFiltered ? 0.15 : 1;
         const r = node.radius * (isHovered ? 1.12 : 1);
 
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = cat.color + Math.round((isHovered ? 0.95 : 0.8) * nodeAlpha * 255).toString(16).padStart(2, '0');
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(255, 255, 255, ${(isHovered ? 0.5 : 0.2) * nodeAlpha})`;
-        ctx.lineWidth = isHovered ? 2 : 1.5;
-        ctx.stroke();
+        drawCelestialBody(ctx, node, r, cat.color, nodeAlpha, isHovered);
 
         ctx.fillStyle = `rgba(255, 255, 255, ${0.95 * nodeAlpha})`;
         ctx.font = `600 ${r * 0.55}px 'Space Grotesk', sans-serif`;
