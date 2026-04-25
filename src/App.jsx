@@ -43,6 +43,7 @@ function App() {
   const [deletedHistory, setDeletedHistory] = useState([]); // undo stack: [{type:'person'|'category', ids:[]}]
   const [photosByPerson, setPhotosByPerson] = useState({}); // { personId: [ { public_id, secure_url, ... }, ... ] }
   const [people, setPeople] = useState(DEMO_PEOPLE);
+  const [searchQuery, setSearchQuery] = useState('');
   
   const [viewMode, setViewMode] = useState('graph'); // 'graph' | 'gallery'
   const [modalPhase, setModalPhase] = useState(null); // null | 'zooming-in' | 'open' | 'zooming-out'
@@ -63,12 +64,16 @@ function App() {
   const peopleByCategory = useMemo(() => {
     const map = {};
     FILTERS.forEach(f => { if (f.key) map[f.key] = { label: f.label, color: f.color, people: [] }; });
+    const q = searchQuery.trim().toLowerCase();
     people.forEach(p => {
+      if (q && !p.name.toLowerCase().includes(q)) return;
       const c = p.relationship?.type;
       if (c && map[c]) map[c].people.push(p);
     });
     return map;
-  }, [people]);
+  }, [people, searchQuery]);
+
+  const isSearching = searchQuery.trim().length > 0;
 
   const toggleCat = (cat) => {
     setExpandedCats(prev => {
@@ -315,19 +320,48 @@ function App() {
 
       <aside className={`sidebar ${viewMode === 'gallery' ? 'hidden' : ''}`}>
         <div className="sidebar-label">EXPLORER</div>
-        <div className="sidebar-tree">
-          <div className="tree-group">
-            <div
-              className="tree-item node-cat level-1"
-              style={{ background: 'rgba(232, 232, 240, 0.12)', marginBottom: '2px' }}
-              onClick={() => setFocusedCategory(null)}
+        <div className="sidebar-search">
+          <svg className="sidebar-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <circle cx="11" cy="11" r="7" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            className="sidebar-search-input"
+            type="text"
+            placeholder="Search nodes..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search nodes"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="sidebar-search-clear"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
             >
-              <span className="filter-dot" style={{ background: '#e8e8f0', marginLeft: '12px' }} />
-              You
+              ×
+            </button>
+          )}
+        </div>
+        <div className="sidebar-tree">
+          {!isSearching && (
+            <div className="tree-group">
+              <div
+                className="tree-item node-cat level-1"
+                style={{ background: 'rgba(232, 232, 240, 0.12)', marginBottom: '2px' }}
+                onClick={() => setFocusedCategory(null)}
+              >
+                <span className="filter-dot" style={{ background: '#e8e8f0', marginLeft: '12px' }} />
+                You
+              </div>
             </div>
-          </div>
+          )}
+          {isSearching && Object.values(peopleByCategory).every((d) => d.people.length === 0) && (
+            <div className="sidebar-empty">No matches for "{searchQuery}"</div>
+          )}
           {Object.entries(peopleByCategory).map(([catKey, data]) => {
-            const isExpanded = expandedCats.has(catKey);
+            const isExpanded = isSearching || expandedCats.has(catKey);
             if (data.people.length === 0) return null;
             const isBranchActive = activeFilters.has(catKey);
             return (
