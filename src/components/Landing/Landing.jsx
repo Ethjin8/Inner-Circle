@@ -1,6 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CONSTELLATIONS } from './constellations';
+import { useAuth } from '../../contexts/AuthContext';
 import './Landing.css';
+import '../SignIn/SignIn.css';
 
 const STAR_COUNT = 240;
 const HOVER_RADIUS = 70;
@@ -106,6 +108,29 @@ const drawStarGlow = (ctx, x, y, radius, alpha) => {
   ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
 };
 
+const drawNorthStar = (ctx, w, h, t) => {
+  const x = w / 2;
+  const y = h / 4;
+  const pulse = 0.75 + 0.25 * Math.sin(t * 0.0008);
+
+  const outerGlow = ctx.createRadialGradient(x, y, 0, x, y, 70 * pulse);
+  outerGlow.addColorStop(0, `rgba(255, 220, 130, ${0.18 * pulse})`);
+  outerGlow.addColorStop(1, 'rgba(255, 220, 130, 0)');
+  ctx.fillStyle = outerGlow;
+  ctx.fillRect(x - 70, y - 70, 140, 140);
+
+  const innerGlow = ctx.createRadialGradient(x, y, 0, x, y, 14 * pulse);
+  innerGlow.addColorStop(0, `rgba(255, 245, 190, ${0.85 * pulse})`);
+  innerGlow.addColorStop(1, 'rgba(255, 220, 130, 0)');
+  ctx.fillStyle = innerGlow;
+  ctx.fillRect(x - 14, y - 14, 28, 28);
+
+  ctx.fillStyle = `rgba(255, 252, 230, ${0.95 * pulse})`;
+  ctx.beginPath();
+  ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+};
+
 const drawStar = (ctx, x, y, r, lit, alpha = 1) => {
   const g = Math.round(255 - 50 * lit);
   const b = Math.round(255 - 150 * lit);
@@ -115,14 +140,35 @@ const drawStar = (ctx, x, y, r, lit, alpha = 1) => {
   ctx.fill();
 };
 
-export default function Landing({ onEnter }) {
+export default function Landing({ onEnter, user }) {
+  const { signInWithGoogle } = useAuth();
+  const [showAuth, setShowAuth] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [zooming, setZooming] = useState(false);
   const canvasRef = useRef(null);
+  const zoomTimerRef = useRef(null);
+  const zoomingRef = useRef(false);
+
+  const triggerEnter = () => {
+    if (zoomingRef.current) return;
+    zoomingRef.current = true;
+    setZooming(true);
+    onEnter();
+  };
   const stateRef = useRef({
     mouse: { x: -9999, y: -9999 },
     ambient: [],
     shooting: [],
     constellations: [],
   });
+
+  const prevUserRef = useRef(user);
+  useEffect(() => {
+    if (user && prevUserRef.current === null) triggerEnter();
+    prevUserRef.current = user ?? null;
+    return () => clearTimeout(zoomTimerRef.current);
+  }, [user]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -154,7 +200,9 @@ export default function Landing({ onEnter }) {
       stateRef.current.mouse = { x: -9999, y: -9999 };
     };
     const onClick = () => {
-      onEnter();
+      if (zoomingRef.current) return;
+      if (user) triggerEnter();
+      else setShowAuth(true);
     };
 
     window.addEventListener('resize', resize);
@@ -162,11 +210,11 @@ export default function Landing({ onEnter }) {
     window.addEventListener('mouseleave', onLeave);
     window.addEventListener('click', onClick);
 
-    const shootingTimer = setInterval(() => {
-      stateRef.current.shooting.push(
-        spawnShootingStar(window.innerWidth, window.innerHeight)
-      );
-    }, SHOOTING_INTERVAL_MS);
+    // const shootingTimer = setInterval(() => {
+    //   stateRef.current.shooting.push(
+    //     spawnShootingStar(window.innerWidth, window.innerHeight)
+    //   );
+    // }, SHOOTING_INTERVAL_MS);
 
     let raf;
     const render = (t) => {
@@ -176,91 +224,92 @@ export default function Landing({ onEnter }) {
 
       ctx.clearRect(0, 0, w, h);
       drawSkyGradient(ctx, w, h);
+      drawNorthStar(ctx, w, h, t);
 
-      // Ambient stars
-      ambient.forEach((s) => {
-        const prox = proximity(s.x, s.y, mouse.x, mouse.y, HOVER_RADIUS);
-        const twinkle = 0.6 + 0.4 * Math.sin(t * 0.001 * s.speed + s.phase);
-        const r = s.r * (1 + prox * 1.4);
-        if (prox > 0.08) drawStarGlow(ctx, s.x, s.y, r * 5, prox * 0.55);
-        drawStar(ctx, s.x, s.y, r, prox, twinkle);
-      });
+      // // Ambient stars
+      // ambient.forEach((s) => {
+      //   const prox = proximity(s.x, s.y, mouse.x, mouse.y, HOVER_RADIUS);
+      //   const twinkle = 0.6 + 0.4 * Math.sin(t * 0.001 * s.speed + s.phase);
+      //   const r = s.r * (1 + prox * 1.4);
+      //   if (prox > 0.08) drawStarGlow(ctx, s.x, s.y, r * 5, prox * 0.55);
+      //   drawStar(ctx, s.x, s.y, r, prox, twinkle);
+      // });
 
-      // Constellations: ease toward hovered state with slow reverse-burst-fade.
-      const hovered = findHoveredConstellation(constellations, mouse.x, mouse.y);
-      constellations.forEach((c) => {
-        const target = c.index === hovered ? 1 : 0;
-        c.litT += (target - c.litT) * FADE_SPEED;
-      });
+      // // Constellations: ease toward hovered state with slow reverse-burst-fade.
+      // const hovered = findHoveredConstellation(constellations, mouse.x, mouse.y);
+      // constellations.forEach((c) => {
+      //   const target = c.index === hovered ? 1 : 0;
+      //   c.litT += (target - c.litT) * FADE_SPEED;
+      // });
 
-      // Lines: opacity follows litT.
-      constellations.forEach((c) => {
-        const e = easeInOutCubic(Math.max(0, Math.min(1, c.litT)));
-        if (e < 0.02) return;
-        ctx.strokeStyle = `rgba(255, 220, 130, ${0.75 * e})`;
-        ctx.lineWidth = 1.2;
-        ctx.shadowColor = `rgba(255, 220, 130, ${0.55 * e})`;
-        ctx.shadowBlur = 10 * e;
-        ctx.beginPath();
-        c.edges.forEach(([a, b]) => {
-          ctx.moveTo(c.stars[a].x, c.stars[a].y);
-          ctx.lineTo(c.stars[b].x, c.stars[b].y);
-        });
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-      });
+      // // Lines: opacity follows litT.
+      // constellations.forEach((c) => {
+      //   const e = easeInOutCubic(Math.max(0, Math.min(1, c.litT)));
+      //   if (e < 0.02) return;
+      //   ctx.strokeStyle = `rgba(255, 220, 130, ${0.75 * e})`;
+      //   ctx.lineWidth = 1.2;
+      //   ctx.shadowColor = `rgba(255, 220, 130, ${0.55 * e})`;
+      //   ctx.shadowBlur = 10 * e;
+      //   ctx.beginPath();
+      //   c.edges.forEach(([a, b]) => {
+      //     ctx.moveTo(c.stars[a].x, c.stars[a].y);
+      //     ctx.lineTo(c.stars[b].x, c.stars[b].y);
+      //   });
+      //   ctx.stroke();
+      //   ctx.shadowBlur = 0;
+      // });
 
-      // Stars + reverse-burst ring during transition.
-      constellations.forEach((c) => {
-        const e = easeInOutCubic(Math.max(0, Math.min(1, c.litT)));
-        c.stars.forEach((s) => {
-          const localProx = proximity(s.x, s.y, mouse.x, mouse.y, HOVER_RADIUS);
-          const lit = Math.max(localProx, e);
-          const baseR = 1.8;
-          const r = baseR * (1 + lit * 1.6);
+      // // Stars + reverse-burst ring during transition.
+      // constellations.forEach((c) => {
+      //   const e = easeInOutCubic(Math.max(0, Math.min(1, c.litT)));
+      //   c.stars.forEach((s) => {
+      //     const localProx = proximity(s.x, s.y, mouse.x, mouse.y, HOVER_RADIUS);
+      //     const lit = Math.max(localProx, e);
+      //     const baseR = 1.8;
+      //     const r = baseR * (1 + lit * 1.6);
 
-          // Reverse burst: a ring contracts inward as the constellation lights up.
-          const burstAlpha = Math.sin(Math.PI * e) * 0.55;
-          if (burstAlpha > 0.02) {
-            const burstR = (1 - e) * 32 + 6;
-            const ring = ctx.createRadialGradient(s.x, s.y, burstR * 0.4, s.x, s.y, burstR);
-            ring.addColorStop(0, 'rgba(255, 220, 130, 0)');
-            ring.addColorStop(0.7, `rgba(255, 220, 130, ${burstAlpha})`);
-            ring.addColorStop(1, 'rgba(255, 220, 130, 0)');
-            ctx.fillStyle = ring;
-            ctx.fillRect(s.x - burstR, s.y - burstR, burstR * 2, burstR * 2);
-          }
+      //     // Reverse burst: a ring contracts inward as the constellation lights up.
+      //     const burstAlpha = Math.sin(Math.PI * e) * 0.55;
+      //     if (burstAlpha > 0.02) {
+      //       const burstR = (1 - e) * 32 + 6;
+      //       const ring = ctx.createRadialGradient(s.x, s.y, burstR * 0.4, s.x, s.y, burstR);
+      //       ring.addColorStop(0, 'rgba(255, 220, 130, 0)');
+      //       ring.addColorStop(0.7, `rgba(255, 220, 130, ${burstAlpha})`);
+      //       ring.addColorStop(1, 'rgba(255, 220, 130, 0)');
+      //       ctx.fillStyle = ring;
+      //       ctx.fillRect(s.x - burstR, s.y - burstR, burstR * 2, burstR * 2);
+      //     }
 
-          if (lit > 0.05) drawStarGlow(ctx, s.x, s.y, r * 5, lit * 0.55);
-          drawStar(ctx, s.x, s.y, r, lit);
-        });
-      });
+      //     if (lit > 0.05) drawStarGlow(ctx, s.x, s.y, r * 5, lit * 0.55);
+      //     drawStar(ctx, s.x, s.y, r, lit);
+      //   });
+      // });
 
-      canvas.style.cursor = hovered !== null ? 'pointer' : 'default';
+      // canvas.style.cursor = hovered !== null ? 'pointer' : 'default';
 
-      // Shooting stars
-      const next = [];
-      for (const ss of stateRef.current.shooting) {
-        const x = ss.x + ss.vx;
-        const y = ss.y + ss.vy;
-        const life = ss.life - 0.005;
-        if (life > 0 && x > -200 && x < w + 200) next.push({ ...ss, x, y, life });
-      }
-      stateRef.current.shooting = next;
+      // // Shooting stars
+      // const next = [];
+      // for (const ss of stateRef.current.shooting) {
+      //   const x = ss.x + ss.vx;
+      //   const y = ss.y + ss.vy;
+      //   const life = ss.life - 0.005;
+      //   if (life > 0 && x > -200 && x < w + 200) next.push({ ...ss, x, y, life });
+      // }
+      // stateRef.current.shooting = next;
 
-      stateRef.current.shooting.forEach((ss) => {
-        const tailX = ss.x - ss.vx * 10;
-        const tailY = ss.y - ss.vy * 10;
-        const grad = ctx.createLinearGradient(ss.x, ss.y, tailX, tailY);
-        grad.addColorStop(0, `rgba(255, 245, 220, ${ss.life})`);
-        grad.addColorStop(1, 'rgba(255, 245, 220, 0)');
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = 1.8;
-        ctx.beginPath();
-        ctx.moveTo(ss.x, ss.y);
-        ctx.lineTo(tailX, tailY);
-        ctx.stroke();
-      });
+      // stateRef.current.shooting.forEach((ss) => {
+      //   const tailX = ss.x - ss.vx * 10;
+      //   const tailY = ss.y - ss.vy * 10;
+      //   const grad = ctx.createLinearGradient(ss.x, ss.y, tailX, tailY);
+      //   grad.addColorStop(0, `rgba(255, 245, 220, ${ss.life})`);
+      //   grad.addColorStop(1, 'rgba(255, 245, 220, 0)');
+      //   ctx.strokeStyle = grad;
+      //   ctx.lineWidth = 1.8;
+      //   ctx.beginPath();
+      //   ctx.moveTo(ss.x, ss.y);
+      //   ctx.lineTo(tailX, tailY);
+      //   ctx.stroke();
+      // });
 
       raf = requestAnimationFrame(render);
     };
@@ -268,7 +317,7 @@ export default function Landing({ onEnter }) {
 
     return () => {
       cancelAnimationFrame(raf);
-      clearInterval(shootingTimer);
+      // clearInterval(shootingTimer);
       window.removeEventListener('resize', resize);
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseleave', onLeave);
@@ -276,11 +325,45 @@ export default function Landing({ onEnter }) {
     };
   }, [onEnter]);
 
+  const handleSignIn = async () => {
+    setError(''); setBusy(true);
+    try { await signInWithGoogle(); }
+    catch (err) { setError(err?.message || 'Sign-in failed.'); }
+    finally { setBusy(false); }
+  };
+
   return (
-    <div className="landing">
+    <div className={`landing ${zooming ? 'zooming' : ''}`}>
       <canvas ref={canvasRef} className="landing-canvas" />
       <img src="/foreground.png" alt="" className="landing-foreground" />
-      <div className="landing-hint">Click anywhere to enter</div>
+      <div className="landing-flash" />
+      {showAuth && !user ? (
+        <div className="signin-panel" onClick={(e) => e.stopPropagation()}>
+          <div className="signin-logo">
+            <svg width="32" height="32" viewBox="0 0 14 14" fill="none">
+              <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="0.9" opacity="0.85" />
+              <circle cx="7" cy="7" r="3.5" stroke="currentColor" strokeWidth="0.7" opacity="0.6" />
+              <line x1="0.8" y1="7" x2="13.2" y2="7" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
+              <line x1="7" y1="0.8" x2="7" y2="13.2" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
+              <circle cx="7" cy="7" r="1" fill="currentColor" />
+            </svg>
+          </div>
+          <h1 className="signin-title">Inner Circle</h1>
+          <p className="signin-subtitle">A constellation of the people who matter.</p>
+          <button className="signin-google" onClick={handleSignIn} disabled={busy}>
+            <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden>
+              <path d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" fill="#4285F4"/>
+              <path d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.92v2.32A8.99 8.99 0 0 0 9 18z" fill="#34A853"/>
+              <path d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.96H.92A8.99 8.99 0 0 0 0 9c0 1.45.35 2.83.92 4.04l3.05-2.32z" fill="#FBBC05"/>
+              <path d="M9 3.58c1.32 0 2.5.46 3.44 1.35l2.58-2.58A8.95 8.95 0 0 0 9 0 8.99 8.99 0 0 0 .92 4.96l3.05 2.32C4.68 5.16 6.66 3.58 9 3.58z" fill="#EA4335"/>
+            </svg>
+            {busy ? 'Signing in...' : 'Continue with Google'}
+          </button>
+          {error && <div className="signin-error">{error}</div>}
+        </div>
+      ) : (
+        <div className="landing-hint">Click anywhere to enter</div>
+      )}
     </div>
   );
 }

@@ -35,6 +35,15 @@ const CATEGORY_COLORS = {
 
 function App() {
   const [view, setView] = useState('landing');
+  const [landingExiting, setLandingExiting] = useState(false);
+  const landingExitTimerRef = useRef(null);
+
+  const handleEnterFromLanding = useCallback(() => {
+    setView('app');
+    setLandingExiting(true);
+    clearTimeout(landingExitTimerRef.current);
+    landingExitTimerRef.current = setTimeout(() => setLandingExiting(false), 1800);
+  }, []);
   const { user, loading: authLoading, signOut } = useAuth();
   const { people, addPerson, updatePerson, removePeople, restorePeople } = usePeople();
   const { photosByPerson, setPhotosForPerson } = usePhotos();
@@ -249,13 +258,13 @@ function App() {
     : null;
 
   if (authLoading) return <div className="app" style={{ background: '#0a0a0f' }} />;
-  if (!user) return <SignIn />;
-
-  if (view === 'landing') {
-    return <Landing onEnter={() => setView('app')} />;
-  }
 
   return (
+    <>
+    {(view === 'landing' || landingExiting) && (
+      <Landing user={user} onEnter={handleEnterFromLanding} />
+    )}
+    {view === 'app' && (
     <div className="app">
       <div className={`cosmos-stage ${showModal ? 'modal-open' : ''} ${viewMode === 'gallery' ? 'hidden-behind-gallery' : ''}`} style={stageStyle}>
         <StarField />
@@ -563,6 +572,8 @@ function App() {
         }}
       />
     </div>
+    )}
+    </>
   );
 }
 
