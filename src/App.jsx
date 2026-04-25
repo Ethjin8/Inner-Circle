@@ -61,6 +61,13 @@ function App() {
 
       <header className="header">
         <div className="logo">
+          <svg className="logo-glyph" width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="0.9" opacity="0.85" />
+            <circle cx="7" cy="7" r="3.5" stroke="currentColor" strokeWidth="0.7" opacity="0.6" />
+            <line x1="0.8" y1="7" x2="13.2" y2="7" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
+            <line x1="7" y1="0.8" x2="7" y2="13.2" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
+            <circle cx="7" cy="7" r="1" fill="currentColor" />
+          </svg>
           <span className="logo-text">Inner Circle</span>
         </div>
 
