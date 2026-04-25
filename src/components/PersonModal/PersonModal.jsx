@@ -56,7 +56,7 @@ function Pills({ label, items }) {
   );
 }
 
-export default function PersonModal({ person, onClose }) {
+export default function PersonModal({ person, originPoint, phase, onClose }) {
   useEffect(() => {
     if (!person) return;
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -91,13 +91,21 @@ export default function PersonModal({ person, onClose }) {
   const ringColor = strengthRingColor(strength);
 
   return (
-    <div className="pm-backdrop" onClick={onClose} role="presentation">
+    <div className={`pm-backdrop ${phase || ''}`} onClick={onClose} role="presentation">
       <div
-        className="pm-panel"
+        className={`pm-panel ${phase || ''}`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label={`${person.name} details`}
+        style={
+          originPoint
+            ? {
+                '--origin-x': `${originPoint.x}px`,
+                '--origin-y': `${originPoint.y}px`,
+              }
+            : undefined
+        }
       >
         <button className="pm-close" onClick={onClose} aria-label="Close">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">

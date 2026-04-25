@@ -473,3 +473,61 @@
     display: none;
   }
 }
+
+/* ---------- Cosmos stage + cinematic transition ---------- */
+.cosmos-stage {
+  position: absolute;
+  inset: 0;
+  transition: transform 380ms cubic-bezier(0.16, 1, 0.3, 1), filter 380ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: 50% 50%;
+  will-change: transform, filter;
+}
+
+.cosmos-stage.zooming-in,
+.cosmos-stage.open {
+  transform: scale(1.45);
+  filter: blur(6px) brightness(0.7);
+}
+
+.cosmos-stage.zooming-out {
+  transform: scale(1);
+  filter: blur(0px) brightness(1);
+  transition-duration: 280ms;
+}
+
+.bokeh-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: auto;
+  background:
+    radial-gradient(circle at 30% 40%, rgba(180, 200, 255, 0.06), transparent 35%),
+    radial-gradient(circle at 70% 60%, rgba(220, 180, 200, 0.05), transparent 40%),
+    rgba(5, 5, 16, 0.42);
+  opacity: 0;
+  transition: opacity 320ms ease-out;
+}
+
+.bokeh-overlay.zooming-in,
+.bokeh-overlay.open {
+  opacity: 1;
+}
+
+.bokeh-overlay.zooming-out {
+  opacity: 0;
+  transition-duration: 220ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cosmos-stage,
+  .cosmos-stage.zooming-in,
+  .cosmos-stage.open,
+  .cosmos-stage.zooming-out {
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+  .bokeh-overlay {
+    transition: none;
+  }
+}

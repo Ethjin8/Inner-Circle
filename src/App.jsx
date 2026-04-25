@@ -32,9 +32,14 @@ function App() {
   const [promptText, setPromptText] = useState('');
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [addPersonOpen, setAddPersonOpen] = useState(false);
+  const [zoomTarget, setZoomTarget] = useState(null);
+  const [cinematicState, setCinematicState] = useState('idle');
 
   const handleNodeClick = useCallback((node) => {
+    setZoomTarget({ x: node.x, y: node.y });
+    setCinematicState('zooming-in');
     setSelectedPerson(node);
+    setTimeout(() => setCinematicState('open'), 380);
   }, []);
 
   const handleNodeDoubleClick = useCallback((node) => {
@@ -42,6 +47,15 @@ function App() {
       if (prev.some((n) => n.id === node.id)) return prev;
       return [...prev, node];
     });
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setCinematicState('zooming-out');
+    setTimeout(() => {
+      setSelectedPerson(null);
+      setZoomTarget(null);
+      setCinematicState('idle');
+    }, 280);
   }, []);
 
   const removeAttachedNode = useCallback((nodeId) => {
@@ -55,97 +69,116 @@ function App() {
     setAttachedNodes([]);
   }, [promptText, attachedNodes]);
 
+  const stageStyle = zoomTarget
+    ? { transformOrigin: `${zoomTarget.x}px ${zoomTarget.y}px` }
+    : undefined;
+
+  const showModal = cinematicState !== 'idle' && selectedPerson;
+
   return (
     <div className="app">
-      <StarField />
+      <div className={`cosmos-stage ${cinematicState}`} style={stageStyle}>
+        <StarField />
 
-      <header className="header">
-        <div className="logo">
-          <svg className="logo-glyph" width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="0.9" opacity="0.85" />
-            <circle cx="7" cy="7" r="3.5" stroke="currentColor" strokeWidth="0.7" opacity="0.6" />
-            <line x1="0.8" y1="7" x2="13.2" y2="7" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
-            <line x1="7" y1="0.8" x2="7" y2="13.2" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
-            <circle cx="7" cy="7" r="1" fill="currentColor" />
-          </svg>
-          <span className="logo-text">Inner Circle</span>
-        </div>
-
-        <div className="header-actions">
-          <button className="btn-primary" onClick={() => setAddPersonOpen(true)}>+ Add Person</button>
-        </div>
-      </header>
-
-      <aside className="sidebar">
-        <div className="sidebar-label">Categories</div>
-        {FILTERS.map((f) => (
-          <button
-            key={f.key ?? 'all'}
-            className={`sidebar-chip ${activeFilter === f.key ? 'active' : 'inactive'}`}
-            onClick={() => setActiveFilter(f.key === activeFilter ? null : f.key)}
-          >
-            {f.color && (
-              <span className="filter-dot" style={{ background: f.color }} />
-            )}
-            {f.label}
-          </button>
-        ))}
-      </aside>
-
-      <div className="graph-container">
-        <ConstellationGraph
-          activeFilter={activeFilter}
-          onNodeClick={handleNodeClick}
-          onNodeDoubleClick={handleNodeDoubleClick}
-        />
-      </div>
-
-      <div className="prompt-area">
-        {attachedNodes.length > 0 && (
-          <div className="attached-nodes">
-            {attachedNodes.map((node) => (
-              <span
-                key={node.id}
-                className="attached-chip"
-                style={{ borderColor: CATEGORY_COLORS[node.category] || '#94a3b8' }}
-              >
-                <span
-                  className="attached-chip-dot"
-                  style={{ background: CATEGORY_COLORS[node.category] || '#94a3b8' }}
-                />
-                {node.name}
-                <button
-                  className="attached-chip-remove"
-                  onClick={() => removeAttachedNode(node.id)}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-        <form className="prompt-form" onSubmit={handleSubmit}>
-          <input
-            className="prompt-input"
-            type="text"
-            placeholder="Ask about your connections..."
-            value={promptText}
-            onChange={(e) => setPromptText(e.target.value)}
-          />
-          <button
-            className="prompt-submit"
-            type="submit"
-            disabled={!promptText.trim() && attachedNodes.length === 0}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <header className="header">
+          <div className="logo">
+            <svg className="logo-glyph" width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="0.9" opacity="0.85" />
+              <circle cx="7" cy="7" r="3.5" stroke="currentColor" strokeWidth="0.7" opacity="0.6" />
+              <line x1="0.8" y1="7" x2="13.2" y2="7" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
+              <line x1="7" y1="0.8" x2="7" y2="13.2" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
+              <circle cx="7" cy="7" r="1" fill="currentColor" />
             </svg>
-          </button>
-        </form>
-        <div className="prompt-hint">Click a node to view details — double-click to attach as context</div>
+            <span className="logo-text">Inner Circle</span>
+          </div>
+
+          <div className="header-actions">
+            <button className="btn-primary" onClick={() => setAddPersonOpen(true)}>+ Add Person</button>
+          </div>
+        </header>
+
+        <aside className="sidebar">
+          <div className="sidebar-label">Categories</div>
+          {FILTERS.map((f) => (
+            <button
+              key={f.key ?? 'all'}
+              className={`sidebar-chip ${activeFilter === f.key ? 'active' : 'inactive'}`}
+              onClick={() => setActiveFilter(f.key === activeFilter ? null : f.key)}
+            >
+              {f.color && (
+                <span className="filter-dot" style={{ background: f.color }} />
+              )}
+              {f.label}
+            </button>
+          ))}
+        </aside>
+
+        <div className="graph-container">
+          <ConstellationGraph
+            activeFilter={activeFilter}
+            onNodeClick={handleNodeClick}
+            onNodeDoubleClick={handleNodeDoubleClick}
+          />
+        </div>
+
+        <div className="prompt-area">
+          {attachedNodes.length > 0 && (
+            <div className="attached-nodes">
+              {attachedNodes.map((node) => (
+                <span
+                  key={node.id}
+                  className="attached-chip"
+                  style={{ borderColor: CATEGORY_COLORS[node.category] || '#cdc9c0' }}
+                >
+                  <span
+                    className="attached-chip-dot"
+                    style={{ background: CATEGORY_COLORS[node.category] || '#cdc9c0' }}
+                  />
+                  {node.name}
+                  <button
+                    className="attached-chip-remove"
+                    onClick={() => removeAttachedNode(node.id)}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <form className="prompt-form" onSubmit={handleSubmit}>
+            <input
+              className="prompt-input"
+              type="text"
+              placeholder="Ask about your connections..."
+              value={promptText}
+              onChange={(e) => setPromptText(e.target.value)}
+            />
+            <button
+              className="prompt-submit"
+              type="submit"
+              disabled={!promptText.trim() && attachedNodes.length === 0}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          </form>
+          <div className="prompt-hint">Click a node to view details — double-click to attach as context</div>
+        </div>
       </div>
 
-      <PersonModal person={selectedPerson} onClose={() => setSelectedPerson(null)} />
+      {cinematicState !== 'idle' && (
+        <div className={`bokeh-overlay ${cinematicState}`} onClick={closeModal} />
+      )}
+
+      {showModal && (
+        <PersonModal
+          person={selectedPerson}
+          originPoint={zoomTarget}
+          phase={cinematicState}
+          onClose={closeModal}
+        />
+      )}
       <AddPersonModal open={addPersonOpen} onClose={() => setAddPersonOpen(false)} />
     </div>
   );
