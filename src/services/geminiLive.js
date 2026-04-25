@@ -1,9 +1,9 @@
 const LIVE_MODEL = 'models/gemini-3.1-flash-live-preview';
-const EXTRACT_MODEL = 'models/gemini-2.0-flash';
+const EXTRACT_MODEL = 'models/gemini-2.5-flash';
 
 // ─── Person extraction (REST fallback) ───────────────────────────────────────
 
-const EXTRACT_SCHEMA = '{"name":null,"birthday":null,"relationship":{"type":"friend","strength":60},"context":{"how_we_met":null,"school":null,"work":null,"hobbies":[],"sports":[],"favorites":{"foods":[],"music":[]}},"history":{"memories_together":[],"important_events":[],"things_to_look_forward_to":[]}}';
+const EXTRACT_SCHEMA = '{"name":null,"birthday":null,"relationship":{"type":"friend"},"context":{"how_we_met":null,"school":null,"work":null,"hobbies":[],"sports":[],"favorites":{"foods":[],"music":[]}},"history":{"memories_together":[],"important_events":[],"things_to_look_forward_to":[]}}';
 
 const EXTRACT_PROMPT = `You are extracting contact information from a voice onboarding conversation.
 
@@ -14,7 +14,6 @@ Fill in the JSON below using only details explicitly mentioned. Rules:
 - null for text fields that were not mentioned
 - [] for array fields that were not mentioned
 - relationship.type: one of family | friend | classmate | coworker | professional | romantic | mentor | other
-- relationship.strength 0-100: family/romantic ≈ 80-95, close friends ≈ 65-80, acquaintances ≈ 30-55
 - birthday: YYYY-MM-DD if a date was mentioned, otherwise null
 
 ${EXTRACT_SCHEMA}`;
@@ -72,7 +71,57 @@ Style:
 - Never ask for sensitive private data.
 - Keep turns short for spoken conversation.
 
-When the user sends the text "EXTRACT_JSON", respond ONLY with a compact JSON object matching this schema (no other text, no markdown): ${EXTRACT_SCHEMA}`;
+When the user sends the text "EXTRACT_JSON", respond ONLY with these labeled sentences — no extra commentary, say "unknown" for anything not mentioned:
+"Name is [full name]. Relationship type is [family|friend|classmate|coworker|professional|romantic|mentor|other]. Birthday is [YYYY-MM-DD or unknown]. How we met is [value or unknown]. School is [value or unknown]. Work is [value or unknown]. Hobbies are [comma list or unknown]. Sports are [comma list or unknown]. Favorite foods are [comma list or unknown]. Favorite music is [comma list or unknown]. Memories are [comma list or unknown]. Important events are [comma list or unknown]. Future plans are [comma list or unknown]."`;
+
+// Parse the labeled-sentence response spoken by the model (ASR-friendly, no JSON needed)
+function parseLabeledSpeech(raw) {
+  const t = raw.toLowerCase().replace(/["""]/g, '');
+
+  const field = (pattern) => {
+    const m = t.match(pattern);
+    if (!m) return null;
+    const v = m[1].trim().replace(/\.$/, '');
+    return (v === 'unknown' || v === 'none' || v === '') ? null : v;
+  };
+
+  const list = (pattern) => {
+    const m = t.match(pattern);
+    if (!m) return [];
+    const v = m[1].trim().replace(/\.$/, '');
+    if (v === 'unknown' || v === 'none' || v === '') return [];
+    return v.split(',').map((s) => s.trim()).filter(Boolean);
+  };
+
+  const name = field(/name is ([^.]+)/);
+  const relType = field(/relationship type is ([^.]+)/);
+  const birthday = field(/birthday is ([\d-]+)/);
+
+  return {
+    name,
+    birthday: birthday || null,
+    relationship: {
+      type: ['family','friend','classmate','coworker','professional','romantic','mentor','other']
+        .find((r) => relType?.includes(r)) ?? 'friend',
+    },
+    context: {
+      how_we_met: field(/how we met is ([^.]+)/),
+      school:     field(/school is ([^.]+)/),
+      work:       field(/work is ([^.]+)/),
+      hobbies:    list(/hobbies are ([^.]+)/),
+      sports:     list(/sports are ([^.]+)/),
+      favorites: {
+        foods: list(/favorite foods are ([^.]+)/),
+        music: list(/favorite music is ([^.]+)/),
+      },
+    },
+    history: {
+      memories_together:        list(/memories are ([^.]+)/),
+      important_events:         list(/important events are ([^.]+)/),
+      things_to_look_forward_to: list(/future plans are ([^.]+)/),
+    },
+  };
+}
 
 export class GeminiLiveSession {
   constructor({
@@ -164,9 +213,7 @@ export class GeminiLiveSession {
 
         // Accumulate transcription; emit one clean message per completed turn
         const outputText = sc.outputTranscription?.text;
-        if (typeof outputText === 'string') {
-          this.outputTranscriptBuffer += outputText;
-        }
+        if (typeof outputText === 'string') this.outputTranscriptBuffer += outputText;
 
         if (sc.turnComplete) {
           const finalText = this.outputTranscriptBuffer.trim();
@@ -229,17 +276,20 @@ export class GeminiLiveSession {
     this._extractResolve = null;
     this._extractReject = null;
 
-    // Pull out the first {...} block — the model may add some speech around it
+    // Try JSON first (legacy / if model somehow returns it)
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      reject(new Error(`No JSON in model response: "${text.slice(0, 120)}"`));
+    if (jsonMatch) {
+      try { resolve(JSON.parse(jsonMatch[0])); return; } catch { /* fall through */ }
+    }
+
+    // Primary: parse labeled-sentence format ("Name is X. Relationship type is Y. ...")
+    const parsed = parseLabeledSpeech(text);
+    if (parsed.name) {
+      resolve(parsed);
       return;
     }
-    try {
-      resolve(JSON.parse(jsonMatch[0]));
-    } catch {
-      reject(new Error('Model returned invalid JSON'));
-    }
+
+    reject(new Error(`Could not extract data from: "${text.slice(0, 120)}"`));
   }
 
   _cancelExtraction(reason) {

@@ -60,6 +60,13 @@ function drawMinimalNode(ctx, node, r, color, alpha, isHovered) {
   ctx.stroke();
 }
 
+function truncateLabel(label, maxChars) {
+  if (!label) return '';
+  if (label.length <= maxChars) return label;
+  if (maxChars <= 1) return '…';
+  return `${label.slice(0, maxChars - 1)}…`;
+}
+
 export const DEMO_PEOPLE = [
   {
     id: '1', name: 'Mom', initials: 'MO', birthday: '1972-03-18',
@@ -706,19 +713,14 @@ export default function ConstellationGraph({ activeFilters, focusedCategory, onZ
           ctx.fillText(node.name, node.x, node.y);
         } else {
           drawMinimalNode(ctx, node, r, renderColor, nodeAlpha, isHov);
-          const nameFits = node.name.length <= 11;
-          const textInside = nameFits ? node.name : node.initials;
+          const maxChars = Math.max(7, Math.floor(r * 0.32));
+          const textInside = truncateLabel(node.name, maxChars);
           ctx.fillStyle = `rgba(11,15,25,${0.95 * nodeAlpha})`;
           let fs = Math.max(9, r * 0.55);
           if (fs * 0.6 * textInside.length > r * 1.75) fs = Math.max(9, (r * 1.75) / (textInside.length * 0.6));
           ctx.font = `600 ${fs}px 'Inter',sans-serif`;
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.fillText(textInside, node.x, node.y);
-          if (!nameFits && !isFiltered) {
-            ctx.fillStyle = `rgba(255,255,255,${0.7 * nodeAlpha})`;
-            ctx.font = `500 11px 'Inter',sans-serif`;
-            ctx.fillText(node.name, node.x, node.y + r + 16);
-          }
         }
       }
 

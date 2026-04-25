@@ -293,7 +293,7 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
           name: rawName,
           initials: rawName.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase(),
           ...(extracted.birthday ? { birthday: extracted.birthday } : {}),
-          relationship: extracted.relationship ?? { type: 'friend', strength: 60 },
+          relationship: extracted.relationship ?? { type: 'friend' },
           context: extracted.context ?? {},
           history: extracted.history ?? {},
         };
@@ -343,7 +343,13 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
               if (!person) { fail("Couldn't catch a name — try again."); return; }
               finish(person);
             })
-            .catch((restErr) => fail(restErr.message || 'Could not chart person'));
+            .catch((restErr) => {
+              const msg = restErr.message || '';
+              const isQuotaZero = msg.includes('limit: 0') || msg.includes('Quota exceeded');
+              fail(isQuotaZero
+                ? 'Free-tier quota exhausted for this model. Try again later or check aistudio.google.com/usage.'
+                : msg || 'Could not chart person');
+            });
         });
     } else {
       startVoiceFlow();
