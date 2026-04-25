@@ -24,7 +24,6 @@ export default function StarField() {
   const milkyExtraRef = useRef([]);
   const shootingStarsRef = useRef([]);
   const animationRef = useRef(null);
-  const mouseRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -109,10 +108,6 @@ export default function StarField() {
     };
     const shootingInterval = setInterval(spawnShootingStar, SHOOTING_STAR_INTERVAL);
 
-    const onMouseMove = (e) => {
-      mouseRef.current = { x: e.clientX - width / 2, y: e.clientY - height / 2 };
-    };
-    if (!isMobile) window.addEventListener('mousemove', onMouseMove);
 
     const drawMilkyWay = () => {
       const cx = width / 2;
@@ -137,11 +132,8 @@ export default function StarField() {
       time += 1;
       ctx.clearRect(0, 0, width, height);
 
-      const mx = isMobile ? 0 : mouseRef.current.x;
-      const my = isMobile ? 0 : mouseRef.current.y;
-
-      const farPx = mx * 0.10;
-      const farPy = my * 0.10;
+      const farPx = 0;
+      const farPy = 0;
 
       for (const star of farRef.current) {
         const tw = Math.sin(time * star.twinkleSpeed + star.twinkleOffset);
@@ -158,8 +150,8 @@ export default function StarField() {
         }
       }
 
-      const midPx = mx * 0.25;
-      const midPy = my * 0.25;
+      const midPx = 0;
+      const midPy = 0;
       for (const n of midRef.current) {
         n.driftPhase += n.driftSpeed;
         const dx = Math.cos(n.driftPhase) * n.driftRadius;
@@ -175,8 +167,8 @@ export default function StarField() {
         ctx.fill();
       }
 
-      const nearPx = mx * 0.55;
-      const nearPy = my * 0.55;
+      const nearPx = 0;
+      const nearPy = 0;
       for (const d of nearRef.current) {
         d.x += d.vx;
         d.y += d.vy;
@@ -223,7 +215,6 @@ export default function StarField() {
       cancelAnimationFrame(animationRef.current);
       clearInterval(shootingInterval);
       window.removeEventListener('resize', resize);
-      window.removeEventListener('mousemove', onMouseMove);
     };
   }, []);
 

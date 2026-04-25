@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo, useState, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
-import { forceManyBody, forceCollide } from 'd3-force-3d';
+import { forceManyBody, forceCollide, forceX, forceY } from 'd3-force-3d';
 
 const CATEGORIES = {
   family: { color: '#e8b06b' },
@@ -254,7 +254,6 @@ export default function ConstellationGraph({
 }) {
   const fgRef = useRef(null);
   const containerRef = useRef(null);
-  const clickTimerRef = useRef(null);
   const hoveredLinkRef = useRef(null);
   const hoveredNodeRef = useRef(null);
   const particlesRef = useRef([]);
@@ -300,9 +299,11 @@ export default function ConstellationGraph({
       return -180;
     }));
     fg.d3Force('collide', forceCollide((n) => nodeRadius(n) + 6));
+    fg.d3Force('x', forceX(0).strength(0.05));
+    fg.d3Force('y', forceY(0).strength(0.06));
     const linkForce = fg.d3Force('link');
     if (linkForce) {
-      linkForce.distance((l) => (l.kind === 'trunk' ? 180 : 80)).strength(0.55);
+      linkForce.distance((l) => (l.kind === 'trunk' ? 160 : 70)).strength(0.6);
     }
   }, [graphData]);
 
@@ -385,18 +386,13 @@ export default function ConstellationGraph({
       onNodeClick?.({ isCategory: true, category: node.category, id: node.id });
       return;
     }
-    const sx = event?.clientX;
-    const sy = event?.clientY;
-    if (clickTimerRef.current) {
-      clearTimeout(clickTimerRef.current);
-      clickTimerRef.current = null;
+    if (event?.shiftKey) {
       onNodeDoubleClick?.(node.person);
       return;
     }
-    clickTimerRef.current = setTimeout(() => {
-      clickTimerRef.current = null;
-      onNodeClick?.(node.person, sx != null ? { x: sx, y: sy } : null);
-    }, 250);
+    const sx = event?.clientX;
+    const sy = event?.clientY;
+    onNodeClick?.(node.person, sx != null ? { x: sx, y: sy } : null);
   }, [activeTool, onNodeClick, onNodeDoubleClick]);
 
   const handleNodeHover = useCallback((node) => {
@@ -522,15 +518,115 @@ export default function ConstellationGraph({
     }
   }, [deletingSet, isDimmed]);
 
-  const paintNodePointer = useCallback((node, color, ctx) => {
-    if (deletingSet.has(node.id)) return;
-    if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
-    const r = nodeRadius(node) * 1.15;
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-    ctx.fill();
-  }, [deletingSet]);
+  const findNodeAt = useCallback((gx, gy) => {
+    let best = null;
+    let bestDist = Infinity;
+    for (const n of graphData.nodes) {
+      if (deletingSet.has(n.id)) continue;
+      if (!Number.isFinite(n.x) || !Number.isFinite(n.y)) continue;
+      const r = nodeRadius(n);
+      const dx = gx - n.x;
+      const dy = gy - n.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 <= r * r && d2 < bestDist) {
+        bestDist = d2;
+        best = n;
+      }
+    }
+    return best;
+  }, [graphData, deletingSet]);
+
+  const findLinkAt = useCallback((gx, gy, tol) => {
+    let best = null;
+    let bestD = tol;
+    for (const l of graphData.links) {
+      const s = l.source;
+      const t = l.target;
+      if (!s || !t || typeof s !== 'object' || typeof t !== 'object') continue;
+      if (!Number.isFinite(s.x) || !Number.isFinite(t.x)) continue;
+      const vx = t.x - s.x;
+      const vy = t.y - s.y;
+      const len2 = vx * vx + vy * vy;
+      if (len2 === 0) continue;
+      let u = ((gx - s.x) * vx + (gy - s.y) * vy) / len2;
+      u = Math.max(0, Math.min(1, u));
+      const px = s.x + u * vx;
+      const py = s.y + u * vy;
+      const d = Math.hypot(gx - px, gy - py);
+      if (d < bestD) {
+        bestD = d;
+        best = l;
+      }
+    }
+    return best;
+  }, [graphData]);
+
+  // Manual pointer interaction (force-graph's shadow-canvas hit detection
+  // misfires for our custom-painted nodes — only the last-painted few register).
+  useEffect(() => {
+    const fg = fgRef.current;
+    const root = containerRef.current;
+    if (!fg || !root) return;
+    const canvas = root.querySelector('canvas');
+    if (!canvas) return;
+
+    const toGraph = (ev) => {
+      const rect = canvas.getBoundingClientRect();
+      const sx = ev.clientX - rect.left;
+      const sy = ev.clientY - rect.top;
+      return fg.screen2GraphCoords(sx, sy);
+    };
+
+    let downScreen = null;
+
+    const onMove = (ev) => {
+      const { x, y } = toGraph(ev);
+      const node = findNodeAt(x, y);
+      if (activeTool === 'snip') {
+        const link = node ? null : findLinkAt(x, y, 8);
+        hoveredLinkRef.current = link;
+        canvas.style.cursor = 'crosshair';
+      } else {
+        hoveredLinkRef.current = null;
+      }
+      handleNodeHover(node);
+    };
+
+    const onDown = (ev) => {
+      if (ev.button !== 0) return;
+      downScreen = { x: ev.clientX, y: ev.clientY };
+    };
+
+    const onUp = (ev) => {
+      if (ev.button !== 0 || !downScreen) return;
+      const dx = ev.clientX - downScreen.x;
+      const dy = ev.clientY - downScreen.y;
+      downScreen = null;
+      const moved = Math.hypot(dx, dy) > 4;
+      if (moved) return; // pan / drag — not a click
+      const { x, y } = toGraph(ev);
+      const node = findNodeAt(x, y);
+      if (node) {
+        handleNodeClick(node, ev);
+        return;
+      }
+      if (activeTool === 'snip') {
+        const link = findLinkAt(x, y, 8);
+        if (link) handleLinkClick(link);
+        return;
+      }
+      handleBackgroundClick();
+    };
+
+    canvas.addEventListener('pointermove', onMove);
+    canvas.addEventListener('pointerdown', onDown);
+    canvas.addEventListener('pointerup', onUp);
+    return () => {
+      canvas.removeEventListener('pointermove', onMove);
+      canvas.removeEventListener('pointerdown', onDown);
+      canvas.removeEventListener('pointerup', onUp);
+    };
+  }, [findNodeAt, findLinkAt, handleNodeClick, handleNodeHover, handleLinkClick, handleBackgroundClick, activeTool]);
 
   // ----- link painting -----
   const paintLink = useCallback((link, ctx) => {
@@ -610,16 +706,25 @@ export default function ConstellationGraph({
   }, []);
 
   return (
-    <div ref={containerRef} style={{ position: 'absolute', inset: 0 }}>
+    <div
+      ref={containerRef}
+      style={{
+        position: 'absolute',
+        top: 80,
+        left: 280,
+        right: 24,
+        bottom: 110,
+      }}
+    >
       <ForceGraph2D
         ref={fgRef}
         graphData={graphData}
         width={size.w}
         height={size.h}
         backgroundColor="rgba(0,0,0,0)"
+        enablePointerInteraction={false}
         nodeCanvasObjectMode={() => 'replace'}
         nodeCanvasObject={paintNode}
-        nodePointerAreaPaint={paintNodePointer}
         linkCanvasObjectMode={() => 'replace'}
         linkCanvasObject={paintLink}
         linkPointerAreaPaint={paintLinkPointer}
@@ -630,10 +735,10 @@ export default function ConstellationGraph({
         onLinkHover={handleLinkHover}
         onBackgroundClick={handleBackgroundClick}
         onRenderFramePost={onRenderFramePost}
-        d3AlphaDecay={0.025}
-        d3VelocityDecay={0.4}
-        cooldownTicks={Infinity}
-        warmupTicks={60}
+        d3AlphaDecay={0.04}
+        d3VelocityDecay={0.55}
+        cooldownTicks={200}
+        warmupTicks={80}
         enableZoomInteraction={true}
         enablePanInteraction={true}
         enableNodeDrag={activeTool !== 'snip'}
