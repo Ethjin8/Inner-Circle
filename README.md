@@ -1,59 +1,67 @@
 # Inner Circle
 
-An AI-powered personal relationship manager that helps you nurture the connections that matter most.
+An immersive, visual personal relationship manager designed to help you organize and cherish the connections that matter most.
 
-## What It Does
+## Overview
 
-You are the center of an interactive graph network. Each person in your life is a node, connected to you by edges that reflect the strength of your relationship. An AI therapist learns about your relationships through natural voice conversations, tracks relationship health over time, and nudges you when a connection needs attention.
+Inner Circle is a deterministic, hierarchical radial graph that lets you map out your entire social network (family, friends, mentors, etc.). With a focus on **visual excellence** and **interaction design**, you are placed at the center of your own constellation. The application goes beyond standard lists, utilizing camera-based zoom systems, particle effects, and 3D rendering to create an engaging experience.
 
 ## Key Features
 
-- **Voice-First Onboarding** — Talk to an AI therapist to add people to your graph. No forms, no typing. The agent walks through a progressive question flow — starting simple ("How well do you know this person?") and gradually deepening into richer prompts ("What's your favorite memory together?") — and extracts the details naturally.
-- **Interactive Relationship Graph** — Force-directed graph with you at the center. Edge thickness = relationship strength. Node color = urgency (green/yellow/red). Filter by category (work, school, family) to focus on one area of your life.
-- **Smart Nudges** — The app knows when you should reach out. Birthday reminders, fading relationship alerts, and context-aware suggestions ("Finals coming up — study session with Jake?").
-- **Context-Aware AI Chat** — Drag nodes into the chat to give the AI context about specific people. Ask it to plan a group hangout, draft a message, or suggest a gift — it knows your relationship history.
-- **Message Drafting** — AI drafts personalized messages matching the right tone for each relationship. Review, edit, copy-paste.
+- **Interactive Constellation Graph** — A fluid, beautifully styled constellation layout. Nodes organically "breathe" with subtle physics and emit glowing particles. Each category in your life receives a dedicated branch from the center "You" node.
+- **Cinematic Zoom System** — Clicking a category or person invokes a camera-based pan-and-zoom, moving the focus point smoothly without scrambling the existing layout.
+- **Explorer Sidebar** — A VS Code-style collapsible hierarchy tree. Easily scan your network by groups, view relationship strength scores, and click to immediately navigate across the galaxy to a specific person.
+- **Node Manipulation & "Snip"** — Full drag-and-drop support for categories and individual people. Use the **Snip Tool ✂️** to cut connections from your graph and watch them gracefully dissolve into physics particles (fully undo-able).
+- **Cloudinary Media Manager** — Integrated seamlessly with the official `@cloudinary/react` SDK. Users can open a person's card and drag-and-drop multiple memories into their profile.
+- **3D Memory Carousel 📸** — Click the camera icon in the toolbar to fade the graph away and enter the Memory Gallery. It aggregates all photos across your network into an Apple-style, 3D hardware-accelerated Coverflow carousel. Supports precision trackpad scrolling, mouse momentum, and auto-play idle loops.
 
 ## Tech Stack
 
-- **Frontend:** React, force-directed graph visualization, Cloudinary (profile photos)
-- **Backend:** Firebase (Firestore, Cloud Functions, Hosting)
-- **AI:** Claude API (voice conversation, relationship analysis, recommendations, chat)
+- **Frontend Core:** React + Vite
+- **Styling & Physics:** Vanilla CSS + custom `requestAnimationFrame` loops (No Tailwind, no bulky physics engines)
+- **Media Hosting & Transformation:** Cloudinary (`@cloudinary/react`, `@cloudinary/url-gen`)
+- **Backend/State:** Currently frontend-state driven (Firebase / LocalStorage extensions planned)
+- **AI (WIP):** Gemini 2.0 integration planned for voice-based onboarding and graph-population parsing.
 
 ## Getting Started
 
-```bash
-# Install dependencies
-npm install
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-# Set up environment variables
-cp .env.example .env
-# Add your API keys: ANTHROPIC_API_KEY, CLOUDINARY_URL, Firebase config
+2. **Set up Environment Variables:**
+   Copy the example `.env` file to set up your keys.
+   ```bash
+   cp .env.example .env
+   ```
+   Provide your Cloudinary tracking details:
+   ```env
+   VITE_CLOUDINARY_CLOUD_NAME=your_cloud_name
+   VITE_CLOUDINARY_UPLOAD_PRESET=your_unsigned_preset
+   ```
 
-# Start development server
-npm run dev
-```
+3. **Start the Development Server:**
+   ```bash
+   npm run dev
+   ```
 
 ## Project Structure
 
-```
+```text
 src/
   components/
-    Graph/          # Force-directed relationship graph
-    Chat/           # AI chat interface
-    NodeCard/       # Person info card overlay
-    Onboarding/     # Voice-first onboarding flow
-  services/
-    ai.js           # Claude API integration (chat + voice)
-    firebase.js     # Firestore data layer
-    nudges.js       # Recommendation engine
-  utils/
-    scoring.js      # Relationship strength calculation
+    Graph/              # Core constellation canvas and rendering logic
+    PersonModal/        # Profile cards with tabs and info presentation
+    CloudinaryUpload/   # SDK-integrated upload widgets and lightboxes
+    MemoryCarousel/     # 3D cinematic physics-based photo gallery
+  App.jsx               # Hub for application state, sidebar logic, and toolbars
+  App.css               # Global theming, glassmorphism, and transitions
 ```
 
 ## Built For
 
-LA Hacks 2026
+**LA Hacks 2026**
 
 ## Team
 
