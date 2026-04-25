@@ -108,9 +108,9 @@ const drawStarGlow = (ctx, x, y, radius, alpha) => {
   ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
 };
 
-const drawNorthStar = (ctx, w, h, t) => {
+const drawNorthStar = (ctx, w, h, t, yRatio = 0.25) => {
   const x = w / 2;
-  const y = h / 4;
+  const y = h * yRatio;
   const pulse = 0.75 + 0.25 * Math.sin(t * 0.0008);
 
   const outerGlow = ctx.createRadialGradient(x, y, 0, x, y, 70 * pulse);
@@ -149,10 +149,12 @@ export default function Landing({ onEnter, user }) {
   const canvasRef = useRef(null);
   const zoomTimerRef = useRef(null);
   const zoomingRef = useRef(false);
+  const zoomStartRef = useRef(0);
 
   const triggerEnter = () => {
     if (zoomingRef.current) return;
     zoomingRef.current = true;
+    zoomStartRef.current = performance.now();
     setZooming(true);
     onEnter();
   };
@@ -224,7 +226,14 @@ export default function Landing({ onEnter, user }) {
 
       ctx.clearRect(0, 0, w, h);
       drawSkyGradient(ctx, w, h);
-      drawNorthStar(ctx, w, h, t);
+
+      let yRatio = 0.25;
+      if (zoomingRef.current) {
+        const elapsed = performance.now() - zoomStartRef.current;
+        const p = Math.min(1, elapsed / 1400);
+        yRatio = 0.25 + (0.5 - 0.25) * easeInOutCubic(p);
+      }
+      drawNorthStar(ctx, w, h, t, yRatio);
 
       // // Ambient stars
       // ambient.forEach((s) => {
