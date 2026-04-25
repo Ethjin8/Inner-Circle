@@ -397,22 +397,58 @@ export default function ConstellationGraph({ activeFilter, people = DEMO_PEOPLE,
         }
       }
 
-      ctx.beginPath();
-      ctx.arc(cx, cy, centerRadius, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(55, 90, 200, 0.9)';
-      ctx.fill();
+      const astrolabeR = 28;
+      const innerR = astrolabeR * 0.6;
+      const astrolabeAngle = t * 0.0035;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(astrolabeAngle);
 
       ctx.beginPath();
-      ctx.arc(cx, cy, centerRadius, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(100, 150, 255, 0.5)';
-      ctx.lineWidth = 2;
+      ctx.arc(0, 0, astrolabeR, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(232, 232, 240, 0.7)';
+      ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-      ctx.font = "700 14px 'Space Grotesk', sans-serif";
+      ctx.beginPath();
+      ctx.arc(0, 0, innerR, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(232, 232, 240, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(-astrolabeR, 0);
+      ctx.lineTo(astrolabeR, 0);
+      ctx.moveTo(0, -astrolabeR);
+      ctx.lineTo(0, astrolabeR);
+      ctx.strokeStyle = 'rgba(232, 232, 240, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      const tickInner = astrolabeR * 0.85;
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * tickInner, Math.sin(a) * tickInner);
+        ctx.lineTo(Math.cos(a) * astrolabeR, Math.sin(a) * astrolabeR);
+        ctx.strokeStyle = 'rgba(232, 232, 240, 0.45)';
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+      }
+
+      ctx.beginPath();
+      ctx.arc(0, 0, 3, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(232, 232, 240, 0.9)';
+      ctx.fill();
+
+      ctx.restore();
+
+      ctx.fillStyle = 'rgba(232, 232, 240, 0.85)';
+      ctx.font = "600 11px 'Inter', sans-serif";
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('YOU', cx, cy);
+      ctx.fillText('YOU', cx, cy + astrolabeR + 14);
 
       animRef.current = requestAnimationFrame(draw);
     };
