@@ -1,0 +1,22 @@
+{
+  "_expected_aggregate": "~4",
+  "id": "val_02_classmate",
+  "name": "Rei",
+  "relationship": { "type": "classmate" },
+  "notes": "Known her since elementary school but we drifted — she runs in a different group now. We had AP Gov together senior year and that was actually fun, sat next to each other. Now we only really see each other through mutual friends maybe once a month.",
+  "context": {
+    "how_we_met": "Met in elementary school, but have mostly drifted apart since.",
+    "school": "UCLA (same school as user)",
+    "major": "Music",
+    "shared_schools": ["same elementary school", "shared a few high school classes"],
+    "communication_channels": ["mostly via shared-friend group meetups; not much direct contact"]
+  },
+  "history": {
+    "memories_together": [
+      "AP Government, senior year of high school — sat next to each other and worked on projects together (genuinely enjoyed those)"
+    ],
+    "important_events": [],
+    "things_to_look_forward_to": []
+  },
+  "last_interaction_at": null
+}

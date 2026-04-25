@@ -1,0 +1,31 @@
+{
+  "_expected_aggregate": "~9-10",
+  "id": "val_05_inner_circle",
+  "name": "Mom",
+  "relationship": { "type": "family" },
+  "notes": "She's my mom — we talk every week or so, more when something's going on. She knows what's happening in my life and I lean on her when stuff gets hard. She got me through the college app process and was anxious right alongside me. We've traveled a lot together and we're going to Taiwan and Japan this summer.",
+  "context": {
+    "relation": "mother",
+    "years_known": "lifetime",
+    "occupation": "accountant",
+    "hobbies": ["going on walks regularly with my dad"],
+    "cultural_context": "Taiwanese family; maternal grandparents live in Taiwan"
+  },
+  "history": {
+    "memories_together": [
+      "Frequent vacations together over the years",
+      "Biannual trips to Taiwan together to visit grandparents (every other year, ongoing tradition)",
+      "She was there throughout high school keeping me on top of my work and pushing me to do my best",
+      "She supported me through the difficult college application process — helping me find people to learn from and editing my college essay",
+      "We were anxious together during the college acceptance letter phase — she was worried about where I'd end up too, and we shared that stress"
+    ],
+    "important_events": [
+      "Present at major life milestones — high school graduation, UCLA acceptance, and more",
+      "Biannual Taiwan trip — recurring family ritual every other year"
+    ],
+    "things_to_look_forward_to": [
+      "Travelling to Taiwan and Japan together in summer 2026"
+    ]
+  },
+  "last_interaction_at": null
+}

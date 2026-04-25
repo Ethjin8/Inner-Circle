@@ -59,7 +59,7 @@ const STEPS = [
 ];
 
 const BLANK = {
-  name: '', birthday: '', relType: 'friend', strength: 60,
+  name: '', birthday: '', relType: 'friend', notes: '',
   howWeMet: '', school: '', work: '',
   hobbies: [], sports: [], favoritesFoods: [], favoritesMusic: [],
   memoriesTogether: [], importantEvents: [], thingsToLookForwardTo: [],
@@ -293,6 +293,7 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
           name: rawName,
           initials: rawName.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase(),
           ...(extracted.birthday ? { birthday: extracted.birthday } : {}),
+          ...(extracted.notes ? { notes: extracted.notes } : {}),
           relationship: extracted.relationship ?? { type: 'friend' },
           context: extracted.context ?? {},
           history: extracted.history ?? {},
@@ -368,7 +369,8 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
       name: rawName,
       initials,
       ...(form.birthday ? { birthday: form.birthday } : {}),
-      relationship: { type: form.relType, strength: Number(form.strength) },
+      ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
+      relationship: { type: form.relType },
       context: {
         how_we_met: form.howWeMet.trim() || null,
         school:     form.school.trim()   || null,
@@ -580,23 +582,6 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
                   </div>
 
                   <div className="apm-field">
-                    <div className="apm-label">
-                      Connection strength
-                      <span className="apm-strength-val"> — {form.strength}</span>
-                    </div>
-                    <input
-                      className="apm-slider"
-                      type="range"
-                      min="0" max="100" step="1"
-                      value={form.strength}
-                      onChange={(e) => set('strength', e.target.value)}
-                    />
-                    <div className="apm-slider-labels">
-                      <span>Distant</span><span>Close</span>
-                    </div>
-                  </div>
-
-                  <div className="apm-field">
                     <label className="apm-label" htmlFor="apm-bday">Birthday</label>
                     <input
                       id="apm-bday"
@@ -604,6 +589,21 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
                       type="date"
                       value={form.birthday}
                       onChange={(e) => set('birthday', e.target.value)}
+                    />
+                  </div>
+
+                  <div className="apm-field">
+                    <label className="apm-label" htmlFor="apm-notes">
+                      Quick note
+                      <span className="apm-label-hint"> — your own words on this relationship (the AI weights this heavily)</span>
+                    </label>
+                    <textarea
+                      id="apm-notes"
+                      className="apm-text-input apm-textarea"
+                      rows="4"
+                      value={form.notes}
+                      onChange={(e) => set('notes', e.target.value)}
+                      placeholder="e.g. We&apos;ve been close since freshman year. Hang out a few times a week, get coffee, study together — she was there for me when my grandma passed."
                     />
                   </div>
                 </>

@@ -1,0 +1,21 @@
+{
+  "_expected_aggregate": "~2-3",
+  "id": "val_01_acquaintance",
+  "name": "Darell",
+  "relationship": { "type": "acquaintance" },
+  "notes": "Met him at an origami club meeting maybe a month ago. We've crossed paths at a couple TASA events since — he seems chill but I don't really know him. Haven't talked one-on-one outside of those.",
+  "context": {
+    "how_we_met": "Met at Bruin Origami Club during early fall quarter of freshman year at UCLA.",
+    "school": "UCLA (same school as user)",
+    "major": "Electrical Engineering (same major as user)",
+    "shared_clubs": ["Bruin Origami Club", "TASA (Taiwanese American Student Association)"]
+  },
+  "history": {
+    "memories_together": [
+      "Attended a few TASA events together (TFTI event, fam slime-making event)"
+    ],
+    "important_events": [],
+    "things_to_look_forward_to": []
+  },
+  "last_interaction_at": null
+}

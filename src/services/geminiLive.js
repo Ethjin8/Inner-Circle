@@ -3,7 +3,7 @@ const EXTRACT_MODEL = 'models/gemini-2.5-flash';
 
 // ─── Person extraction (REST fallback) ───────────────────────────────────────
 
-const EXTRACT_SCHEMA = '{"name":null,"birthday":null,"relationship":{"type":"friend"},"context":{"how_we_met":null,"school":null,"work":null,"hobbies":[],"sports":[],"favorites":{"foods":[],"music":[]}},"history":{"memories_together":[],"important_events":[],"things_to_look_forward_to":[]}}';
+const EXTRACT_SCHEMA = '{"name":null,"birthday":null,"notes":null,"relationship":{"type":"friend"},"context":{"how_we_met":null,"school":null,"work":null,"hobbies":[],"sports":[],"favorites":{"foods":[],"music":[]}},"history":{"memories_together":[],"important_events":[],"things_to_look_forward_to":[]}}';
 
 const EXTRACT_PROMPT = `You are extracting contact information from a voice onboarding conversation.
 
@@ -15,6 +15,7 @@ Fill in the JSON below using only details explicitly mentioned. Rules:
 - [] for array fields that were not mentioned
 - relationship.type: one of family | friend | classmate | coworker | professional | romantic | mentor | other
 - birthday: YYYY-MM-DD if a date was mentioned, otherwise null
+- notes: a 1-3 sentence prose summary of the relationship in the user's own framing (closeness, cadence, emotional tone). null if there's nothing to summarize.
 
 ${EXTRACT_SCHEMA}`;
 
@@ -72,7 +73,7 @@ Style:
 - Keep turns short for spoken conversation.
 
 When the user sends the text "EXTRACT_JSON", respond ONLY with these labeled sentences — no extra commentary, say "unknown" for anything not mentioned:
-"Name is [full name]. Relationship type is [family|friend|classmate|coworker|professional|romantic|mentor|other]. Birthday is [YYYY-MM-DD or unknown]. How we met is [value or unknown]. School is [value or unknown]. Work is [value or unknown]. Hobbies are [comma list or unknown]. Sports are [comma list or unknown]. Favorite foods are [comma list or unknown]. Favorite music is [comma list or unknown]. Memories are [comma list or unknown]. Important events are [comma list or unknown]. Future plans are [comma list or unknown]."`;
+"Name is [full name]. Relationship type is [family|friend|classmate|coworker|professional|romantic|mentor|other]. Birthday is [YYYY-MM-DD or unknown]. Notes are [a 1-3 sentence prose summary of the relationship in the user's own framing — closeness, cadence, emotional tone — or unknown]. How we met is [value or unknown]. School is [value or unknown]. Work is [value or unknown]. Hobbies are [comma list or unknown]. Sports are [comma list or unknown]. Favorite foods are [comma list or unknown]. Favorite music is [comma list or unknown]. Memories are [comma list or unknown]. Important events are [comma list or unknown]. Future plans are [comma list or unknown]."`;
 
 // Parse the labeled-sentence response spoken by the model (ASR-friendly, no JSON needed)
 function parseLabeledSpeech(raw) {
@@ -96,10 +97,16 @@ function parseLabeledSpeech(raw) {
   const name = field(/name is ([^.]+)/);
   const relType = field(/relationship type is ([^.]+)/);
   const birthday = field(/birthday is ([\d-]+)/);
+  // Notes can span multiple sentences (and contain periods), so terminate on
+  // the next labeled field instead of on the first period.
+  const notesMatch = t.match(/notes are (.+?)\s+how we met is /);
+  const notesRaw = notesMatch?.[1]?.trim().replace(/\.$/, '') ?? null;
+  const notes = (notesRaw === 'unknown' || !notesRaw) ? null : notesRaw;
 
   return {
     name,
     birthday: birthday || null,
+    ...(notes ? { notes } : {}),
     relationship: {
       type: ['family','friend','classmate','coworker','professional','romantic','mentor','other']
         .find((r) => relType?.includes(r)) ?? 'friend',
