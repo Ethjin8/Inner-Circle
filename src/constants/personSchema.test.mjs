@@ -13,7 +13,7 @@ test('buildPersonFromForm returns null for blank name', () => {
 
 test('buildPersonFromForm produces full v2 shape with all 7 connection fields', () => {
   const result = buildPersonFromForm({
-    ...BLANK_PERSON,
+    ...BLANK_PERSON(),
     name: 'Theo',
     relType: 'friend',
     tenure: 'lifetime',
@@ -38,7 +38,7 @@ test('buildPersonFromForm produces full v2 shape with all 7 connection fields', 
 
 test('buildPersonFromForm drops invalid enum values to null', () => {
   const result = buildPersonFromForm({
-    ...BLANK_PERSON,
+    ...BLANK_PERSON(),
     name: 'Test',
     tenure: 'forever',
     frequency: 'daily',
