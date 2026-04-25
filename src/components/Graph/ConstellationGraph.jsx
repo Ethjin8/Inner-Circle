@@ -1,20 +1,20 @@
 import { useRef, useEffect, useCallback } from 'react';
 
 const CATEGORIES = {
-  friend: { color: '#60a5fa' },
-  family: { color: '#f472b6' },
-  classmate: { color: '#a78bfa' },
-  coworker: { color: '#34d399' },
-  professional: { color: '#fbbf24' },
-  romantic: { color: '#fb7185' },
-  mentor: { color: '#38bdf8' },
-  other: { color: '#94a3b8' },
+  family: { color: '#e8b06b' },
+  romantic: { color: '#ffc8d6' },
+  friend: { color: '#ffce5c' },
+  classmate: { color: '#b9d0ff' },
+  coworker: { color: '#9be6c4' },
+  professional: { color: '#ff9c5a' },
+  mentor: { color: '#7df9ff' },
+  other: { color: '#cdc9c0' },
 };
 
 function strengthToEdgeColor(strength) {
-  if (strength >= 65) return '52, 211, 153';   // green
-  if (strength >= 40) return '250, 204, 50';    // yellow
-  return '240, 80, 80';                         // red
+  if (strength >= 65) return '120, 220, 170';   // sage green
+  if (strength >= 40) return '240, 210, 110';    // soft amber
+  return '220, 130, 130';                         // dusty rose
 }
 
 const DEMO_PEOPLE = [
