@@ -24,6 +24,21 @@ const CATEGORY_LABELS = {
   other: 'Other',
 };
 
+const DIMENSION_LABELS = {
+  depth_of_knowledge:     'Depth of knowledge',
+  emotional_intimacy:     'Emotional intimacy',
+  recency_frequency:      'Recency / frequency',
+  shared_history_density: 'Shared history',
+  reciprocity:            'Reciprocity',
+};
+const DIMENSION_ORDER = [
+  'depth_of_knowledge',
+  'emotional_intimacy',
+  'recency_frequency',
+  'shared_history_density',
+  'reciprocity',
+];
+
 function strengthRingColor(s) {
   if (s >= 65) return '#34d399';
   if (s >= 40) return '#facc32';
@@ -73,7 +88,7 @@ function toDraft(person) {
     name: person.name || '',
     birthday: person.birthday || '',
     relationshipType: person.relationship?.type || 'other',
-    relationshipStrength: String(person.relationship?.strength ?? 0),
+    notes: person.notes || '',
     howWeMet: person.context?.how_we_met || '',
     school: person.context?.school || '',
     work: person.context?.work || '',
@@ -100,10 +115,10 @@ function fromDraft(person, draft) {
     ...person,
     name: draft.name.trim() || person.name,
     birthday: draft.birthday || null,
+    notes: draft.notes.trim() || null,
     relationship: {
       ...(person.relationship || {}),
       type: draft.relationshipType || 'other',
-      strength: Math.max(0, Math.min(100, Number(draft.relationshipStrength) || 0)),
     },
     context: {
       ...(person.context || {}),
@@ -127,7 +142,7 @@ function fromDraft(person, draft) {
   };
 }
 
-export default function PersonModal({ person, originPoint, phase, onClose, photosByPerson = {}, onPhotosChange, onUpdatePerson }) {
+export default function PersonModal({ person, originPoint, phase, onClose, photosByPerson = {}, onPhotosChange, onUpdatePerson, onRescore }) {
   const [activeTab, setActiveTab] = useState('info');
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(() => toDraft(person));
@@ -158,12 +173,15 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
   const hasForward = history.things_to_look_forward_to?.length > 0;
   const showSubLabels = hasMemoriesTogether && hasImportantEvents;
 
+  const isScored = Boolean(person.scoring?.dimensions);
   const RING_R = 44;
   const RING_W = 3;
   const SIZE = (RING_R + RING_W) * 2;
   const CIRC = 2 * Math.PI * RING_R;
-  const offset = CIRC * (1 - Math.max(0, Math.min(100, strength)) / 100);
-  const ringColor = strengthRingColor(strength);
+  // Until scored, the strength ring is neutral and shows no fill — avoids
+  // implying a connection level the AI hasn't graded yet.
+  const offset = isScored ? CIRC * (1 - Math.max(0, Math.min(100, strength)) / 100) : CIRC;
+  const ringColor = isScored ? strengthRingColor(strength) : 'rgba(200,200,210,0.35)';
 
   return (
     <div className={`pm-backdrop ${phase || ''}`} onClick={onClose} role="presentation">
@@ -195,6 +213,18 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
               className={`pm-tab ${activeTab === 'info' ? 'active' : ''}`}
               onClick={() => setActiveTab('info')}
             >Info</button>
+            <button
+              className={`pm-tab ${activeTab === 'score' ? 'active' : ''}`}
+              onClick={() => setActiveTab('score')}
+            >
+              Score
+              {person.scoring?.status === 'pending' && (
+                <span className="pm-tab-dot pm-tab-dot-pending" aria-label="scoring" />
+              )}
+              {person.scoring?.status === 'failed' && (
+                <span className="pm-tab-dot pm-tab-dot-failed" aria-label="scoring failed" />
+              )}
+            </button>
             <button
               className={`pm-tab ${activeTab === 'photos' ? 'active' : ''}`}
               onClick={() => setActiveTab('photos')}
@@ -316,15 +346,13 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
                           ))}
                         </select>
                       </label>
-                      <label className="pm-input-label">
-                        Strength (0-100)
-                        <input
-                          className="pm-input"
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={draft.relationshipStrength}
-                          onChange={(e) => setDraft((prev) => ({ ...prev, relationshipStrength: e.target.value }))}
+                      <label className="pm-input-label pm-input-wide">
+                        Notes
+                        <textarea
+                          className="pm-input pm-textarea"
+                          value={draft.notes}
+                          onChange={(e) => setDraft((prev) => ({ ...prev, notes: e.target.value }))}
+                          placeholder="Your own words on this relationship — closeness, cadence, tone."
                         />
                       </label>
                     </div>
@@ -370,6 +398,16 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
 
               {!isEditing && (
                 <>
+              {person.notes && (
+                <>
+                  <div className="pm-divider" />
+                  <section className="pm-section">
+                    <div className="pm-section-label">Notes</div>
+                    <div className="pm-notes">{person.notes}</div>
+                  </section>
+                </>
+              )}
+
               {hasContext && (
                 <>
                   <div className="pm-divider" />
@@ -424,6 +462,65 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
               )}
                 </>
               )}
+            </>
+          )}
+
+          {/* Score tab content */}
+          {activeTab === 'score' && (
+            <>
+              <div className="pm-divider" />
+              <section className="pm-section">
+                <div className="pm-score-header">
+                  <div className="pm-section-label">Why this score?</div>
+                  {onRescore && person.scoring?.status !== 'pending' && (
+                    <button className="pm-rescore-btn" onClick={onRescore}>
+                      Rescore
+                    </button>
+                  )}
+                </div>
+
+                {!person.scoring && (
+                  <div className="pm-score-pending">Not scored yet.</div>
+                )}
+
+                {person.scoring?.status === 'pending' && (
+                  <div className="pm-score-pending">
+                    Scoring across 5 dimensions… (~25s)
+                  </div>
+                )}
+
+                {person.scoring?.status === 'failed' && (
+                  <div className="pm-score-failed">
+                    ⚠ Scoring failed{person.scoring.error ? `: ${person.scoring.error}` : '.'}
+                  </div>
+                )}
+
+                {person.scoring?.dimensions && (
+                  <div className="pm-score-dims">
+                    {DIMENSION_ORDER.map((key) => {
+                      const dim = person.scoring.dimensions[key];
+                      if (!dim) return null;
+                      return (
+                        <div key={key} className="pm-score-dim">
+                          <div className="pm-score-dim-head">
+                            <span className="pm-score-dim-name">{DIMENSION_LABELS[key]}</span>
+                            <span className="pm-score-dim-num">{dim.score}/10</span>
+                          </div>
+                          <div className="pm-score-bar">
+                            <div
+                              className="pm-score-bar-fill"
+                              style={{ width: `${(dim.score / 10) * 100}%` }}
+                            />
+                          </div>
+                          {dim.reasoning && (
+                            <div className="pm-score-dim-reason">{dim.reasoning}</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
             </>
           )}
 

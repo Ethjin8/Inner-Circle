@@ -1,0 +1,24 @@
+{
+  "_expected_aggregate": "~6",
+  "id": "val_03_friend",
+  "name": "Curtis",
+  "relationship": { "type": "friend" },
+  "notes": "Known him since middle school — went through high school together and now we're both at UCLA. We don't text constantly but we hang out on campus a few times a month — gym, meals, late-night walks. Solid friendship, low-maintenance, picks right back up whenever.",
+  "context": {
+    "how_we_met": "Met in middle school; had a few shared classes in high school (most notably AP Literature senior year); now both at UCLA.",
+    "school": "UCLA (same school as user)",
+    "shared_schools": ["same middle school", "same high school", "same university (UCLA)"],
+    "communication_channels": ["in-person on campus — not constant, but recurring"]
+  },
+  "history": {
+    "memories_together": [
+      "Went to a UCLA football game together",
+      "Late-night campus wandering together once",
+      "Occasional gym sessions together",
+      "Occasional meals together"
+    ],
+    "important_events": [],
+    "things_to_look_forward_to": []
+  },
+  "last_interaction_at": null
+}

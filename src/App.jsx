@@ -4,6 +4,7 @@ import ConstellationGraph, { DEMO_PEOPLE } from './components/Graph/Constellatio
 import PersonModal from './components/PersonModal/PersonModal';
 import AddPersonModal from './components/AddPersonModal/AddPersonModal';
 import MemoryCarousel from './components/MemoryCarousel/MemoryCarousel';
+import { scorePerson } from './services/scoring';
 import './App.css';
 
 const FILTERS = [
@@ -173,6 +174,43 @@ function App() {
   const handlePersonUpdate = useCallback((updatedPerson) => {
     setPeople((prev) => prev.map((person) => (person.id === updatedPerson.id ? updatedPerson : person)));
     setSelectedPerson(updatedPerson);
+    // Edits change the relationship signal, so rescore. README §AI Workflow point 5.
+    scoreAndPatch(updatedPerson);
+  // scoreAndPatch is a stable useCallback — safe to omit
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Mark a person as scoring-pending, run the AI pipeline, then patch the
+  // result back. Used by both onAdd (initial) and the sidebar Retry button.
+  const scoreAndPatch = useCallback((person) => {
+    setPeople((prev) =>
+      prev.map((p) => (p.id === person.id ? { ...p, scoring: { status: 'pending' } } : p)),
+    );
+    scorePerson(person)
+      .then((scoring) => {
+        setPeople((prev) =>
+          prev.map((p) =>
+            p.id === person.id
+              ? {
+                  ...p,
+                  scoring,
+                  relationship: { ...(p.relationship || {}), strength: scoring.aggregate },
+                  updated_at: scoring.scored_at,
+                }
+              : p,
+          ),
+        );
+      })
+      .catch((err) => {
+        console.error('Scoring failed for', person.name, err);
+        setPeople((prev) =>
+          prev.map((p) =>
+            p.id === person.id
+              ? { ...p, scoring: { status: 'failed', error: err.message } }
+              : p,
+          ),
+        );
+      });
   }, []);
 
   const handleSubmit = useCallback((e) => {
@@ -187,6 +225,11 @@ function App() {
     : undefined;
 
   const showModal = !!selectedPerson || modalPhase === 'zooming-out';
+  // Pull the latest copy from `people` so async scoring updates flow into an
+  // already-open modal. Falls back to the snapshot for the zooming-out frame.
+  const livePerson = selectedPerson
+    ? people.find((p) => p.id === selectedPerson.id) ?? selectedPerson
+    : null;
 
   return (
     <div className="app">
@@ -329,8 +372,32 @@ function App() {
                           {isPersonExpanded && (
                             <div className="person-info-panel level-3">
                               {person.birthday && <div>🎉 {person.birthday}</div>}
-                              {person.relationship?.strength && (
-                                <div>🔥 Strength: {person.relationship.strength}/100</div>
+                              <div>
+                                🔥 Strength:{' '}
+                                {person.scoring?.status === 'pending' ? (
+                                  <span className="scoring-pending">scoring…</span>
+                                ) : person.relationship?.strength != null ? (
+                                  <>
+                                    {person.relationship.strength}/100
+                                    {person.scoring?.variance === 'high' && (
+                                      <span className="scoring-uncertain" title="High variance across samples"> · uncertain</span>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span className="scoring-pending">—</span>
+                                )}
+                              </div>
+                              {person.scoring?.status === 'failed' && (
+                                <div className="scoring-failed">
+                                  ⚠ Scoring failed
+                                  <button
+                                    type="button"
+                                    className="scoring-retry"
+                                    onClick={(e) => { e.stopPropagation(); scoreAndPatch(person); }}
+                                  >
+                                    Retry
+                                  </button>
+                                </div>
                               )}
                               {person.context?.school && <div>🎓 {person.context.school}</div>}
                               {person.context?.work && <div>💼 {person.context.work}</div>}
@@ -359,13 +426,14 @@ function App() {
       {showModal && (
         <PersonModal
           key={selectedPerson?.id}
-          person={selectedPerson}
+          person={livePerson}
           originPoint={zoomTarget}
           phase={modalPhase}
           onClose={closeModal}
           photosByPerson={photosByPerson}
           onPhotosChange={handlePhotosChange}
           onUpdatePerson={handlePersonUpdate}
+          onRescore={() => livePerson && scoreAndPatch(livePerson)}
         />
       )}
 
@@ -417,7 +485,13 @@ function App() {
       <AddPersonModal
         open={addPersonOpen}
         onClose={() => setAddPersonOpen(false)}
-        onAdd={(person) => setPeople((prev) => [...prev, person])}
+        onAdd={(person) => {
+          // Insert with no strength yet — the renderer treats unscored nodes
+          // as neutral grey so they don't fake a connection level. The AI
+          // pipeline runs async via scoreAndPatch and fills it in.
+          setPeople((prev) => [...prev, { ...person, scoring: { status: 'pending' } }]);
+          scoreAndPatch(person);
+        }}
       />
     </div>
   );
