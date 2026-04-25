@@ -3,7 +3,7 @@ const EXTRACT_MODEL = 'models/gemini-2.5-flash';
 
 // ─── Person extraction (REST fallback) ───────────────────────────────────────
 
-const EXTRACT_SCHEMA = '{"name":null,"birthday":null,"notes":null,"relationship":{"type":"friend"},"context":{"how_we_met":null,"school":null,"work":null,"hobbies":[],"sports":[],"favorites":{"foods":[],"music":[]}},"history":{"memories_together":[],"important_events":[],"things_to_look_forward_to":[]}}';
+const EXTRACT_SCHEMA = '{"name":null,"birthday":null,"notes":null,"relationship":{"type":"friend","tenure":null,"frequency":null,"last_interaction":null,"channels":[],"they_show_up_for_me":null,"i_show_up_for_them":null,"knows_about_me":null},"context":{"how_we_met":null,"school":null,"work":null,"hobbies":[],"sports":[],"favorites":{"foods":[],"music":[]}},"history":{"memories_together":[],"important_events":[],"things_to_look_forward_to":[]}}';
 
 const EXTRACT_PROMPT = `You are extracting contact information from a voice onboarding conversation.
 
@@ -14,6 +14,13 @@ Fill in the JSON below using only details explicitly mentioned. Rules:
 - null for text fields that were not mentioned
 - [] for array fields that were not mentioned
 - relationship.type: one of family | friend | classmate | coworker | professional | romantic | mentor | other
+- relationship.tenure: one of just_met | months | one_year | few_years | five_plus | lifetime, else null
+- relationship.frequency: one of daily | weekly | monthly | few_times_a_year | rarely, else null
+- relationship.last_interaction: one of today | this_week | this_month | this_season | this_year | over_a_year, else null
+- relationship.channels: array (subset) of in_person | text | call | video_call | dm | email | other; [] if unmentioned
+- relationship.they_show_up_for_me / i_show_up_for_them: one of yes | sometimes | not_really | not_sure, else null
+- relationship.knows_about_me: one of most_of_it | some_of_it | not_really | not_sure, else null
+- Map free-form phrasings to the closest enum (e.g. "every week" → weekly, "since high school" → few_years, "yeah definitely" → yes, "kind of" → sometimes).
 - birthday: YYYY-MM-DD if a date was mentioned, otherwise null
 - notes: a 1-3 sentence prose summary of the relationship in the user's own framing (closeness, cadence, emotional tone). null if there's nothing to summarize.
 
