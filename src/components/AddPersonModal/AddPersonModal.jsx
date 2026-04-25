@@ -141,6 +141,7 @@ function PillGroup({ label, options, value, onChange }) {
             type="button"
             className={`apm-pill ${value === opt.key ? 'active' : ''}`}
             onClick={() => onChange(opt.key)}
+            aria-pressed={value === opt.key}
           >
             {opt.label}
           </button>
@@ -165,6 +166,7 @@ function ChipMultiGroup({ label, options, values, onChange }) {
             type="button"
             className={`apm-pill ${values.includes(opt.key) ? 'active' : ''}`}
             onClick={() => toggle(opt.key)}
+            aria-pressed={values.includes(opt.key)}
           >
             {opt.label}
           </button>
