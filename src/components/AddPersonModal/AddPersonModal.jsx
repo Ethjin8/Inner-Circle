@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import './AddPersonModal.css';
 import { GeminiLiveSession, extractPersonFromTranscript } from '../../services/geminiLive';
+import { buildPersonFromExtraction } from '../../constants/personSchema.js';
 
 // ─── voice helpers ────────────────────────────────────────────────────────────
 const STARDUST_PARTICLES = 28;
@@ -285,20 +286,7 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
 
       setExtracting(true);
 
-      const buildPerson = (extracted) => {
-        const rawName = (extracted?.name ?? '').trim();
-        if (!rawName) return null;
-        return {
-          id: String(Date.now()),
-          name: rawName,
-          initials: rawName.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase(),
-          ...(extracted.birthday ? { birthday: extracted.birthday } : {}),
-          ...(extracted.notes ? { notes: extracted.notes } : {}),
-          relationship: extracted.relationship ?? { type: 'friend' },
-          context: extracted.context ?? {},
-          history: extracted.history ?? {},
-        };
-      };
+      const buildPerson = buildPersonFromExtraction;
 
       const finish = (person) => {
         setVoiceStatus(`Adding ${person.name} to your constellation...`);
