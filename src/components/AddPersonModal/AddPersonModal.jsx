@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import './AddPersonModal.css';
 
+const STARDUST_PARTICLES = 28;
+
 export default function AddPersonModal({ open, onClose }) {
   const [listening, setListening] = useState(false);
+  const [bursting, setBursting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -12,8 +15,21 @@ export default function AddPersonModal({ open, onClose }) {
   }, [open, onClose]);
 
   useEffect(() => {
-    if (!open) setListening(false);
+    if (!open) {
+      setListening(false);
+      setBursting(false);
+    }
   }, [open]);
+
+  const handleProbeToggle = () => {
+    if (listening) {
+      setListening(false);
+      setBursting(true);
+      setTimeout(() => setBursting(false), 720);
+    } else {
+      setListening(true);
+    }
+  };
 
   if (!open) return null;
 
@@ -41,21 +57,60 @@ export default function AddPersonModal({ open, onClose }) {
         </div>
 
         <div className="apm-mic-wrap">
+          {listening && (
+            <svg className="apm-flares" width="220" height="220" viewBox="0 0 220 220" aria-hidden>
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <circle
+                  key={i}
+                  cx="110"
+                  cy="110"
+                  r={70 + i * 8}
+                  fill="none"
+                  stroke="rgba(232, 232, 240, 0.5)"
+                  strokeWidth="1"
+                  strokeDasharray="6 380"
+                  strokeLinecap="round"
+                  className="apm-flare-arc"
+                  style={{ animationDelay: `${i * 0.18}s` }}
+                />
+              ))}
+            </svg>
+          )}
+
+          {bursting && (
+            <div className="apm-stardust" aria-hidden>
+              {Array.from({ length: STARDUST_PARTICLES }, (_, i) => {
+                const angle = (i / STARDUST_PARTICLES) * Math.PI * 2 + Math.random() * 0.4;
+                const dist = 60 + Math.random() * 60;
+                const dx = Math.cos(angle) * dist;
+                const dy = Math.sin(angle) * dist;
+                return (
+                  <span
+                    key={i}
+                    className="apm-stardust-particle"
+                    style={{ '--dx': `${dx}px`, '--dy': `${dy}px`, animationDelay: `${Math.random() * 60}ms` }}
+                  />
+                );
+              })}
+            </div>
+          )}
+
           <button
-            className={`apm-mic ${listening ? 'listening' : ''}`}
-            onClick={() => setListening((v) => !v)}
+            className={`apm-probe ${listening ? 'listening' : ''}`}
+            onClick={handleProbeToggle}
             aria-pressed={listening}
             aria-label={listening ? 'Stop listening' : 'Start listening'}
           >
-            {listening && <span className="apm-mic-pulse" aria-hidden />}
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="9" y="3" width="6" height="12" rx="3" />
-              <path d="M5 11a7 7 0 0 0 14 0" />
-              <path d="M12 18v3" />
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 19 L4 24" />
+              <path d="M22 6 L26 4" />
+              <path d="M22 6 L20 8" />
+              <path d="M9 19 a 9 9 0 0 1 0 -12.7 L21.7 19 a 9 9 0 0 1 -12.7 0 Z" />
+              <circle cx="22" cy="6" r="1.6" fill="currentColor" />
             </svg>
           </button>
           <div className={`apm-status ${listening ? 'live' : ''}`}>
-            {listening ? 'Listening…' : 'Tap to start'}
+            {listening ? 'Listening…' : bursting ? 'Charting…' : 'Tap probe to start'}
           </div>
         </div>
 

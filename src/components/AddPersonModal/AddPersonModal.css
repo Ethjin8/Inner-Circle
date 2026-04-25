@@ -199,3 +199,83 @@
     padding: 28px 22px 22px;
   }
 }
+
+/* ---------- Probe + flares + stardust ---------- */
+.apm-mic-wrap {
+  position: relative;
+}
+
+.apm-probe {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  border: 1px solid rgba(232, 232, 240, 0.18);
+  background: radial-gradient(circle at 35% 30%, rgba(232, 232, 240, 0.08), rgba(10, 10, 30, 0.95));
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+  z-index: 2;
+}
+
+.apm-probe:hover {
+  border-color: rgba(232, 232, 240, 0.4);
+}
+
+.apm-probe.listening {
+  border-color: rgba(232, 232, 240, 0.55);
+}
+
+.apm-flares {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.apm-flare-arc {
+  transform-origin: 110px 110px;
+  animation: apm-flare-spin 3.6s linear infinite;
+  opacity: 0.85;
+}
+
+@keyframes apm-flare-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.apm-stardust {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.apm-stardust-particle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(232, 232, 240, 0.95);
+  box-shadow: 0 0 4px rgba(232, 232, 240, 0.6);
+  animation: apm-stardust-burst 720ms ease-out forwards;
+}
+
+@keyframes apm-stardust-burst {
+  0%   { transform: translate(0, 0) scale(0.6); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .apm-flare-arc { animation: none; }
+  .apm-stardust-particle { animation: none; opacity: 0; }
+}
