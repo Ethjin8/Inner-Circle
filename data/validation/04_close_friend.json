@@ -1,0 +1,33 @@
+{
+  "_expected_aggregate": "~8",
+  "id": "val_04_close_friend",
+  "name": "Xavier",
+
+  "relationship": { "type": "close_friend" },
+  "notes": "One of my closest friends from home — known him since elementary school, got really tight in high school through swim. He's at Berkeley now and I'm at UCLA but we still talk in our group chat constantly and always hang out when we're both home for break. The kind of friend where you skip prom together to go to Knott's.",
+
+  "context": {
+    "how_we_met": "Met in elementry school. Got close in High School",
+    "school": "UC Berkeley (X); user is at UCLA",
+    "shared_schools": ["same elementary school", "same middle school", "same high school"],
+    "hobbies": ["Swim"],
+    "communication_channels": ["central group chat",  "in-person when both home from college"]
+  },
+
+  "history": {
+    "memories_together": [
+      "Swim competitions together. Played various sports with him",
+      "Went ice skating together",
+      "Late night wandering together"
+    ],
+    "important_events": [
+      "Skipping prom to go to Knotts Berry Farm Together",
+      "Went to shared friends houses together for a party."
+    ],
+    "things_to_look_forward_to": [
+      "Hanging out together during summer 2025-2026 break"
+    ]
+  },
+
+  "last_interaction_at": "2026-04-22T00:00:00Z"
+}

@@ -1,4 +1,60 @@
-const LIVE_MODEL = 'models/gemini-2.0-flash-live-001';
+const LIVE_MODEL = 'models/gemini-3.1-flash-live-preview';
+const EXTRACT_MODEL = 'models/gemini-2.5-flash';
+
+// ─── Person extraction (REST fallback) ───────────────────────────────────────
+
+const EXTRACT_SCHEMA = '{"name":null,"birthday":null,"notes":null,"relationship":{"type":"friend"},"context":{"how_we_met":null,"school":null,"work":null,"hobbies":[],"sports":[],"favorites":{"foods":[],"music":[]}},"history":{"memories_together":[],"important_events":[],"things_to_look_forward_to":[]}}';
+
+const EXTRACT_PROMPT = `You are extracting contact information from a voice onboarding conversation.
+
+Transcript:
+{{TRANSCRIPT}}
+
+Fill in the JSON below using only details explicitly mentioned. Rules:
+- null for text fields that were not mentioned
+- [] for array fields that were not mentioned
+- relationship.type: one of family | friend | classmate | coworker | professional | romantic | mentor | other
+- birthday: YYYY-MM-DD if a date was mentioned, otherwise null
+- notes: a 1-3 sentence prose summary of the relationship in the user's own framing (closeness, cadence, emotional tone). null if there's nothing to summarize.
+
+${EXTRACT_SCHEMA}`;
+
+export async function extractPersonFromTranscript(transcript, apiKey, { maxRetries = 2, onRetry } = {}) {
+  const prompt = EXTRACT_PROMPT.replace('{{TRANSCRIPT}}', transcript);
+  const body = JSON.stringify({
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+  });
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/${EXTRACT_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body },
+    );
+
+    if (res.status === 429) {
+      const errBody = await res.json().catch(() => ({}));
+      const googleMsg = errBody?.error?.message ?? '';
+      if (attempt === maxRetries - 1) throw new Error(googleMsg || 'Quota exceeded.');
+      const retryAfterMs = Number(res.headers.get('Retry-After') ?? 0) * 1000 || 1000 * 2 ** (attempt + 1);
+      onRetry?.(attempt + 1);
+      await new Promise((r) => setTimeout(r, retryAfterMs));
+      continue;
+    }
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody?.error?.message || `Extract API error ${res.status}`);
+    }
+
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
+    return JSON.parse(text);
+  }
+}
+
+// ─── Live session ─────────────────────────────────────────────────────────────
+
 const WS_BASE_URL =
   'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent';
 
@@ -14,17 +70,64 @@ Flow:
 Style:
 - Warm, concise, one question at a time.
 - Never ask for sensitive private data.
-- Keep turns short for spoken conversation.`;
+- Keep turns short for spoken conversation.
 
-function readTextParts(parts = []) {
-  return parts
-    .map((part) => {
-      if (!part || typeof part !== 'object') return '';
-      if (typeof part.text === 'string') return part.text;
-      return '';
-    })
-    .join('')
-    .trim();
+When the user sends the text "EXTRACT_JSON", respond ONLY with these labeled sentences — no extra commentary, say "unknown" for anything not mentioned:
+"Name is [full name]. Relationship type is [family|friend|classmate|coworker|professional|romantic|mentor|other]. Birthday is [YYYY-MM-DD or unknown]. Notes are [a 1-3 sentence prose summary of the relationship in the user's own framing — closeness, cadence, emotional tone — or unknown]. How we met is [value or unknown]. School is [value or unknown]. Work is [value or unknown]. Hobbies are [comma list or unknown]. Sports are [comma list or unknown]. Favorite foods are [comma list or unknown]. Favorite music is [comma list or unknown]. Memories are [comma list or unknown]. Important events are [comma list or unknown]. Future plans are [comma list or unknown]."`;
+
+// Parse the labeled-sentence response spoken by the model (ASR-friendly, no JSON needed)
+function parseLabeledSpeech(raw) {
+  const t = raw.toLowerCase().replace(/["""]/g, '');
+
+  const field = (pattern) => {
+    const m = t.match(pattern);
+    if (!m) return null;
+    const v = m[1].trim().replace(/\.$/, '');
+    return (v === 'unknown' || v === 'none' || v === '') ? null : v;
+  };
+
+  const list = (pattern) => {
+    const m = t.match(pattern);
+    if (!m) return [];
+    const v = m[1].trim().replace(/\.$/, '');
+    if (v === 'unknown' || v === 'none' || v === '') return [];
+    return v.split(',').map((s) => s.trim()).filter(Boolean);
+  };
+
+  const name = field(/name is ([^.]+)/);
+  const relType = field(/relationship type is ([^.]+)/);
+  const birthday = field(/birthday is ([\d-]+)/);
+  // Notes can span multiple sentences (and contain periods), so terminate on
+  // the next labeled field instead of on the first period.
+  const notesMatch = t.match(/notes are (.+?)\s+how we met is /);
+  const notesRaw = notesMatch?.[1]?.trim().replace(/\.$/, '') ?? null;
+  const notes = (notesRaw === 'unknown' || !notesRaw) ? null : notesRaw;
+
+  return {
+    name,
+    birthday: birthday || null,
+    ...(notes ? { notes } : {}),
+    relationship: {
+      type: ['family','friend','classmate','coworker','professional','romantic','mentor','other']
+        .find((r) => relType?.includes(r)) ?? 'friend',
+    },
+    context: {
+      how_we_met: field(/how we met is ([^.]+)/),
+      school:     field(/school is ([^.]+)/),
+      work:       field(/work is ([^.]+)/),
+      hobbies:    list(/hobbies are ([^.]+)/),
+      sports:     list(/sports are ([^.]+)/),
+      favorites: {
+        foods: list(/favorite foods are ([^.]+)/),
+        music: list(/favorite music is ([^.]+)/),
+      },
+    },
+    history: {
+      memories_together:        list(/memories are ([^.]+)/),
+      important_events:         list(/important events are ([^.]+)/),
+      things_to_look_forward_to: list(/future plans are ([^.]+)/),
+    },
+  };
 }
 
 export class GeminiLiveSession {
@@ -44,7 +147,22 @@ export class GeminiLiveSession {
     this.systemPrompt = systemPrompt;
     this.socket = null;
     this.setupComplete = false;
+
+    // Accumulate output transcription chunks; emit one message per completed turn
+    this.outputTranscriptBuffer = '';
+
+    // Extraction state
+    this._extractResolve = null;
+    this._extractReject = null;
+    this._extractTimeout = null;
+    this._extracting = false;
+
+    // Audio playback
+    this.playbackCtx = null;
+    this.nextPlayTime = 0;
   }
+
+  // ─── Connection ──────────────────────────────────────────────────────────────
 
   connect() {
     if (!this.apiKey) {
@@ -54,74 +172,167 @@ export class GeminiLiveSession {
 
     const url = `${WS_BASE_URL}?key=${encodeURIComponent(this.apiKey)}`;
     this.socket = new WebSocket(url);
+    this.socket.binaryType = 'arraybuffer';
 
     this.socket.addEventListener('open', () => {
       this.onStatus?.('connecting');
       this.send({
         setup: {
           model: LIVE_MODEL,
-          generationConfig: {
-            responseModalities: ['TEXT'],
-            temperature: 0.4,
-          },
+          generationConfig: { responseModalities: ['AUDIO'], temperature: 0.4 },
           inputAudioTranscription: {},
-          systemInstruction: {
-            parts: [{ text: this.systemPrompt }],
-          },
+          outputAudioTranscription: {},
+          systemInstruction: { parts: [{ text: this.systemPrompt }] },
         },
       });
     });
 
     this.socket.addEventListener('message', (event) => {
       try {
-        const payload = JSON.parse(event.data);
+        const raw =
+          event.data instanceof ArrayBuffer
+            ? new TextDecoder().decode(event.data)
+            : event.data;
+        const payload = JSON.parse(raw);
+
         if (payload?.setupComplete) {
           this.setupComplete = true;
           this.onStatus?.('connected');
           return;
         }
 
-        const inputTranscript = payload?.serverContent?.inputTranscription?.text;
-        if (typeof inputTranscript === 'string' && inputTranscript.trim()) {
-          this.onUserTranscript?.(inputTranscript.trim());
+        const sc = payload?.serverContent;
+        if (!sc) return;
+
+        // User audio → forward streaming transcript for the preview display
+        const inputText = sc.inputTranscription?.text;
+        if (typeof inputText === 'string' && inputText.trim()) {
+          this.onUserTranscript?.(inputText.trim());
         }
 
-        const parts = payload?.serverContent?.modelTurn?.parts;
-        const text = readTextParts(parts);
-        if (text) this.onMessage?.(text);
+        // Model audio → play chunks (muted during extraction so user doesn't hear spoken JSON)
+        if (!this._extracting) {
+          for (const part of sc.modelTurn?.parts ?? []) {
+            const { mimeType, data } = part.inlineData ?? {};
+            if (data) this.playAudioChunk(data, mimeType);
+          }
+        }
+
+        // Accumulate transcription; emit one clean message per completed turn
+        const outputText = sc.outputTranscription?.text;
+        if (typeof outputText === 'string') this.outputTranscriptBuffer += outputText;
+
+        if (sc.turnComplete) {
+          const finalText = this.outputTranscriptBuffer.trim();
+          this.outputTranscriptBuffer = '';
+
+          if (this._extracting) {
+            // Resolve the extraction promise with the raw transcription
+            this._finishExtraction(finalText);
+          } else if (finalText) {
+            this.onMessage?.(finalText);
+          }
+        }
       } catch (error) {
         this.onError?.(error);
       }
     });
 
-    this.socket.addEventListener('close', () => {
+    this.socket.addEventListener('close', (event) => {
       this.onStatus?.('closed');
       this.socket = null;
+      this._cancelExtraction('Session closed during extraction');
+      if (!event.wasClean || event.code !== 1000) {
+        const reason = event.reason || `code ${event.code}`;
+        this.onError?.(new Error(`Gemini Live closed: ${reason}`));
+      }
     });
 
     this.socket.addEventListener('error', () => {
-      this.onError?.(new Error('Gemini Live websocket error.'));
+      // No actionable detail; the close event that follows will have the reason.
+    });
+  }
+
+  // ─── Extraction via the open session ─────────────────────────────────────────
+
+  requestExtraction() {
+    return new Promise((resolve, reject) => {
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        reject(new Error('Session not connected'));
+        return;
+      }
+      this._extracting = true;
+      this.outputTranscriptBuffer = '';
+      this._extractResolve = resolve;
+      this._extractReject = reject;
+
+      this._extractTimeout = setTimeout(() => {
+        this._cancelExtraction('Timed out waiting for model response');
+      }, 15000);
+
+      // The system prompt teaches the model to output JSON when it sees this command
+      this.sendUserTurn('EXTRACT_JSON');
+    });
+  }
+
+  _finishExtraction(text) {
+    clearTimeout(this._extractTimeout);
+    this._extracting = false;
+    const resolve = this._extractResolve;
+    const reject = this._extractReject;
+    this._extractResolve = null;
+    this._extractReject = null;
+
+    // Try JSON first (legacy / if model somehow returns it)
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try { resolve(JSON.parse(jsonMatch[0])); return; } catch { /* fall through */ }
+    }
+
+    // Primary: parse labeled-sentence format ("Name is X. Relationship type is Y. ...")
+    const parsed = parseLabeledSpeech(text);
+    if (parsed.name) {
+      resolve(parsed);
+      return;
+    }
+
+    reject(new Error(`Could not extract data from: "${text.slice(0, 120)}"`));
+  }
+
+  _cancelExtraction(reason) {
+    if (!this._extracting) return;
+    clearTimeout(this._extractTimeout);
+    this._extracting = false;
+    this._extractReject?.(new Error(reason));
+    this._extractResolve = null;
+    this._extractReject = null;
+  }
+
+  // ─── Sending ─────────────────────────────────────────────────────────────────
+
+  sendAudioChunk(audioBuffer, mimeType = 'audio/pcm;rate=16000') {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN || !this.setupComplete) return;
+    if (!(audioBuffer instanceof ArrayBuffer) || audioBuffer.byteLength === 0) return;
+    this.send({
+      realtimeInput: { audio: { mimeType, data: this.arrayBufferToBase64(audioBuffer) } },
     });
   }
 
   sendUserTurn(text) {
     const cleanText = (text || '').trim();
     if (!cleanText || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
-
     this.send({
       clientContent: {
-        turns: [
-          {
-            role: 'user',
-            parts: [{ text: cleanText }],
-          },
-        ],
+        turns: [{ role: 'user', parts: [{ text: cleanText }] }],
         turnComplete: true,
       },
     });
   }
 
   disconnect() {
+    this._cancelExtraction('Disconnected');
+    this.outputTranscriptBuffer = '';
+    this.stopPlayback();
     this.send({ realtimeInput: { audioStreamEnd: true } });
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.close(1000, 'Voice onboarding stopped');
@@ -130,25 +341,56 @@ export class GeminiLiveSession {
     this.setupComplete = false;
   }
 
-  sendAudioChunk(audioBuffer, mimeType = 'audio/pcm;rate=16000') {
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN || !this.setupComplete) return;
-    if (!(audioBuffer instanceof ArrayBuffer) || audioBuffer.byteLength === 0) return;
-
-    const base64Audio = this.arrayBufferToBase64(audioBuffer);
-    this.send({
-      realtimeInput: {
-        audio: {
-          mimeType,
-          data: base64Audio,
-        },
-      },
-    });
-  }
-
   send(payload) {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
     this.socket.send(JSON.stringify(payload));
   }
+
+  // ─── Audio playback ──────────────────────────────────────────────────────────
+
+  playAudioChunk(base64Data, mimeType = 'audio/pcm;rate=24000') {
+    try {
+      const rateMatch = mimeType?.match(/rate=(\d+)/);
+      const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
+
+      if (!this.playbackCtx) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        this.playbackCtx = new AudioCtx();
+        this.nextPlayTime = this.playbackCtx.currentTime;
+      }
+
+      const binary = atob(base64Data);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const pcm16 = new Int16Array(bytes.buffer);
+      const float32 = new Float32Array(pcm16.length);
+      for (let i = 0; i < pcm16.length; i++) float32[i] = pcm16[i] / 32768.0;
+
+      const buffer = this.playbackCtx.createBuffer(1, float32.length, sampleRate);
+      buffer.copyToChannel(float32, 0);
+
+      const source = this.playbackCtx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(this.playbackCtx.destination);
+
+      const startAt = Math.max(this.nextPlayTime, this.playbackCtx.currentTime);
+      source.start(startAt);
+      this.nextPlayTime = startAt + buffer.duration;
+    } catch (_) {
+      // Non-fatal — skip bad audio chunk
+    }
+  }
+
+  stopPlayback() {
+    if (this.playbackCtx) {
+      this.playbackCtx.close().catch(() => {});
+      this.playbackCtx = null;
+      this.nextPlayTime = 0;
+    }
+  }
+
+  // ─── Utilities ───────────────────────────────────────────────────────────────
 
   arrayBufferToBase64(buffer) {
     const bytes = new Uint8Array(buffer);
@@ -156,9 +398,7 @@ export class GeminiLiveSession {
     const chunkSize = 0x8000;
     for (let i = 0; i < bytes.length; i += chunkSize) {
       const chunk = bytes.subarray(i, i + chunkSize);
-      for (let j = 0; j < chunk.length; j += 1) {
-        binary += String.fromCharCode(chunk[j]);
-      }
+      for (let j = 0; j < chunk.length; j++) binary += String.fromCharCode(chunk[j]);
     }
     return btoa(binary);
   }

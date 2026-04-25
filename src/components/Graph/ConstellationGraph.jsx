@@ -60,6 +60,13 @@ function drawMinimalNode(ctx, node, r, color, alpha, isHovered) {
   ctx.stroke();
 }
 
+function truncateLabel(label, maxChars) {
+  if (!label) return '';
+  if (label.length <= maxChars) return label;
+  if (maxChars <= 1) return '…';
+  return `${label.slice(0, maxChars - 1)}…`;
+}
+
 export const DEMO_PEOPLE = [
   {
     id: '1', name: 'Mom', initials: 'MO', birthday: '1972-03-18',
@@ -307,6 +314,10 @@ const userPanRef = useRef({ x: 0, y: 0 });
           isCategory: false,
           category: catKey,
           strength: person.relationship?.strength ?? 0,
+          scoringStatus: person.scoring?.status ?? null,
+          // True once the AI pipeline has produced real dimension scores.
+          // Until then, edges render neutral so unscored nodes don't fake a strength.
+          isScored: Boolean(person.scoring?.dimensions),
           parentCat: catNode,
           x: oldNode ? oldNode.x : basePx + pManualOffX,
           y: oldNode ? oldNode.y : basePy + pManualOffY,
@@ -673,8 +684,10 @@ const userPanRef = useRef({ x: 0, y: 0 });
           const p = node.parentCat;
           if (!p || deletingIds.includes(p.id)) continue;
           const isHovPEdge = hoveredEdgeRef.current?.id === node.id;
-          const rgb = strengthToEdgeColor(node.strength);
-          const ew = 0.5 + (node.strength / 100) * 4;
+          // Until the AI pipeline produces real scores, edges render neutral
+          // so unscored nodes don't fake a strength color.
+          const rgb = node.isScored ? strengthToEdgeColor(node.strength) : '160,160,170';
+          const ew = node.isScored ? 0.5 + (node.strength / 100) * 4 : 1;
           ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(node.x, node.y);
           ctx.lineWidth = ew;
           if (isHovPEdge && activeTool === 'snip') {
@@ -682,7 +695,7 @@ const userPanRef = useRef({ x: 0, y: 0 });
             ctx.shadowColor = 'rgba(255,80,80,0.8)'; ctx.shadowBlur = 12;
           } else if (edgeDimmed) {
             ctx.strokeStyle = `rgba(140,140,150,0.18)`;
-          } else { ctx.strokeStyle = `rgba(${rgb}, 0.55)`; }
+          } else { ctx.strokeStyle = `rgba(${rgb}, ${node.isScored ? 0.55 : 0.32})`; }
           ctx.stroke(); ctx.setLineDash([]); ctx.shadowBlur = 0;
         }
       }
@@ -710,18 +723,38 @@ const userPanRef = useRef({ x: 0, y: 0 });
           ctx.fillText(node.name, node.x, node.y);
         } else {
           drawMinimalNode(ctx, node, r, renderColor, nodeAlpha, isHov);
-          const nameFits = node.name.length <= 11;
-          const textInside = nameFits ? node.name : node.initials;
+          const maxChars = Math.max(7, Math.floor(r * 0.32));
+          const textInside = truncateLabel(node.name, maxChars);
           ctx.fillStyle = `rgba(11,15,25,${0.95 * nodeAlpha})`;
           let fs = Math.max(9, r * 0.55);
           if (fs * 0.6 * textInside.length > r * 1.75) fs = Math.max(9, (r * 1.75) / (textInside.length * 0.6));
           ctx.font = `600 ${fs}px 'Inter',sans-serif`;
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.fillText(textInside, node.x, node.y);
-          if (!nameFits && !isFiltered) {
-            ctx.fillStyle = `rgba(255,255,255,${0.7 * nodeAlpha})`;
-            ctx.font = `500 11px 'Inter',sans-serif`;
-            ctx.fillText(node.name, node.x, node.y + r + 16);
+
+          // Scoring state overlay: dashed pulse for pending, warning glyph for failed.
+          if (node.scoringStatus === 'pending') {
+            const pulse = 1 + Math.sin(timeRef.current * 0.08) * 0.04;
+            const ringR = r * 1.35 * pulse;
+            const phase = (timeRef.current * 0.6) % 24;
+            ctx.save();
+            ctx.beginPath(); ctx.arc(node.x, node.y, ringR, 0, Math.PI * 2);
+            ctx.setLineDash([4, 4]); ctx.lineDashOffset = -phase;
+            ctx.strokeStyle = `rgba(232,232,240,${0.55 * nodeAlpha})`;
+            ctx.lineWidth = 1.1;
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+          } else if (node.scoringStatus === 'failed') {
+            const gx = node.x + r * 0.78, gy = node.y - r * 0.78;
+            ctx.save();
+            ctx.beginPath(); ctx.arc(gx, gy, r * 0.28, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255,140,120,${0.95 * nodeAlpha})`; ctx.fill();
+            ctx.fillStyle = `rgba(11,15,25,${0.95 * nodeAlpha})`;
+            ctx.font = `700 ${Math.max(8, r * 0.34)}px 'Inter',sans-serif`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText('!', gx, gy + 0.5);
+            ctx.restore();
           }
         }
       }

@@ -5,6 +5,11 @@ import PersonModal from './components/PersonModal/PersonModal';
 import AddPersonModal from './components/AddPersonModal/AddPersonModal';
 import MemoryCarousel from './components/MemoryCarousel/MemoryCarousel';
 import Landing from './components/Landing/Landing';
+import SignIn from './components/SignIn/SignIn';
+import { useAuth } from './contexts/AuthContext';
+import { usePeople } from './hooks/usePeople';
+import { usePhotos } from './hooks/usePhotos';
+import { scorePerson } from './services/scoring';
 import './App.css';
 
 const FILTERS = [
@@ -30,6 +35,11 @@ const CATEGORY_COLORS = {
 
 function App() {
   const [view, setView] = useState('landing');
+  const { user, loading: authLoading, signOut } = useAuth();
+  const { people, addPerson, updatePerson, removePeople, restorePeople } = usePeople();
+  const { photosByPerson, setPhotosForPerson } = usePhotos();
+
+
   const [activeFilters, setActiveFilters] = useState(() => new Set());
   const [attachedNodes, setAttachedNodes] = useState([]);
   const [promptText, setPromptText] = useState('');
@@ -42,9 +52,13 @@ function App() {
   const [activeTool, setActiveTool] = useState(null); // null | 'snip'
   const [deletingIds, setDeletingIds] = useState([]); // ids being animated out
   const [deletedHistory, setDeletedHistory] = useState([]); // undo stack: [{type:'person'|'category', ids:[]}]
-  const [photosByPerson, setPhotosByPerson] = useState({}); // { personId: [ { public_id, secure_url, ... }, ... ] }
-  const [people, setPeople] = useState(DEMO_PEOPLE);
-  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showDemo, setShowDemo] = useState(false); // testing: show demo people without persisting
+
+  const displayPeople = useMemo(() => (
+    showDemo ? [...people, ...DEMO_PEOPLE.map(p => ({ ...p, isDemo: true }))] : people
+  ), [people, showDemo]);
+
   const [viewMode, setViewMode] = useState('graph'); // 'graph' | 'gallery'
   const [modalPhase, setModalPhase] = useState(null); // null | 'zooming-in' | 'open' | 'zooming-out'
   const modalTimerRef = useRef(null);
@@ -52,24 +66,28 @@ function App() {
   const allPhotos = useMemo(() => {
     const photos = [];
     Object.entries(photosByPerson).forEach(([personId, pList]) => {
-      const person = people.find(p => p.id === personId);
+      const person = displayPeople.find(p => p.id === personId);
       if (person) {
         pList.forEach(photo => photos.push({ ...photo, personName: person.name }));
       }
     });
     // Sort by upload date, newest first
     return photos.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
-  }, [photosByPerson, people]);
+  }, [photosByPerson, displayPeople]);
 
   const peopleByCategory = useMemo(() => {
     const map = {};
     FILTERS.forEach(f => { if (f.key) map[f.key] = { label: f.label, color: f.color, people: [] }; });
-    people.forEach(p => {
+    const q = searchQuery.trim().toLowerCase();
+    displayPeople.forEach(p => {
+      if (q && !p.name.toLowerCase().includes(q)) return;
       const c = p.relationship?.type;
       if (c && map[c]) map[c].people.push(p);
     });
     return map;
-  }, [people]);
+  }, [displayPeople, searchQuery]);
+
+  const isSearching = searchQuery.trim().length > 0;
 
   const toggleCat = (cat) => {
     setExpandedCats(prev => {
@@ -139,37 +157,77 @@ function App() {
 
     if (node.isCategory) {
       // snipping a cat line: delete the cat + all its people
-      snippedPeople = people.filter(p => p.relationship?.type === node.category);
+      snippedPeople = displayPeople.filter(p => p.relationship?.type === node.category);
       idsToDelete = [node.id, ...snippedPeople.map(p => p.id)];
     } else {
-      snippedPeople = people.filter(p => p.id === node.id);
+      snippedPeople = displayPeople.filter(p => p.id === node.id);
       idsToDelete = [node.id];
     }
 
     // Animate out
     setDeletingIds(prev => [...prev, ...idsToDelete]);
-    // Push to undo stack
-    setDeletedHistory(prev => [...prev, { ids: idsToDelete, snippedPeople, node }]);
+    // Push to undo stack (only persist real, non-demo people for restore)
+    const realSnipped = snippedPeople.filter(p => !p.isDemo);
+    setDeletedHistory(prev => [...prev, { ids: idsToDelete, snippedPeople: realSnipped, node }]);
 
-    // Actually remove after animation (600ms)
+    // Actually remove after animation (600ms) — demo people are visual-only, skip Firestore
     setTimeout(() => {
-      setPeople(prev => prev.filter(p => !idsToDelete.includes(p.id)));
+      removePeople(realSnipped.map((p) => p.id));
       setDeletingIds(prev => prev.filter(id => !idsToDelete.includes(id)));
     }, 600);
-  }, [people]);
+  }, [displayPeople, removePeople]);
 
   const handleUndo = useCallback(() => {
     if (deletedHistory.length === 0) return;
     const last = deletedHistory[deletedHistory.length - 1];
-    setPeople(prev => [...prev, ...last.snippedPeople]);
+    restorePeople(last.snippedPeople);
     setDeletedHistory(prev => prev.slice(0, -1));
-  }, [deletedHistory]);
+  }, [deletedHistory, restorePeople]);
 
   const handlePhotosChange = useCallback((personId, newPhotos) => {
-    setPhotosByPerson(prev => ({
-      ...prev,
-      [personId]: newPhotos
-    }));
+    setPhotosForPerson(personId, newPhotos);
+  }, [setPhotosForPerson]);
+
+  const handlePersonUpdate = useCallback((updatedPerson) => {
+    if (!updatedPerson.isDemo) updatePerson(updatedPerson);
+    setSelectedPerson(updatedPerson);
+    // Edits change the relationship signal, so rescore. README §AI Workflow point 5.
+    scoreAndPatch(updatedPerson);
+  // scoreAndPatch is a stable useCallback — safe to omit
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Mark a person as scoring-pending, run the AI pipeline, then patch the
+  // result back. Used by both onAdd (initial) and the sidebar Retry button.
+  const scoreAndPatch = useCallback((person) => {
+    setPeople((prev) =>
+      prev.map((p) => (p.id === person.id ? { ...p, scoring: { status: 'pending' } } : p)),
+    );
+    scorePerson(person)
+      .then((scoring) => {
+        setPeople((prev) =>
+          prev.map((p) =>
+            p.id === person.id
+              ? {
+                  ...p,
+                  scoring,
+                  relationship: { ...(p.relationship || {}), strength: scoring.aggregate },
+                  updated_at: scoring.scored_at,
+                }
+              : p,
+          ),
+        );
+      })
+      .catch((err) => {
+        console.error('Scoring failed for', person.name, err);
+        setPeople((prev) =>
+          prev.map((p) =>
+            p.id === person.id
+              ? { ...p, scoring: { status: 'failed', error: err.message } }
+              : p,
+          ),
+        );
+      });
   }, []);
 
   const handleSubmit = useCallback((e) => {
@@ -184,6 +242,14 @@ function App() {
     : undefined;
 
   const showModal = !!selectedPerson || modalPhase === 'zooming-out';
+  // Pull the latest copy from `people` so async scoring updates flow into an
+  // already-open modal. Falls back to the snapshot for the zooming-out frame.
+  const livePerson = selectedPerson
+    ? people.find((p) => p.id === selectedPerson.id) ?? selectedPerson
+    : null;
+
+  if (authLoading) return <div className="app" style={{ background: '#0a0a0f' }} />;
+  if (!user) return <SignIn />;
 
   if (view === 'landing') {
     return <Landing onEnter={() => setView('app')} />;
@@ -203,7 +269,7 @@ function App() {
             activeTool={activeTool}
             onSnip={handleSnip}
             deletingIds={deletingIds}
-            people={people}
+            people={displayPeople}
           />
         </div>
       </div>
@@ -268,24 +334,60 @@ function App() {
 
         <div className="header-actions">
           <button className="btn-primary" onClick={() => setAddPersonOpen(true)}>+ Add Person</button>
+          <button className="btn-ghost" onClick={signOut} title={user.email || 'Sign out'}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          </button>
         </div>
       </header>
 
       <aside className={`sidebar ${viewMode === 'gallery' ? 'hidden' : ''}`}>
         <div className="sidebar-label">EXPLORER</div>
-        <div className="sidebar-tree">
-          <div className="tree-group">
-            <div
-              className="tree-item node-cat level-1"
-              style={{ background: 'rgba(232, 232, 240, 0.12)', marginBottom: '2px' }}
-              onClick={() => setFocusedCategory(null)}
+        <div className="sidebar-search">
+          <svg className="sidebar-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <circle cx="11" cy="11" r="7" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            className="sidebar-search-input"
+            type="text"
+            placeholder="Search nodes..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search nodes"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="sidebar-search-clear"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
             >
-              <span className="filter-dot" style={{ background: '#e8e8f0', marginLeft: '12px' }} />
-              You
+              ×
+            </button>
+          )}
+        </div>
+        <div className="sidebar-tree">
+          {!isSearching && (
+            <div className="tree-group">
+              <div
+                className="tree-item node-cat level-1"
+                style={{ background: 'rgba(232, 232, 240, 0.12)', marginBottom: '2px' }}
+                onClick={() => setFocusedCategory(null)}
+              >
+                <span className="filter-dot" style={{ background: '#e8e8f0', marginLeft: '12px' }} />
+                You
+              </div>
             </div>
-          </div>
+          )}
+          {isSearching && Object.values(peopleByCategory).every((d) => d.people.length === 0) && (
+            <div className="sidebar-empty">No matches for "{searchQuery}"</div>
+          )}
           {Object.entries(peopleByCategory).map(([catKey, data]) => {
-            const isExpanded = expandedCats.has(catKey);
+            const isExpanded = isSearching || expandedCats.has(catKey);
             if (data.people.length === 0) return null;
             const isBranchActive = activeFilters.has(catKey);
             return (
@@ -330,8 +432,32 @@ function App() {
                           {isPersonExpanded && (
                             <div className="person-info-panel level-3">
                               {person.birthday && <div>🎉 {person.birthday}</div>}
-                              {person.relationship?.strength && (
-                                <div>🔥 Strength: {person.relationship.strength}/100</div>
+                              <div>
+                                🔥 Strength:{' '}
+                                {person.scoring?.status === 'pending' ? (
+                                  <span className="scoring-pending">scoring…</span>
+                                ) : person.relationship?.strength != null ? (
+                                  <>
+                                    {person.relationship.strength}/100
+                                    {person.scoring?.variance === 'high' && (
+                                      <span className="scoring-uncertain" title="High variance across samples"> · uncertain</span>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span className="scoring-pending">—</span>
+                                )}
+                              </div>
+                              {person.scoring?.status === 'failed' && (
+                                <div className="scoring-failed">
+                                  ⚠ Scoring failed
+                                  <button
+                                    type="button"
+                                    className="scoring-retry"
+                                    onClick={(e) => { e.stopPropagation(); scoreAndPatch(person); }}
+                                  >
+                                    Retry
+                                  </button>
+                                </div>
                               )}
                               {person.context?.school && <div>🎓 {person.context.school}</div>}
                               {person.context?.work && <div>💼 {person.context.work}</div>}
@@ -357,14 +483,26 @@ function App() {
         </button>
       )}
 
+      <button
+        className={`demo-toggle ${showDemo ? 'active' : ''}`}
+        onClick={() => setShowDemo(s => !s)}
+        title={showDemo ? 'Hide demo people' : 'Show demo people (not saved)'}
+      >
+        <span className="demo-toggle-dot" />
+        {showDemo ? 'Demo on' : 'Demo'}
+      </button>
+
       {showModal && (
         <PersonModal
-          person={selectedPerson}
+          key={selectedPerson?.id}
+          person={livePerson}
           originPoint={zoomTarget}
           phase={modalPhase}
           onClose={closeModal}
           photosByPerson={photosByPerson}
           onPhotosChange={handlePhotosChange}
+          onUpdatePerson={handlePersonUpdate}
+          onRescore={() => livePerson && scoreAndPatch(livePerson)}
         />
       )}
 
@@ -416,7 +554,13 @@ function App() {
       <AddPersonModal
         open={addPersonOpen}
         onClose={() => setAddPersonOpen(false)}
-        onAdd={(person) => setPeople((prev) => [...prev, person])}
+        onAdd={(person) => {
+          // Insert with no strength yet — the renderer treats unscored nodes
+          // as neutral grey so they don't fake a connection level. The AI
+          // pipeline runs async via scoreAndPatch and fills it in.
+          setPeople((prev) => [...prev, { ...person, scoring: { status: 'pending' } }]);
+          scoreAndPatch(person);
+        }}
       />
     </div>
   );

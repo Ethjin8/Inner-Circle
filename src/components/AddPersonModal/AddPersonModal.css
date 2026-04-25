@@ -8,7 +8,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  /* Reserve room for the header/toolbar at top and the prompt bar at bottom
+     so the panel never overlaps app chrome. */
+  padding: 96px 24px 150px;
   animation: apm-fade-in 0.18s var(--ease-out);
 }
 
@@ -21,7 +23,7 @@
   position: relative;
   width: 100%;
   max-width: 460px;
-  max-height: 85vh;
+  max-height: 100%;
   overflow-y: auto;
   background: var(--surface-3);
   border: 1px solid var(--border-strong);
@@ -364,6 +366,19 @@
 .apm-text-input:focus { border-color: rgba(255, 255, 255, 0.3); }
 .apm-text-input::placeholder { color: var(--text-muted); }
 
+.apm-textarea {
+  resize: vertical;
+  min-height: 92px;
+  line-height: 1.5;
+  font-family: inherit;
+}
+
+.apm-label-hint {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 11px;
+}
+
 /* date input light */
 .apm-text-input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0.6);
@@ -614,6 +629,22 @@
 
 .apm-probe.listening {
   border-color: rgba(232, 232, 240, 0.55);
+}
+
+.apm-probe.extracting {
+  border-color: rgba(125, 249, 255, 0.4);
+  opacity: 0.8;
+  cursor: not-allowed;
+}
+
+.apm-spin-icon {
+  animation: apm-spin 1.2s linear infinite;
+  transform-origin: center;
+}
+
+@keyframes apm-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 .apm-flares {
