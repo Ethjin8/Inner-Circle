@@ -231,7 +231,7 @@ export default function Landing({ onEnter }) {
             ctx.fillRect(s.x - burstR, s.y - burstR, burstR * 2, burstR * 2);
           }
 
-          if (lit > 0.05) drawStarGlow(ctx, s.x, s.y, r * 6, lit * 0.8);
+          if (lit > 0.05) drawStarGlow(ctx, s.x, s.y, r * 5, lit * 0.55);
           drawStar(ctx, s.x, s.y, r, lit);
         });
       });

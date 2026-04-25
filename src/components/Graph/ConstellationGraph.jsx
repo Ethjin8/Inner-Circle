@@ -1,4 +1,6 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useMemo, useState, useCallback } from 'react';
+import ForceGraph2D from 'react-force-graph-2d';
+import { forceManyBody, forceCollide } from 'd3-force-3d';
 
 const CATEGORIES = {
   family: { color: '#e8b06b' },
@@ -12,9 +14,9 @@ const CATEGORIES = {
 };
 
 function strengthToEdgeColor(strength) {
-  if (strength >= 65) return '120, 220, 170';   // sage green
-  if (strength >= 40) return '240, 210, 110';    // soft amber
-  return '220, 130, 130';                         // dusty rose
+  if (strength >= 65) return '120, 220, 170';
+  if (strength >= 40) return '240, 210, 110';
+  return '220, 130, 130';
 }
 
 function daysSince(iso) {
@@ -41,23 +43,32 @@ function hexWithAlpha(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
-function drawMinimalNode(ctx, node, r, color, alpha, isHovered) {
-  const haloR = r * 1.6;
-  const halo = ctx.createRadialGradient(node.x, node.y, r * 0.5, node.x, node.y, haloR);
-  halo.addColorStop(0, hexWithAlpha(color, 0.4 * alpha));
-  halo.addColorStop(1, hexWithAlpha(color, 0));
-  ctx.fillStyle = halo;
-  ctx.beginPath();
-  ctx.arc(node.x, node.y, haloR, 0, Math.PI * 2);
-  ctx.fill();
+function countInfoFields(p) {
+  let n = 0;
+  if (p.birthday) n++;
+  const c = p.context || {};
+  if (c.how_we_met) n++;
+  if (c.school) n++;
+  if (c.work) n++;
+  if (c.hobbies?.length) n++;
+  if (c.sports?.length) n++;
+  if (c.favorites?.foods?.length) n++;
+  if (c.favorites?.music?.length) n++;
+  const h = p.history || {};
+  if (h.memories_together?.length) n++;
+  if (h.important_events?.length) n++;
+  if (h.things_to_look_forward_to?.length) n++;
+  return Math.max(1, n);
+}
 
-  ctx.beginPath();
-  ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-  ctx.fillStyle = hexWithAlpha(color, 1.0 * alpha);
-  ctx.fill();
-  ctx.strokeStyle = `rgba(255, 255, 255, ${(isHovered ? 1.0 : 0.6) * alpha})`;
-  ctx.lineWidth = isHovered ? 2 : 1.5;
-  ctx.stroke();
+function personRadius(p) {
+  return 24 + (Math.min(countInfoFields(p), 8) / 8) * 16;
+}
+
+function nodeRadius(node) {
+  if (node.kind === 'you') return 44;
+  if (node.kind === 'cat') return 36;
+  return node.__radius;
 }
 
 export const DEMO_PEOPLE = [
@@ -178,593 +189,457 @@ export const DEMO_PEOPLE = [
   },
 ];
 
-function countInfoFields(p) {
-  let n = 0;
-  if (p.birthday) n++;
-  const c = p.context || {};
-  if (c.how_we_met) n++;
-  if (c.school) n++;
-  if (c.work) n++;
-  if (c.hobbies?.length) n++;
-  if (c.sports?.length) n++;
-  if (c.favorites?.foods?.length) n++;
-  if (c.favorites?.music?.length) n++;
-  const h = p.history || {};
-  if (h.memories_together?.length) n++;
-  if (h.important_events?.length) n++;
-  if (h.things_to_look_forward_to?.length) n++;
-  return Math.max(1, n);
-}
+function buildGraphData(people) {
+  const grouped = {};
+  for (const p of people) {
+    const cat = p.relationship?.type ?? 'other';
+    (grouped[cat] ||= []).push(p);
+  }
 
-const PADDING_TOP = 80;
-const PADDING_BOTTOM = 160;
-const PADDING_LEFT = 180;
-const PADDING_RIGHT = 60;
+  const youNode = { id: 'you', kind: 'you', fx: 0, fy: 0 };
+  const catNodes = Object.entries(grouped).map(([cat, list]) => {
+    const sum = list.reduce((acc, p) => acc + (p.relationship?.strength ?? 50), 0);
+    return {
+      id: `cat_${cat}`,
+      kind: 'cat',
+      category: cat,
+      name: cat.toUpperCase(),
+      avgStrength: sum / Math.max(1, list.length),
+    };
+  });
+  const personNodes = people.map((p) => ({
+    id: p.id,
+    kind: 'person',
+    category: p.relationship?.type ?? 'other',
+    name: p.name,
+    initials: p.initials,
+    person: p,
+    strength: p.relationship?.strength ?? 0,
+    daysSince: daysSince(p.lastContactAt),
+    isBirthday: isBirthdayToday(p.birthday),
+    __radius: personRadius(p),
+  }));
 
-function clampToBounds(node, width, height) {
-  const r = node.radius + 20;
-  node.baseX = Math.max(PADDING_LEFT + r, Math.min(width - PADDING_RIGHT - r, node.baseX));
-  node.baseY = Math.max(PADDING_TOP + r, Math.min(height - PADDING_BOTTOM - r, node.baseY));
-}
+  const trunkLinks = catNodes.map((c) => ({
+    source: 'you',
+    target: c.id,
+    kind: 'trunk',
+    avgStrength: c.avgStrength,
+    category: c.category,
+  }));
+  const branchLinks = people.map((p) => ({
+    source: `cat_${p.relationship?.type ?? 'other'}`,
+    target: p.id,
+    kind: 'branch',
+    strength: p.relationship?.strength ?? 0,
+    category: p.relationship?.type ?? 'other',
+  }));
 
-export default function ConstellationGraph({ activeFilters, focusedCategory, onZoomOut, people = DEMO_PEOPLE, onNodeClick, onNodeDoubleClick, activeTool, onSnip, deletingIds = [] }) {
-  const filterSet = activeFilters instanceof Set ? activeFilters : new Set();
-  const hasFilter = filterSet.size > 0;
-  const isDimmed = (cat) => {
-    if (focusedCategory) return cat !== focusedCategory;
-    return hasFilter && !filterSet.has(cat);
+  return {
+    nodes: [youNode, ...catNodes, ...personNodes],
+    links: [...trunkLinks, ...branchLinks],
   };
-  const canvasRef = useRef(null);
-  const nodesRef = useRef([]);
-  const animRef = useRef(null);
-  const hoveredRef = useRef(null);
-  const hoveredEdgeRef = useRef(null);
-  const timeRef = useRef(0);
-  const mouseRef = useRef({ x: 0, y: 0 });
+}
+
+export default function ConstellationGraph({
+  activeFilters,
+  focusedCategory,
+  onZoomOut,
+  people = DEMO_PEOPLE,
+  onNodeClick,
+  onNodeDoubleClick,
+  activeTool,
+  onSnip,
+  deletingIds = [],
+}) {
+  const fgRef = useRef(null);
+  const containerRef = useRef(null);
   const clickTimerRef = useRef(null);
-  const userPanRef = useRef({ x: 0, y: 0 });
-  const youPosRef = useRef({ x: 0, y: 0 });
-  const camRef = useRef({ x: 0, y: 0, scale: 1, targetX: 0, targetY: 0, targetScale: 1 });
-  const dragStateRef = useRef({ active: false, nodeId: null, startMx: 0, startMy: 0, startNx: 0, startNy: 0, moved: false, suppressClick: false });
-  const particlesRef = useRef([]); // [{x,y,vx,vy,r,alpha,color,life,maxLife}]
-  const prevDeletingRef = useRef([]); // track when ids newly enter deleting
+  const hoveredLinkRef = useRef(null);
+  const hoveredNodeRef = useRef(null);
+  const particlesRef = useRef([]);
+  const prevDeletingRef = useRef([]);
+  const lastFocusPinRef = useRef(null);
+  const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const initNodes = useCallback((width, height) => {
-    const cx = width / 2;
-    const cy = height / 2 - Math.min(width, height) * 0.05;
+  const filterSet = useMemo(
+    () => (activeFilters instanceof Set ? activeFilters : new Set()),
+    [activeFilters],
+  );
+  const isDimmed = useCallback(
+    (cat) => {
+      if (!cat || cat === 'you') return false;
+      if (focusedCategory) return cat !== focusedCategory;
+      return filterSet.size > 0 && !filterSet.has(cat);
+    },
+    [focusedCategory, filterSet],
+  );
 
-    const grouped = {};
-    for (const p of people) {
-      const cat = p.relationship?.type ?? 'other';
-      if (!grouped[cat]) grouped[cat] = [];
-      grouped[cat].push(p);
+  const deletingSet = useMemo(() => new Set(deletingIds), [deletingIds]);
+
+  const graphData = useMemo(() => buildGraphData(people), [people]);
+
+  // Resize observer for the container
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Configure d3 forces once the graph is mounted
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (!fg) return;
+    fg.d3Force('charge', forceManyBody().strength((n) => {
+      if (n.kind === 'you') return -1200;
+      if (n.kind === 'cat') return -700;
+      return -180;
+    }));
+    fg.d3Force('collide', forceCollide((n) => nodeRadius(n) + 6));
+    const linkForce = fg.d3Force('link');
+    if (linkForce) {
+      linkForce.distance((l) => (l.kind === 'trunk' ? 180 : 80)).strength(0.55);
+    }
+  }, [graphData]);
+
+  // Category focus zoom
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (!fg) return;
+
+    if (focusedCategory) {
+      const cat = graphData.nodes.find(
+        (n) => n.kind === 'cat' && n.category === focusedCategory,
+      );
+      if (!cat) return;
+      // Pin the focused cat so the camera stays centered on a stable target.
+      cat.fx = cat.x ?? 0;
+      cat.fy = cat.y ?? 0;
+      lastFocusPinRef.current = cat;
+      fg.centerAt(cat.fx, cat.fy, 600);
+      fg.zoom(2.6, 600);
+    } else {
+      const pinned = lastFocusPinRef.current;
+      if (pinned) {
+        delete pinned.fx;
+        delete pinned.fy;
+        lastFocusPinRef.current = null;
+      }
+      fg.centerAt(0, 0, 500);
+      fg.zoom(1, 500);
+    }
+  }, [focusedCategory, graphData]);
+
+  // Esc / wheel to un-focus (preserve original behaviour)
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape' || e.key === '-') onZoomOut?.();
+    };
+    const onWheel = (e) => {
+      if (focusedCategory && e.deltaY !== 0) onZoomOut?.();
+    };
+    window.addEventListener('keydown', onKey);
+    const el = containerRef.current;
+    el?.addEventListener('wheel', onWheel, { passive: true });
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      el?.removeEventListener('wheel', onWheel);
+    };
+  }, [onZoomOut, focusedCategory]);
+
+  // Spawn particles for newly-deleting nodes
+  useEffect(() => {
+    const newIds = deletingIds.filter((id) => !prevDeletingRef.current.includes(id));
+    for (const id of newIds) {
+      const node = graphData.nodes.find((n) => n.id === id);
+      if (!node || node.x == null) continue;
+      const cat = CATEGORIES[node.category] || CATEGORIES.other;
+      const numP = node.kind === 'cat' ? 22 : 14;
+      for (let p = 0; p < numP; p++) {
+        const angle = (p / numP) * Math.PI * 2 + Math.random() * 0.5;
+        const speed = (1.5 + Math.random() * 3.5) / 6; // world-space speed
+        particlesRef.current.push({
+          x: node.x,
+          y: node.y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          r: 0.5 + Math.random() * (node.kind === 'cat' ? 1.4 : 0.9),
+          alpha: 1,
+          color: cat.color,
+          life: 0,
+          maxLife: 45 + Math.random() * 20,
+        });
+      }
+    }
+    prevDeletingRef.current = [...deletingIds];
+  }, [deletingIds, graphData]);
+
+  const handleNodeClick = useCallback((node, event) => {
+    if (activeTool === 'snip') return;
+    if (node.kind === 'you') return;
+    if (node.kind === 'cat') {
+      onNodeClick?.({ isCategory: true, category: node.category, id: node.id });
+      return;
+    }
+    const sx = event?.clientX;
+    const sy = event?.clientY;
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+      onNodeDoubleClick?.(node.person);
+      return;
+    }
+    clickTimerRef.current = setTimeout(() => {
+      clickTimerRef.current = null;
+      onNodeClick?.(node.person, sx != null ? { x: sx, y: sy } : null);
+    }, 250);
+  }, [activeTool, onNodeClick, onNodeDoubleClick]);
+
+  const handleNodeHover = useCallback((node) => {
+    hoveredNodeRef.current = node || null;
+    const canvas = containerRef.current?.querySelector('canvas');
+    if (!canvas) return;
+    if (activeTool === 'snip') {
+      canvas.style.cursor = hoveredLinkRef.current ? 'crosshair' : 'crosshair';
+    } else {
+      canvas.style.cursor = node ? (node.kind === 'you' ? 'grab' : 'pointer') : 'grab';
+    }
+  }, [activeTool]);
+
+  const handleLinkHover = useCallback((link) => {
+    hoveredLinkRef.current = link || null;
+    const canvas = containerRef.current?.querySelector('canvas');
+    if (canvas && activeTool === 'snip') canvas.style.cursor = 'crosshair';
+  }, [activeTool]);
+
+  const handleLinkClick = useCallback((link) => {
+    if (activeTool !== 'snip') return;
+    const target = link.target;
+    if (!target || typeof target !== 'object') return;
+    if (target.kind === 'cat') {
+      onSnip?.({ isCategory: true, id: target.id, category: target.category });
+    } else if (target.kind === 'person') {
+      onSnip?.({ isCategory: false, id: target.id, category: target.category });
+    }
+  }, [activeTool, onSnip]);
+
+  const handleNodeDragEnd = useCallback((node) => {
+    if (node.kind === 'you') return;
+    node.fx = node.x;
+    node.fy = node.y;
+  }, []);
+
+  const handleBackgroundClick = useCallback(() => {
+    if (focusedCategory) onZoomOut?.();
+  }, [focusedCategory, onZoomOut]);
+
+  // ----- node painting -----
+  const paintNode = useCallback((node, ctx, globalScale) => {
+    if (deletingSet.has(node.id)) return;
+    if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
+    const r = nodeRadius(node);
+    const isHov = hoveredNodeRef.current?.id === node.id;
+    const dim = isDimmed(node.category);
+    const alpha = dim ? 0.18 : 1;
+    const drawR = r * (isHov ? 1.12 : 1);
+    const cat = CATEGORIES[node.category] || CATEGORIES.other;
+    const color = dim ? '#6a6f7a' : (node.kind === 'you' ? '#e8e8f0' : cat.color);
+
+    if (node.kind === 'you') {
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, drawR, 0, Math.PI * 2);
+      ctx.fillStyle = hexWithAlpha(color, alpha);
+      ctx.fill();
+      ctx.strokeStyle = hexWithAlpha(color, 0.95 * alpha);
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = `rgba(11,15,25,${0.95 * alpha})`;
+      ctx.font = "600 16px 'Inter',sans-serif";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('YOU', node.x, node.y);
+      return;
     }
 
-    const catKeys = Object.keys(grouped);
-    const numCats = catKeys.length;
-    const baseWinSize = Math.min(width, height);
-    const nodes = [];
-
-    catKeys.forEach((catKey, i) => {
-      const g = grouped[catKey];
-      const sum = g.reduce((acc, p) => acc + (p.relationship?.strength ?? 50), 0);
-      const avgStrength = sum / Math.max(1, g.length);
-
-      const mappedOffset = 0.45 - (avgStrength / 100) * 0.30;
-      const catRadiusOffset = baseWinSize * mappedOffset;
-      const theta = (i * (Math.PI * 2)) / Math.max(1, numCats) - Math.PI / 2;
-
-      const baseCatX = cx + Math.cos(theta) * catRadiusOffset * 1.35;
-      const baseCatY = cy + Math.sin(theta) * catRadiusOffset * 0.8;
-
-      const oldCat = nodesRef.current.find(old => old.id === `cat_${catKey}`);
-      const manualOffX = oldCat ? (oldCat.manualOffX ?? 0) : 0;
-      const manualOffY = oldCat ? (oldCat.manualOffY ?? 0) : 0;
-
-      const catNode = {
-        isCategory: true,
-        id: `cat_${catKey}`,
-        name: catKey.toUpperCase(),
-        initials: '',
-        category: catKey,
-        avgStrength,
-        x: oldCat ? oldCat.x : baseCatX + manualOffX,
-        y: oldCat ? oldCat.y : baseCatY + manualOffY,
-        targetX: baseCatX + manualOffX,
-        targetY: baseCatY + manualOffY,
-        baseX: baseCatX,
-        baseY: baseCatY,
-        manualOffX,
-        manualOffY,
-        theta,
-        catRadiusOffset,
-        radius: 36,
-      };
-      nodes.push(catNode);
-
-      const peopleList = grouped[catKey];
-      const numPeople = peopleList.length;
-      const spreadAngle = Math.PI * 0.5;
-      let startAngle = theta - spreadAngle / 2;
-      if (numPeople === 1) startAngle = theta;
-      const angleStep = numPeople > 1 ? spreadAngle / (numPeople - 1) : 0;
-      const basePersonDist = catRadiusOffset * 0.38;
-
-      peopleList.forEach((person, j) => {
-        const infoFields = countInfoFields(person);
-        const personR = 24 + (Math.min(infoFields, 8) / 8) * 16;
-        const pTheta = startAngle + j * angleStep;
-        const pDist = basePersonDist + (j % 2 === 0 ? 0 : personR * 1.2);
-        const basePx = baseCatX + Math.cos(pTheta) * pDist * 1.35;
-        const basePy = baseCatY + Math.sin(pTheta) * pDist * 0.8;
-
-        const oldNode = nodesRef.current.find(old => old.id === person.id);
-        const pManualOffX = oldNode ? (oldNode.manualOffX ?? 0) : 0;
-        const pManualOffY = oldNode ? (oldNode.manualOffY ?? 0) : 0;
-
-        nodes.push({
-          ...person,
-          isCategory: false,
-          category: catKey,
-          strength: person.relationship?.strength ?? 0,
-          parentCat: catNode,
-          x: oldNode ? oldNode.x : basePx + pManualOffX,
-          y: oldNode ? oldNode.y : basePy + pManualOffY,
-          targetX: basePx + pManualOffX,
-          targetY: basePy + pManualOffY,
-          baseX: basePx,
-          baseY: basePy,
-          manualOffX: pManualOffX,
-          manualOffY: pManualOffY,
-          radius: personR,
-          orbitAngle: oldNode ? oldNode.orbitAngle : Math.random() * Math.PI * 2,
-          orbitRadius: 2 + Math.random() * 3,
-          orbitSpeed: 0.0006 + Math.random() * 0.0008,
-          daysSince: daysSince(person.lastContactAt),
-          isBirthday: isBirthdayToday(person.birthday),
-        });
-      });
-    });
-
-    nodesRef.current = nodes;
-  }, [people]);
-
-  // Whenever focus mode changes, reset user pan so the focused cat (or galaxy)
-  // lands cleanly centered regardless of prior panning.
-  useEffect(() => {
-    userPanRef.current.x = 0;
-    userPanRef.current.y = 0;
-  }, [focusedCategory]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    let width = canvas.parentElement.clientWidth;
-    let height = canvas.parentElement.clientHeight;
-
-    const resize = () => {
-      width = canvas.parentElement.clientWidth;
-      height = canvas.parentElement.clientHeight;
-      canvas.width = width * devicePixelRatio;
-      canvas.height = height * devicePixelRatio;
-      canvas.style.width = width + 'px';
-      canvas.style.height = height + 'px';
-      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-      initNodes(width, height);
-    };
-    resize();
-
-    const getCenter = () => ({
-      cx: width / 2,
-      cy: height / 2 - Math.min(width, height) * 0.05,
-    });
-
-    const screenToWorld = (sx, sy) => {
-      const { cx, cy } = getCenter();
-      return {
-        wx: (sx - (camRef.current.x + cx)) / camRef.current.scale + cx,
-        wy: (sy - (camRef.current.y + cy)) / camRef.current.scale + cy,
-      };
-    };
-
-    const hitTest = (mx, my) => {
-      const { cx, cy } = getCenter();
-      const { wx, wy } = screenToWorld(mx, my);
-      // YOU lives in world space at (cx + youOffset)
-      const youX = cx + youPosRef.current.x;
-      const youY = cy + youPosRef.current.y;
-      const ydist = Math.sqrt((wx - youX) ** 2 + (wy - youY) ** 2);
-      if (ydist < 44 && !focusedCategory) return { id: 'center', isCenter: true };
-      for (const node of [...nodesRef.current].reverse()) {
-        if (Math.sqrt((wx - node.x) ** 2 + (wy - node.y) ** 2) < node.radius + 6) return node;
+    if (node.kind === 'cat') {
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, drawR, 0, Math.PI * 2);
+      ctx.fillStyle = hexWithAlpha(color, alpha);
+      ctx.fill();
+      ctx.strokeStyle = hexWithAlpha(color, alpha);
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = `rgba(11,15,25,${0.95 * alpha})`;
+      const maxTextWidth = drawR * 1.45;
+      let cfs = Math.max(9, drawR * 0.46);
+      if (cfs * 0.6 * node.name.length > maxTextWidth) {
+        cfs = Math.max(9, maxTextWidth / (node.name.length * 0.6));
       }
-      return null;
-    };
+      ctx.font = `600 ${cfs}px 'Inter',sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(node.name, node.x, node.y);
+      return;
+    }
 
-    const hitTestEdge = (mx, my) => {
-      const { wx, wy } = screenToWorld(mx, my);
-      const { cx, cy } = getCenter();
-      let best = null; let bestDist = 14;
-      for (const node of nodesRef.current) {
-        let ax, ay, bx, by;
-        if (node.isCategory) { ax = cx; ay = cy; bx = node.x; by = node.y; }
-        else { const p = node.parentCat; if (!p) continue; ax = p.x; ay = p.y; bx = node.x; by = node.y; }
-        const dx = bx - ax; const dy = by - ay;
-        const len2 = dx * dx + dy * dy;
-        if (len2 < 1) continue;
-        const t = Math.max(0, Math.min(1, ((wx - ax) * dx + (wy - ay) * dy) / len2));
-        const dist = Math.sqrt((wx - ax - t * dx) ** 2 + (wy - ay - t * dy) ** 2);
-        if (dist < bestDist) { bestDist = dist; best = node; }
-      }
-      return best;
-    };
+    // person node — halo + filled circle + name/initials
+    const haloR = drawR * 1.6;
+    const halo = ctx.createRadialGradient(node.x, node.y, drawR * 0.5, node.x, node.y, haloR);
+    halo.addColorStop(0, hexWithAlpha(color, 0.4 * alpha));
+    halo.addColorStop(1, hexWithAlpha(color, 0));
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, haloR, 0, Math.PI * 2);
+    ctx.fill();
 
-    const dragState = dragStateRef.current;
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, drawR, 0, Math.PI * 2);
+    ctx.fillStyle = hexWithAlpha(color, alpha);
+    ctx.fill();
+    ctx.strokeStyle = `rgba(255,255,255,${(isHov ? 1.0 : 0.6) * alpha})`;
+    ctx.lineWidth = isHov ? 2 : 1.5;
+    ctx.stroke();
 
-    const onMouseDown = (e) => {
-      if (activeTool === 'snip') return;
-      const rect = canvas.getBoundingClientRect();
-      const node = hitTest(e.clientX - rect.left, e.clientY - rect.top);
-      dragState.active = true;
-      dragState.startMx = e.clientX;
-      dragState.startMy = e.clientY;
-      dragState.moved = false;
-      dragState.suppressClick = false;
-      if (!node) {
-        dragState.nodeId = 'pan';
-        dragState.startNx = userPanRef.current.x;
-        dragState.startNy = userPanRef.current.y;
-      } else if (node.isCenter) {
-        dragState.nodeId = 'you';
-        dragState.startNx = youPosRef.current.x;
-        dragState.startNy = youPosRef.current.y;
-      } else {
-        dragState.nodeId = node.id;
-        dragState.startNx = node.manualOffX ?? 0;
-        dragState.startNy = node.manualOffY ?? 0;
-      }
-    };
+    const nameFits = (node.name?.length ?? 0) <= 11;
+    const textInside = nameFits ? node.name : (node.initials || node.name);
+    ctx.fillStyle = `rgba(11,15,25,${0.95 * alpha})`;
+    let fs = Math.max(9, drawR * 0.55);
+    if (fs * 0.6 * textInside.length > drawR * 1.75) {
+      fs = Math.max(9, (drawR * 1.75) / (textInside.length * 0.6));
+    }
+    ctx.font = `600 ${fs}px 'Inter',sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(textInside, node.x, node.y);
+    if (!nameFits && !dim) {
+      ctx.fillStyle = `rgba(255,255,255,${0.7 * alpha})`;
+      ctx.font = `500 ${11 / globalScale}px 'Inter',sans-serif`;
+      ctx.fillText(node.name, node.x, node.y + drawR + 14 / globalScale);
+    }
+  }, [deletingSet, isDimmed]);
 
-    const onMouseUp = () => {
-      if (dragState.active && dragState.moved) dragState.suppressClick = true;
-      dragState.active = false;
-      dragState.nodeId = null;
-    };
+  const paintNodePointer = useCallback((node, color, ctx) => {
+    if (deletingSet.has(node.id)) return;
+    if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
+    const r = nodeRadius(node) * 1.15;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }, [deletingSet]);
 
-    const onMouseMove = (e) => {
-      const rect = canvas.getBoundingClientRect();
-      mouseRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  // ----- link painting -----
+  const paintLink = useCallback((link, ctx) => {
+    const src = link.source;
+    const tgt = link.target;
+    if (!src || !tgt || typeof src !== 'object' || typeof tgt !== 'object') return;
+    if (deletingSet.has(src.id) || deletingSet.has(tgt.id)) return;
+    if (!Number.isFinite(src.x) || !Number.isFinite(tgt.x)) return;
 
-      if (dragState.active && dragState.nodeId) {
-        const dxPx = e.clientX - dragState.startMx;
-        const dyPx = e.clientY - dragState.startMy;
-        if (!dragState.moved && (Math.abs(dxPx) > 4 || Math.abs(dyPx) > 4)) dragState.moved = true;
-        const dxW = dxPx / camRef.current.scale;
-        const dyW = dyPx / camRef.current.scale;
+    const isHovEdge = hoveredLinkRef.current === link;
+    const dim = isDimmed(link.category);
+    const dimMul = dim ? 0.12 : 1;
 
-        if (dragState.nodeId === 'pan') {
-          userPanRef.current.x = dragState.startNx + dxPx;
-          userPanRef.current.y = dragState.startNy + dyPx;
-          // Snap camera to the correct target (focusOffset + userPan when focused, else userPan)
-          // so cursor tracks 1:1 with no spring lag.
-          if (focusedCategory) {
-            const catNode = nodesRef.current.find(n => n.isCategory && n.category === focusedCategory);
-            if (catNode) {
-              const s = camRef.current.scale;
-              camRef.current.x = (width / 2 - catNode.x) * s + userPanRef.current.x;
-              camRef.current.y = (height / 2 - Math.min(width, height) * 0.05 - catNode.y) * s + userPanRef.current.y;
-            }
-          } else {
-            camRef.current.x = userPanRef.current.x;
-            camRef.current.y = userPanRef.current.y;
-          }
-        } else if (dragState.nodeId === 'you') {
-          youPosRef.current.x = dragState.startNx + dxW;
-          youPosRef.current.y = dragState.startNy + dyW;
-        } else {
-          const node = nodesRef.current.find(n => n.id === dragState.nodeId);
-          if (node) {
-            const newOffX = dragState.startNx + dxW;
-            const newOffY = dragState.startNy + dyW;
-            if (node.isCategory) {
-              const diffX = newOffX - (node.manualOffX ?? 0);
-              const diffY = newOffY - (node.manualOffY ?? 0);
-              node.manualOffX = newOffX; node.manualOffY = newOffY;
-              node.targetX = node.baseX + newOffX; node.targetY = node.baseY + newOffY;
-              for (const pn of nodesRef.current) {
-                if (!pn.isCategory && pn.category === node.category) {
-                  pn.manualOffX = (pn.manualOffX ?? 0) + diffX;
-                  pn.manualOffY = (pn.manualOffY ?? 0) + diffY;
-                  pn.targetX = pn.baseX + pn.manualOffX;
-                  pn.targetY = pn.baseY + pn.manualOffY;
-                }
-              }
-            } else {
-              node.manualOffX = newOffX; node.manualOffY = newOffY;
-              node.targetX = node.baseX + newOffX; node.targetY = node.baseY + newOffY;
-            }
-          }
-        }
-        canvas.style.cursor = 'grabbing';
-        return;
-      }
+    if (isHovEdge && activeTool === 'snip') {
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = 'rgba(255,80,80,0.95)';
+      ctx.shadowColor = 'rgba(255,80,80,0.8)';
+      ctx.shadowBlur = 12;
+      ctx.lineWidth = (link.kind === 'trunk' ? 1.5 : 1.2);
+    } else if (link.kind === 'trunk') {
+      const ea = (0.1 + (link.avgStrength / 100) * 0.3) * dimMul;
+      ctx.strokeStyle = `rgba(255,255,255,${ea})`;
+      ctx.lineWidth = 0.5 + (link.avgStrength / 100) * 4;
+    } else {
+      const rgb = strengthToEdgeColor(link.strength);
+      const a = dim ? 0.18 : 0.55;
+      ctx.strokeStyle = dim ? `rgba(140,140,150,${a})` : `rgba(${rgb}, ${a})`;
+      ctx.lineWidth = 0.5 + (link.strength / 100) * 4;
+    }
 
-      if (activeTool === 'snip') {
-        hoveredEdgeRef.current = hitTestEdge(mouseRef.current.x, mouseRef.current.y);
-        hoveredRef.current = null;
-        canvas.style.cursor = 'crosshair';
-      } else {
-        hoveredEdgeRef.current = null;
-        const found = hitTest(mouseRef.current.x, mouseRef.current.y);
-        hoveredRef.current = found;
-        canvas.style.cursor = found ? (found.isCenter ? 'grab' : 'pointer') : 'grab';
-      }
-    };
+    ctx.beginPath();
+    ctx.moveTo(src.x, src.y);
+    ctx.lineTo(tgt.x, tgt.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
+  }, [deletingSet, isDimmed, activeTool]);
 
-    const onClick = (e) => {
-      if (dragState.active) return;
-      if (dragState.suppressClick) { dragState.suppressClick = false; return; }
-      const rect = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left; const my = e.clientY - rect.top;
-      if (activeTool === 'snip') { const edge = hitTestEdge(mx, my); if (edge) onSnip?.(edge); return; }
-      const node = hitTest(mx, my);
-      if (!node || node.isCenter) return;
-      if (clickTimerRef.current) {
-        clearTimeout(clickTimerRef.current); clickTimerRef.current = null;
-        onNodeDoubleClick?.(node);
-      } else {
-        const cx = e.clientX; const cy = e.clientY;
-        clickTimerRef.current = setTimeout(() => { clickTimerRef.current = null; onNodeClick?.(node, { x: cx, y: cy }); }, 250);
-      }
-    };
+  const paintLinkPointer = useCallback((link, color, ctx) => {
+    const src = link.source;
+    const tgt = link.target;
+    if (!src || !tgt || typeof src !== 'object' || typeof tgt !== 'object') return;
+    if (!Number.isFinite(src.x) || !Number.isFinite(tgt.x)) return;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    ctx.moveTo(src.x, src.y);
+    ctx.lineTo(tgt.x, tgt.y);
+    ctx.stroke();
+  }, []);
 
-    const onKeyDown = (e) => { if (e.key === 'Escape' || e.key === '-') onZoomOut?.(); };
-    const onWheel = (e) => { if (e.deltaY !== 0) onZoomOut?.(); };
+  // ----- particle layer (post-render, in graph coordinates) -----
+  const onRenderFramePost = useCallback((ctx) => {
+    const list = particlesRef.current;
+    if (list.length === 0) return;
+    const next = list
+      .map((p) => {
+        const life = p.life + 1;
+        return {
+          ...p,
+          x: p.x + p.vx,
+          y: p.y + p.vy,
+          vx: p.vx * 0.93,
+          vy: p.vy * 0.93,
+          life,
+          alpha: 1 - life / p.maxLife,
+        };
+      })
+      .filter((p) => p.life < p.maxLife);
+    for (const p of next) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = hexWithAlpha(p.color, p.alpha * 0.9);
+      ctx.fill();
+    }
+    particlesRef.current = next;
+  }, []);
 
-    const draw = () => {
-      timeRef.current += 1;
-      const { cx, cy } = getCenter();
-      ctx.clearRect(0, 0, width, height);
-
-      // Camera target
-      if (focusedCategory) {
-        const catNode = nodesRef.current.find(n => n.isCategory && n.category === focusedCategory);
-        if (catNode) {
-          const focusScale = 2.6;
-          // Position so cat lands at screen center; userPan is added on top so further
-          // panning during focus still works (it's reset to 0 on focus enter/exit).
-          camRef.current.targetX = (cx - catNode.x) * focusScale + userPanRef.current.x;
-          camRef.current.targetY = (cy - catNode.y) * focusScale + userPanRef.current.y;
-          camRef.current.targetScale = focusScale;
-        }
-      } else {
-        camRef.current.targetX = userPanRef.current.x;
-        camRef.current.targetY = userPanRef.current.y;
-        camRef.current.targetScale = 1;
-      }
-      camRef.current.x += (camRef.current.targetX - camRef.current.x) * 0.08;
-      camRef.current.y += (camRef.current.targetY - camRef.current.y) * 0.08;
-      camRef.current.scale += (camRef.current.targetScale - camRef.current.scale) * 0.08;
-
-      // Collision pass: nudge overlapping nodes apart through their target offsets
-      const draggedId = dragStateRef.current.active ? dragStateRef.current.nodeId : null;
-      const collidable = nodesRef.current.filter(n => !deletingIds.includes(n.id) && n.id !== draggedId);
-      const youR = 44;
-      const youWX = cx + youPosRef.current.x;
-      const youWY = cy + youPosRef.current.y;
-      for (let i = 0; i < collidable.length; i++) {
-        const a = collidable[i];
-        // YOU obstacle (constellation origin, follows youPos)
-        {
-          const dx = a.x - youWX, dy = a.y - youWY;
-          const d = Math.sqrt(dx * dx + dy * dy) || 0.01;
-          const minD = a.radius + youR + 8;
-          if (d < minD) {
-            const push = (minD - d) * 0.12;
-            const nx = dx / d, ny = dy / d;
-            a.manualOffX = (a.manualOffX ?? 0) + nx * push;
-            a.manualOffY = (a.manualOffY ?? 0) + ny * push;
-            a.targetX = a.baseX + a.manualOffX;
-            a.targetY = a.baseY + a.manualOffY;
-          }
-        }
-        for (let j = i + 1; j < collidable.length; j++) {
-          const b = collidable[j];
-          const dx = b.x - a.x, dy = b.y - a.y;
-          const d = Math.sqrt(dx * dx + dy * dy) || 0.01;
-          const minD = a.radius + b.radius + 8;
-          if (d < minD) {
-            const overlap = (minD - d) * 0.06;
-            const nx = dx / d, ny = dy / d;
-            a.manualOffX = (a.manualOffX ?? 0) - nx * overlap;
-            a.manualOffY = (a.manualOffY ?? 0) - ny * overlap;
-            b.manualOffX = (b.manualOffX ?? 0) + nx * overlap;
-            b.manualOffY = (b.manualOffY ?? 0) + ny * overlap;
-            a.targetX = a.baseX + a.manualOffX;
-            a.targetY = a.baseY + a.manualOffY;
-            b.targetX = b.baseX + b.manualOffX;
-            b.targetY = b.baseY + b.manualOffY;
-          }
-        }
-      }
-
-      // Spring step — node target is its base layout + manual offset + youPos shift
-      const yox = youPosRef.current.x, yoy = youPosRef.current.y;
-      for (const a of nodesRef.current) {
-        let swayX = 0; let swayY = 0;
-        if (!a.isCategory) {
-          swayX = Math.sin(timeRef.current * a.orbitSpeed * 15 + a.orbitAngle) * 1.5;
-          swayY = Math.cos(timeRef.current * a.orbitSpeed * 17 + a.orbitAngle) * 1.5;
-        }
-        a.x += ((a.targetX + yox + swayX) - a.x) * 0.1;
-        a.y += ((a.targetY + yoy + swayY) - a.y) * 0.1;
-      }
-
-      // Spawn particles for newly-deleting nodes
-      const newIds = deletingIds.filter(id => !prevDeletingRef.current.includes(id));
-      if (newIds.length > 0) {
-        for (const id of newIds) {
-          const node = nodesRef.current.find(n => n.id === id);
-          if (!node) continue;
-          const cat = CATEGORIES[node.category] || CATEGORIES.other;
-          // convert node world pos to screen pos
-          const sx = (node.x - cx) * camRef.current.scale + cx + camRef.current.x;
-          const sy = (node.y - cy) * camRef.current.scale + cy + camRef.current.y;
-          const numP = node.isCategory ? 22 : 14;
-          for (let p = 0; p < numP; p++) {
-            const angle = (p / numP) * Math.PI * 2 + Math.random() * 0.5;
-            const speed = 1.5 + Math.random() * 3.5;
-            particlesRef.current.push({
-              x: sx, y: sy,
-              vx: Math.cos(angle) * speed,
-              vy: Math.sin(angle) * speed,
-              r: 2 + Math.random() * (node.isCategory ? 5 : 3),
-              alpha: 1,
-              color: cat.color,
-              life: 0, maxLife: 45 + Math.random() * 20,
-            });
-          }
-        }
-      }
-      prevDeletingRef.current = [...deletingIds];
-
-      // Update particles
-      particlesRef.current = particlesRef.current.filter(p => p.life < p.maxLife);
-      for (const p of particlesRef.current) { p.x += p.vx; p.y += p.vy; p.vx *= 0.93; p.vy *= 0.93; p.life++; p.alpha = 1 - p.life / p.maxLife; }
-
-      ctx.save();
-      ctx.translate(cx + camRef.current.x, cy + camRef.current.y);
-      ctx.scale(camRef.current.scale, camRef.current.scale);
-      ctx.translate(-cx, -cy);
-
-      const youWorldX = cx + youPosRef.current.x;
-      const youWorldY = cy + youPosRef.current.y;
-
-      // YOU → cat trunk edges (world space)
-      for (const node of nodesRef.current) {
-        if (deletingIds.includes(node.id)) continue;
-        if (!node.isCategory) continue;
-        const isHovEdge = hoveredEdgeRef.current?.id === node.id;
-        const edgeDimmed = isDimmed(node.category);
-        const dimMul = edgeDimmed ? 0.12 : 1;
-        const ea = isHovEdge ? 0.95 : (0.1 + (node.avgStrength / 100) * 0.3) * dimMul;
-        const ew = 0.5 + (node.avgStrength / 100) * 4;
-        ctx.beginPath(); ctx.moveTo(youWorldX, youWorldY); ctx.lineTo(node.x, node.y);
-        ctx.lineWidth = ew;
-        if (isHovEdge && activeTool === 'snip') {
-          ctx.setLineDash([6, 4]); ctx.strokeStyle = 'rgba(255,80,80,0.95)';
-          ctx.shadowColor = 'rgba(255,80,80,0.8)'; ctx.shadowBlur = 12;
-        } else { ctx.strokeStyle = `rgba(255,255,255,${ea})`; }
-        ctx.stroke(); ctx.setLineDash([]); ctx.shadowBlur = 0;
-      }
-
-      // Cat→Person edges (world space)
-      for (const node of nodesRef.current) {
-        if (deletingIds.includes(node.id)) continue;
-        if (node.isCategory) continue;
-        const isHovEdge = hoveredEdgeRef.current?.id === node.id;
-        const edgeDimmed = isDimmed(node.category);
-        const dimMul = edgeDimmed ? 0.12 : 1;
-        {
-          const p = node.parentCat;
-          if (!p || deletingIds.includes(p.id)) continue;
-          const isHovPEdge = hoveredEdgeRef.current?.id === node.id;
-          const rgb = strengthToEdgeColor(node.strength);
-          const ew = 0.5 + (node.strength / 100) * 4;
-          ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(node.x, node.y);
-          ctx.lineWidth = ew;
-          if (isHovPEdge && activeTool === 'snip') {
-            ctx.setLineDash([6, 4]); ctx.strokeStyle = 'rgba(255,80,80,0.95)';
-            ctx.shadowColor = 'rgba(255,80,80,0.8)'; ctx.shadowBlur = 12;
-          } else if (edgeDimmed) {
-            ctx.strokeStyle = `rgba(140,140,150,0.18)`;
-          } else { ctx.strokeStyle = `rgba(${rgb}, 0.55)`; }
-          ctx.stroke(); ctx.setLineDash([]); ctx.shadowBlur = 0;
-        }
-      }
-
-      // Nodes
-      for (const node of nodesRef.current) {
-        if (deletingIds.includes(node.id)) continue;
-        const cat = CATEGORIES[node.category] || CATEGORIES.other;
-        const isFiltered = isDimmed(node.category);
-        const isHov = hoveredRef.current?.id === node.id;
-        const nodeAlpha = isFiltered ? 0.18 : 1;
-        const r = node.radius * (isHov ? 1.12 : 1);
-        const renderColor = isFiltered ? '#6a6f7a' : cat.color;
-
-        if (node.isCategory) {
-          ctx.beginPath(); ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-          ctx.fillStyle = hexWithAlpha(renderColor, nodeAlpha); ctx.fill();
-          ctx.strokeStyle = hexWithAlpha(renderColor, nodeAlpha); ctx.lineWidth = 1.5; ctx.stroke();
-          ctx.fillStyle = `rgba(11,15,25,${0.95 * nodeAlpha})`;
-          const maxTextWidth = r * 1.45;
-          let cfs = Math.max(9, r * 0.46);
-          if (cfs * 0.6 * node.name.length > maxTextWidth) cfs = Math.max(9, maxTextWidth / (node.name.length * 0.6));
-          ctx.font = `600 ${cfs}px 'Inter',sans-serif`;
-          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.fillText(node.name, node.x, node.y);
-        } else {
-          drawMinimalNode(ctx, node, r, renderColor, nodeAlpha, isHov);
-          const nameFits = node.name.length <= 11;
-          const textInside = nameFits ? node.name : node.initials;
-          ctx.fillStyle = `rgba(11,15,25,${0.95 * nodeAlpha})`;
-          let fs = Math.max(9, r * 0.55);
-          if (fs * 0.6 * textInside.length > r * 1.75) fs = Math.max(9, (r * 1.75) / (textInside.length * 0.6));
-          ctx.font = `600 ${fs}px 'Inter',sans-serif`;
-          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.fillText(textInside, node.x, node.y);
-          if (!nameFits && !isFiltered) {
-            ctx.fillStyle = `rgba(255,255,255,${0.7 * nodeAlpha})`;
-            ctx.font = `500 11px 'Inter',sans-serif`;
-            ctx.fillText(node.name, node.x, node.y + r + 16);
-          }
-        }
-      }
-
-      // YOU drawn in world space, last so it stays on top
-      ctx.beginPath(); ctx.arc(youWorldX, youWorldY, 44, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(232,232,240,1)'; ctx.fill();
-      ctx.strokeStyle = 'rgba(232,232,240,0.95)'; ctx.lineWidth = 2; ctx.stroke();
-      ctx.fillStyle = 'rgba(11,15,25,0.95)';
-      ctx.font = "600 16px 'Inter',sans-serif";
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('YOU', youWorldX, youWorldY);
-
-      ctx.restore();
-
-      // Render particles in screen space
-      for (const p of particlesRef.current) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = hexWithAlpha(p.color, p.alpha * 0.9);
-        ctx.fill();
-      }
-
-      animRef.current = requestAnimationFrame(draw);
-    };
-    draw();
-
-    window.addEventListener('resize', resize);
-    canvas.addEventListener('mousedown', onMouseDown);
-    window.addEventListener('mouseup', onMouseUp);
-    canvas.addEventListener('mousemove', onMouseMove);
-    canvas.addEventListener('click', onClick);
-    window.addEventListener('keydown', onKeyDown);
-    canvas.addEventListener('wheel', onWheel, { passive: false });
-
-    return () => {
-      cancelAnimationFrame(animRef.current);
-      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
-      window.removeEventListener('resize', resize);
-      canvas.removeEventListener('mousedown', onMouseDown);
-      window.removeEventListener('mouseup', onMouseUp);
-      canvas.removeEventListener('mousemove', onMouseMove);
-      canvas.removeEventListener('click', onClick);
-      window.removeEventListener('keydown', onKeyDown);
-      canvas.removeEventListener('wheel', onWheel);
-    };
-  }, [activeFilters, focusedCategory, activeTool, initNodes, onNodeClick, onNodeDoubleClick, onSnip, onZoomOut, deletingIds]);
-
-  return <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, zIndex: 1 }} />;
+  return (
+    <div ref={containerRef} style={{ position: 'absolute', inset: 0 }}>
+      <ForceGraph2D
+        ref={fgRef}
+        graphData={graphData}
+        width={size.w}
+        height={size.h}
+        backgroundColor="rgba(0,0,0,0)"
+        nodeCanvasObjectMode={() => 'replace'}
+        nodeCanvasObject={paintNode}
+        nodePointerAreaPaint={paintNodePointer}
+        linkCanvasObjectMode={() => 'replace'}
+        linkCanvasObject={paintLink}
+        linkPointerAreaPaint={paintLinkPointer}
+        onNodeClick={handleNodeClick}
+        onNodeHover={handleNodeHover}
+        onNodeDragEnd={handleNodeDragEnd}
+        onLinkClick={handleLinkClick}
+        onLinkHover={handleLinkHover}
+        onBackgroundClick={handleBackgroundClick}
+        onRenderFramePost={onRenderFramePost}
+        d3AlphaDecay={0.025}
+        d3VelocityDecay={0.4}
+        cooldownTicks={Infinity}
+        warmupTicks={60}
+        enableZoomInteraction={true}
+        enablePanInteraction={true}
+        enableNodeDrag={activeTool !== 'snip'}
+        minZoom={0.3}
+        maxZoom={5}
+      />
+    </div>
+  );
 }
