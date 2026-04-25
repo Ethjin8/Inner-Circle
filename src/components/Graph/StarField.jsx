@@ -140,18 +140,9 @@ export default function StarField() {
       const mx = isMobile ? 0 : mouseRef.current.x;
       const my = isMobile ? 0 : mouseRef.current.y;
 
-      drawMilkyWay();
-
       const farPx = mx * 0.10;
       const farPy = my * 0.10;
-      for (const s of milkyExtraRef.current) {
-        const tw = Math.sin(time * s.twinkleSpeed + s.twinkleOffset);
-        const a = s.opacity + tw * 0.15;
-        ctx.beginPath();
-        ctx.arc(s.x + farPx, s.y + farPy, s.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(220, 215, 230, ${Math.max(0, a)})`;
-        ctx.fill();
-      }
+
       for (const star of farRef.current) {
         const tw = Math.sin(time * star.twinkleSpeed + star.twinkleOffset);
         const a = star.opacity + tw * 0.25;

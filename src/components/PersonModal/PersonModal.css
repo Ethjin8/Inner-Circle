@@ -29,6 +29,7 @@
   padding: 32px;
   font-family: var(--font-body);
   animation: pm-rise 0.22s var(--ease-out);
+  margin-bottom: 70px;
 }
 
 @keyframes pm-rise {
@@ -41,6 +42,47 @@
 .pm-panel::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.08);
   border-radius: 4px;
+}
+
+/* Tabs */
+.pm-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  padding-bottom: 0;
+}
+.pm-tab {
+  position: relative;
+  background: transparent;
+  border: none;
+  padding: 8px 16px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.45);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pm-tab:hover { color: rgba(255,255,255,0.75); }
+.pm-tab.active {
+  color: #7df9ff;
+  border-bottom-color: #7df9ff;
+}
+.pm-tab-badge {
+  background: rgba(125, 249, 255, 0.2);
+  color: #7df9ff;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: 1px 6px;
+  min-width: 18px;
+  text-align: center;
 }
 
 .pm-close {

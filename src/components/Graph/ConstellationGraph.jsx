@@ -41,184 +41,26 @@ function hexWithAlpha(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
-function drawSoftStar(ctx, x, y, r, color, alpha, isHovered) {
-  const haloR = r * 1.9;
-  const halo = ctx.createRadialGradient(x, y, r * 0.4, x, y, haloR);
-  halo.addColorStop(0, hexWithAlpha(color, 0.45 * alpha));
+function drawMinimalNode(ctx, node, r, color, alpha, isHovered) {
+  const haloR = r * 1.6;
+  const halo = ctx.createRadialGradient(node.x, node.y, r * 0.5, node.x, node.y, haloR);
+  halo.addColorStop(0, hexWithAlpha(color, 0.4 * alpha));
   halo.addColorStop(1, hexWithAlpha(color, 0));
   ctx.fillStyle = halo;
   ctx.beginPath();
-  ctx.arc(x, y, haloR, 0, Math.PI * 2);
+  ctx.arc(node.x, node.y, haloR, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = hexWithAlpha(color, alpha);
+  ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+  ctx.fillStyle = hexWithAlpha(color, 1.0 * alpha);
   ctx.fill();
-  ctx.strokeStyle = `rgba(255, 255, 255, ${(isHovered ? 0.55 : 0.22) * alpha})`;
+  ctx.strokeStyle = `rgba(255, 255, 255, ${(isHovered ? 1.0 : 0.6) * alpha})`;
   ctx.lineWidth = isHovered ? 2 : 1.5;
   ctx.stroke();
 }
 
-function drawHaloStar(ctx, x, y, r, color, alpha, isHovered) {
-  const haloR = r * 2.3;
-  const halo = ctx.createRadialGradient(x, y, r * 0.5, x, y, haloR);
-  halo.addColorStop(0, hexWithAlpha(color, 0.55 * alpha));
-  halo.addColorStop(1, hexWithAlpha(color, 0));
-  ctx.fillStyle = halo;
-  ctx.beginPath();
-  ctx.arc(x, y, haloR, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = hexWithAlpha(color, alpha);
-  ctx.fill();
-  ctx.strokeStyle = `rgba(255, 255, 255, ${(isHovered ? 0.55 : 0.22) * alpha})`;
-  ctx.lineWidth = isHovered ? 2 : 1.5;
-  ctx.stroke();
-}
-
-function drawEmberStar(ctx, x, y, r, color, alpha, isHovered) {
-  const haloR = r * 2.5;
-  const halo = ctx.createRadialGradient(x, y, r * 0.3, x, y, haloR);
-  halo.addColorStop(0, hexWithAlpha(color, 0.65 * alpha));
-  halo.addColorStop(0.5, hexWithAlpha(color, 0.25 * alpha));
-  halo.addColorStop(1, hexWithAlpha(color, 0));
-  ctx.fillStyle = halo;
-  ctx.beginPath();
-  ctx.arc(x, y, haloR, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = hexWithAlpha(color, alpha);
-  ctx.fill();
-  ctx.strokeStyle = `rgba(255, 255, 255, ${(isHovered ? 0.55 : 0.25) * alpha})`;
-  ctx.lineWidth = isHovered ? 2 : 1.5;
-  ctx.stroke();
-}
-
-function drawAnamorphicStar(ctx, x, y, r, color, alpha, isHovered) {
-  drawSoftStar(ctx, x, y, r, color, alpha, isHovered);
-
-  const flareLen = r * 3.2;
-  const flareH = ctx.createLinearGradient(x - flareLen, y, x + flareLen, y);
-  flareH.addColorStop(0, hexWithAlpha(color, 0));
-  flareH.addColorStop(0.5, hexWithAlpha(color, 0.55 * alpha));
-  flareH.addColorStop(1, hexWithAlpha(color, 0));
-  ctx.strokeStyle = flareH;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(x - flareLen, y);
-  ctx.lineTo(x + flareLen, y);
-  ctx.stroke();
-
-  const flareV = ctx.createLinearGradient(x, y - flareLen, x, y + flareLen);
-  flareV.addColorStop(0, hexWithAlpha(color, 0));
-  flareV.addColorStop(0.5, hexWithAlpha(color, 0.55 * alpha));
-  flareV.addColorStop(1, hexWithAlpha(color, 0));
-  ctx.strokeStyle = flareV;
-  ctx.beginPath();
-  ctx.moveTo(x, y - flareLen);
-  ctx.lineTo(x, y + flareLen);
-  ctx.stroke();
-}
-
-function drawRingedPlanet(ctx, x, y, r, color, alpha, strength) {
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = hexWithAlpha(color, alpha);
-  ctx.fill();
-  ctx.strokeStyle = `rgba(255, 255, 255, ${0.22 * alpha})`;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(-0.26);
-
-  ctx.beginPath();
-  ctx.ellipse(0, 0, r * 1.7, r * 0.45, 0, 0, Math.PI * 2);
-  ctx.strokeStyle = hexWithAlpha(color, 0.55 * alpha);
-  ctx.lineWidth = 1.2;
-  ctx.stroke();
-
-  if (strength > 70) {
-    ctx.beginPath();
-    ctx.ellipse(0, 0, r * 2.05, r * 0.55, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = hexWithAlpha(color, 0.3 * alpha);
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }
-
-  ctx.restore();
-}
-
-function drawQuasar(ctx, x, y, r, color, alpha, idStr) {
-  let h = 0;
-  for (let i = 0; i < idStr.length; i++) h = (h * 31 + idStr.charCodeAt(i)) >>> 0;
-  const angle = ((h % 360) * Math.PI) / 180;
-  const beamLen = r * 8;
-
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angle);
-  const beamGrad = ctx.createLinearGradient(0, 0, beamLen, 0);
-  beamGrad.addColorStop(0, hexWithAlpha(color, 0.32 * alpha));
-  beamGrad.addColorStop(1, hexWithAlpha(color, 0));
-  ctx.fillStyle = beamGrad;
-  ctx.beginPath();
-  ctx.moveTo(0, -r * 0.3);
-  ctx.lineTo(beamLen, -r * 0.05);
-  ctx.lineTo(beamLen, r * 0.05);
-  ctx.lineTo(0, r * 0.3);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-
-  const haloR = r * 1.5;
-  const halo = ctx.createRadialGradient(x, y, 0, x, y, haloR);
-  halo.addColorStop(0, hexWithAlpha(color, 0.95 * alpha));
-  halo.addColorStop(1, hexWithAlpha(color, 0));
-  ctx.fillStyle = halo;
-  ctx.beginPath();
-  ctx.arc(x, y, haloR, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = hexWithAlpha(color, alpha);
-  ctx.fill();
-}
-
-function drawCelestialBody(ctx, node, r, color, alpha, isHovered) {
-  switch (node.category) {
-    case 'family':
-      drawRingedPlanet(ctx, node.x, node.y, r, color, alpha, node.strength);
-      break;
-    case 'romantic':
-      drawSoftStar(ctx, node.x, node.y, r, color, alpha, isHovered);
-      break;
-    case 'friend':
-      drawAnamorphicStar(ctx, node.x, node.y, r, color, alpha, isHovered);
-      break;
-    case 'mentor':
-      drawQuasar(ctx, node.x, node.y, r, color, alpha, String(node.id));
-      break;
-    case 'professional':
-      drawEmberStar(ctx, node.x, node.y, r, color, alpha, isHovered);
-      break;
-    case 'classmate':
-    case 'coworker':
-      drawHaloStar(ctx, node.x, node.y, r, color, alpha, isHovered);
-      break;
-    default:
-      drawSoftStar(ctx, node.x, node.y, r, color, alpha, isHovered);
-  }
-}
-
-const DEMO_PEOPLE = [
+export const DEMO_PEOPLE = [
   {
     id: '1', name: 'Mom', initials: 'MO', birthday: '1972-03-18',
     lastContactAt: '2026-04-23T18:30:00Z',
@@ -354,11 +196,6 @@ function countInfoFields(p) {
   return Math.max(1, n);
 }
 
-function strengthToDistance(strength, maxRadius) {
-  const normalized = 1 - strength / 100;
-  return maxRadius * 0.22 + normalized * maxRadius * 0.78;
-}
-
 const PADDING_TOP = 80;
 const PADDING_BOTTOM = 160;
 const PADDING_LEFT = 180;
@@ -370,95 +207,121 @@ function clampToBounds(node, width, height) {
   node.baseY = Math.max(PADDING_TOP + r, Math.min(height - PADDING_BOTTOM - r, node.baseY));
 }
 
-function resolveCollisions(nodes, cx, cy, width, height, iterations = 80) {
-  for (let iter = 0; iter < iterations; iter++) {
-    for (let i = 0; i < nodes.length; i++) {
-      const dxc = nodes[i].baseX - cx;
-      const dyc = nodes[i].baseY - cy;
-      const distC = Math.sqrt(dxc * dxc + dyc * dyc);
-      const minCenterDist = nodes[i].radius + 46;
-      if (distC < minCenterDist && distC > 0) {
-        const push = (minCenterDist - distC) / distC;
-        nodes[i].baseX += dxc * push;
-        nodes[i].baseY += dyc * push;
-      }
-
-      for (let j = i + 1; j < nodes.length; j++) {
-        const dx = nodes[j].baseX - nodes[i].baseX;
-        const dy = nodes[j].baseY - nodes[i].baseY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const minDist = nodes[i].radius + nodes[j].radius + 28;
-        if (dist < minDist && dist > 0) {
-          const push = (minDist - dist) / dist * 0.5;
-          nodes[i].baseX -= dx * push;
-          nodes[i].baseY -= dy * push;
-          nodes[j].baseX += dx * push;
-          nodes[j].baseY += dy * push;
-        }
-      }
-
-      clampToBounds(nodes[i], width, height);
-    }
-  }
-}
-
-export default function ConstellationGraph({ activeFilter, people = DEMO_PEOPLE, onNodeClick, onNodeDoubleClick }) {
+export default function ConstellationGraph({ activeFilter, focusedCategory, onZoomOut, people = DEMO_PEOPLE, onNodeClick, onNodeDoubleClick, activeTool, onSnip, deletingIds = [] }) {
   const canvasRef = useRef(null);
   const nodesRef = useRef([]);
   const animRef = useRef(null);
   const hoveredRef = useRef(null);
+  const hoveredEdgeRef = useRef(null);
   const timeRef = useRef(0);
   const mouseRef = useRef({ x: 0, y: 0 });
   const clickTimerRef = useRef(null);
+  const globalPanRef = useRef({ x: 0, y: 0 });
+  const camRef = useRef({ x: 0, y: 0, scale: 1, targetX: 0, targetY: 0, targetScale: 1 });
+  const dragStateRef = useRef({ active: false, nodeId: null, startMx: 0, startMy: 0, startNx: 0, startNy: 0 });
+  const particlesRef = useRef([]); // [{x,y,vx,vy,r,alpha,color,life,maxLife}]
+  const prevDeletingRef = useRef([]); // track when ids newly enter deleting
 
   const initNodes = useCallback((width, height) => {
-    const cx = width / 2;
-    const cy = height / 2;
-    const maxRadius = Math.min(width, height) * 0.58;
+    const cx = width / 2 + globalPanRef.current.x;
+    const cy = height / 2 - Math.min(width, height) * 0.05 + globalPanRef.current.y;
 
-    const nodes = people.map((person, i) => {
-      const strength = person.relationship?.strength ?? 0;
-      const category = person.relationship?.type ?? 'other';
-      const infoFields = countInfoFields(person);
-      const dist = strengthToDistance(strength, maxRadius);
-      const angleSpread = (Math.PI * 2) / people.length;
-      const angle = angleSpread * i - Math.PI / 2;
+    const grouped = {};
+    for (const p of people) {
+      const cat = p.relationship?.type ?? 'other';
+      if (activeFilter && activeFilter !== cat) continue;
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(p);
+    }
 
-      const bx = cx + Math.cos(angle) * dist;
-      const by = cy + Math.sin(angle) * dist;
+    const catKeys = Object.keys(grouped);
+    const numCats = catKeys.length;
+    const baseWinSize = Math.min(width, height);
+    const nodes = [];
 
-      return {
-        ...person,
-        category,
-        strength,
-        infoFields,
-        targetDist: dist,
-        x: bx,
-        y: by,
-        baseX: bx,
-        baseY: by,
-        radius: 18 + (Math.min(infoFields, 8) / 8) * 18,
-        orbitAngle: Math.random() * Math.PI * 2,
-        orbitRadius: 3 + Math.random() * 5,
-        orbitSpeed: 0.0006 + Math.random() * 0.0008,
-        daysSince: daysSince(person.lastContactAt),
-        isBirthday: isBirthdayToday(person.birthday),
+    catKeys.forEach((catKey, i) => {
+      const g = grouped[catKey];
+      const sum = g.reduce((acc, p) => acc + (p.relationship?.strength ?? 50), 0);
+      const avgStrength = sum / Math.max(1, g.length);
+
+      const mappedOffset = 0.45 - (avgStrength / 100) * 0.30;
+      const catRadiusOffset = baseWinSize * mappedOffset;
+      const theta = (i * (Math.PI * 2)) / Math.max(1, numCats) - Math.PI / 2;
+
+      const baseCatX = cx + Math.cos(theta) * catRadiusOffset * 1.35;
+      const baseCatY = cy + Math.sin(theta) * catRadiusOffset * 0.8;
+
+      const oldCat = nodesRef.current.find(old => old.id === `cat_${catKey}`);
+      const manualOffX = oldCat ? (oldCat.manualOffX ?? 0) : 0;
+      const manualOffY = oldCat ? (oldCat.manualOffY ?? 0) : 0;
+
+      const catNode = {
+        isCategory: true,
+        id: `cat_${catKey}`,
+        name: catKey.toUpperCase(),
+        initials: '',
+        category: catKey,
+        avgStrength,
+        x: oldCat ? oldCat.x : baseCatX + manualOffX,
+        y: oldCat ? oldCat.y : baseCatY + manualOffY,
+        targetX: baseCatX + manualOffX,
+        targetY: baseCatY + manualOffY,
+        baseX: baseCatX,
+        baseY: baseCatY,
+        manualOffX,
+        manualOffY,
+        theta,
+        catRadiusOffset,
+        radius: 36,
       };
+      nodes.push(catNode);
+
+      const peopleList = grouped[catKey];
+      const numPeople = peopleList.length;
+      const spreadAngle = Math.PI * 0.5;
+      let startAngle = theta - spreadAngle / 2;
+      if (numPeople === 1) startAngle = theta;
+      const angleStep = numPeople > 1 ? spreadAngle / (numPeople - 1) : 0;
+      const basePersonDist = catRadiusOffset * 0.38;
+
+      peopleList.forEach((person, j) => {
+        const infoFields = countInfoFields(person);
+        const personR = 24 + (Math.min(infoFields, 8) / 8) * 16;
+        const pTheta = startAngle + j * angleStep;
+        const pDist = basePersonDist + (j % 2 === 0 ? 0 : personR * 1.2);
+        const basePx = baseCatX + Math.cos(pTheta) * pDist * 1.35;
+        const basePy = baseCatY + Math.sin(pTheta) * pDist * 0.8;
+
+        const oldNode = nodesRef.current.find(old => old.id === person.id);
+        const pManualOffX = oldNode ? (oldNode.manualOffX ?? 0) : 0;
+        const pManualOffY = oldNode ? (oldNode.manualOffY ?? 0) : 0;
+
+        nodes.push({
+          ...person,
+          isCategory: false,
+          category: catKey,
+          strength: person.relationship?.strength ?? 0,
+          parentCat: catNode,
+          x: oldNode ? oldNode.x : basePx + pManualOffX,
+          y: oldNode ? oldNode.y : basePy + pManualOffY,
+          targetX: basePx + pManualOffX,
+          targetY: basePy + pManualOffY,
+          baseX: basePx,
+          baseY: basePy,
+          manualOffX: pManualOffX,
+          manualOffY: pManualOffY,
+          radius: personR,
+          orbitAngle: oldNode ? oldNode.orbitAngle : Math.random() * Math.PI * 2,
+          orbitRadius: 2 + Math.random() * 3,
+          orbitSpeed: 0.0006 + Math.random() * 0.0008,
+          daysSince: daysSince(person.lastContactAt),
+          isBirthday: isBirthdayToday(person.birthday),
+        });
+      });
     });
 
-    resolveCollisions(nodes, cx, cy, width, height);
-
-    for (const node of nodes) {
-      const dx = node.baseX - cx;
-      const dy = node.baseY - cy;
-      const angle = Math.atan2(dy, dx);
-      node.baseX = cx + Math.cos(angle) * node.targetDist;
-      node.baseY = cy + Math.sin(angle) * node.targetDist;
-      clampToBounds(node, width, height);
-    }
-    nodes.forEach(n => { n.x = n.baseX; n.y = n.baseY; });
     nodesRef.current = nodes;
-  }, [people]);
+  }, [people, activeFilter]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -478,233 +341,319 @@ export default function ConstellationGraph({ activeFilter, people = DEMO_PEOPLE,
     };
     resize();
 
+    const getCenter = () => ({
+      cx: width / 2 + globalPanRef.current.x,
+      cy: height / 2 - Math.min(width, height) * 0.05 + globalPanRef.current.y,
+    });
+
+    const screenToWorld = (sx, sy) => {
+      const { cx, cy } = getCenter();
+      return {
+        wx: (sx - (camRef.current.x + cx)) / camRef.current.scale + cx,
+        wy: (sy - (camRef.current.y + cy)) / camRef.current.scale + cy,
+      };
+    };
+
     const hitTest = (mx, my) => {
-      for (const node of nodesRef.current) {
-        const dx = mx - node.x;
-        const dy = my - node.y;
-        if (Math.sqrt(dx * dx + dy * dy) < node.radius + 6) return node;
+      const { cx, cy } = getCenter();
+      const { wx, wy } = screenToWorld(mx, my);
+      const cdist = Math.sqrt((wx - cx) ** 2 + (wy - cy) ** 2);
+      if (cdist < 44 && !focusedCategory) return { id: 'center', isCenter: true };
+      for (const node of [...nodesRef.current].reverse()) {
+        if (Math.sqrt((wx - node.x) ** 2 + (wy - node.y) ** 2) < node.radius + 6) return node;
       }
       return null;
     };
 
-    const onMouseMove = (e) => {
-      const rect = canvas.getBoundingClientRect();
-      mouseRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-      const found = hitTest(mouseRef.current.x, mouseRef.current.y);
-      hoveredRef.current = found;
-      canvas.style.cursor = found ? 'pointer' : 'default';
+    const hitTestEdge = (mx, my) => {
+      const { wx, wy } = screenToWorld(mx, my);
+      const { cx, cy } = getCenter();
+      let best = null; let bestDist = 14;
+      for (const node of nodesRef.current) {
+        let ax, ay, bx, by;
+        if (node.isCategory) { ax = cx; ay = cy; bx = node.x; by = node.y; }
+        else { const p = node.parentCat; if (!p) continue; ax = p.x; ay = p.y; bx = node.x; by = node.y; }
+        const dx = bx - ax; const dy = by - ay;
+        const len2 = dx * dx + dy * dy;
+        if (len2 < 1) continue;
+        const t = Math.max(0, Math.min(1, ((wx - ax) * dx + (wy - ay) * dy) / len2));
+        const dist = Math.sqrt((wx - ax - t * dx) ** 2 + (wy - ay - t * dy) ** 2);
+        if (dist < bestDist) { bestDist = dist; best = node; }
+      }
+      return best;
     };
 
-    const onClick = (e) => {
+    const dragState = dragStateRef.current;
+
+    const onMouseDown = (e) => {
+      if (activeTool === 'snip') return;
       const rect = canvas.getBoundingClientRect();
       const node = hitTest(e.clientX - rect.left, e.clientY - rect.top);
       if (!node) return;
-      if (clickTimerRef.current) {
-        clearTimeout(clickTimerRef.current);
-        clickTimerRef.current = null;
-        onNodeDoubleClick?.(node);
+      dragState.active = true;
+      dragState.nodeId = node.id ?? 'center';
+      dragState.startMx = e.clientX;
+      dragState.startMy = e.clientY;
+      if (node.isCenter) {
+        dragState.startNx = globalPanRef.current.x;
+        dragState.startNy = globalPanRef.current.y;
       } else {
-        clickTimerRef.current = setTimeout(() => {
-          clickTimerRef.current = null;
-          onNodeClick?.(node);
-        }, 250);
+        dragState.startNx = node.manualOffX ?? 0;
+        dragState.startNy = node.manualOffY ?? 0;
       }
     };
 
-    canvas.addEventListener('mousemove', onMouseMove);
-    canvas.addEventListener('click', onClick);
+    const onMouseUp = () => { dragState.active = false; dragState.nodeId = null; };
+
+    const onMouseMove = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+
+      if (dragState.active && dragState.nodeId) {
+        const dxPx = e.clientX - dragState.startMx;
+        const dyPx = e.clientY - dragState.startMy;
+        const dxW = dxPx / camRef.current.scale;
+        const dyW = dyPx / camRef.current.scale;
+
+        if (dragState.nodeId === 'center') {
+          globalPanRef.current.x = dragState.startNx + dxPx;
+          globalPanRef.current.y = dragState.startNy + dyPx;
+          initNodes(width, height);
+        } else {
+          const node = nodesRef.current.find(n => n.id === dragState.nodeId);
+          if (node) {
+            const newOffX = dragState.startNx + dxW;
+            const newOffY = dragState.startNy + dyW;
+            if (node.isCategory) {
+              const diffX = newOffX - (node.manualOffX ?? 0);
+              const diffY = newOffY - (node.manualOffY ?? 0);
+              node.manualOffX = newOffX; node.manualOffY = newOffY;
+              node.targetX = node.baseX + newOffX; node.targetY = node.baseY + newOffY;
+              for (const pn of nodesRef.current) {
+                if (!pn.isCategory && pn.category === node.category) {
+                  pn.manualOffX = (pn.manualOffX ?? 0) + diffX;
+                  pn.manualOffY = (pn.manualOffY ?? 0) + diffY;
+                  pn.targetX = pn.baseX + pn.manualOffX;
+                  pn.targetY = pn.baseY + pn.manualOffY;
+                }
+              }
+            } else {
+              node.manualOffX = newOffX; node.manualOffY = newOffY;
+              node.targetX = node.baseX + newOffX; node.targetY = node.baseY + newOffY;
+            }
+          }
+        }
+        canvas.style.cursor = 'grabbing';
+        return;
+      }
+
+      if (activeTool === 'snip') {
+        hoveredEdgeRef.current = hitTestEdge(mouseRef.current.x, mouseRef.current.y);
+        hoveredRef.current = null;
+        canvas.style.cursor = 'crosshair';
+      } else {
+        hoveredEdgeRef.current = null;
+        const found = hitTest(mouseRef.current.x, mouseRef.current.y);
+        hoveredRef.current = found;
+        canvas.style.cursor = found ? (found.isCenter ? 'grab' : 'pointer') : 'default';
+      }
+    };
+
+    const onClick = (e) => {
+      if (dragState.active) return;
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left; const my = e.clientY - rect.top;
+      if (activeTool === 'snip') { const edge = hitTestEdge(mx, my); if (edge) onSnip?.(edge); return; }
+      const node = hitTest(mx, my);
+      if (!node || node.isCenter) return;
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current); clickTimerRef.current = null;
+        onNodeDoubleClick?.(node);
+      } else {
+        clickTimerRef.current = setTimeout(() => { clickTimerRef.current = null; onNodeClick?.(node); }, 250);
+      }
+    };
+
+    const onKeyDown = (e) => { if (e.key === 'Escape' || e.key === '-') onZoomOut?.(); };
+    const onWheel = (e) => { if (e.deltaY !== 0) onZoomOut?.(); };
 
     const draw = () => {
       timeRef.current += 1;
-      const t = timeRef.current;
-      const cx = width / 2;
-      const cy = height / 2;
+      const { cx, cy } = getCenter();
       ctx.clearRect(0, 0, width, height);
 
-      for (const node of nodesRef.current) {
-        const r = node.radius + 20;
-        node.orbitAngle += node.orbitSpeed;
-        node.x = node.baseX + Math.cos(node.orbitAngle) * node.orbitRadius;
-        node.y = node.baseY + Math.sin(node.orbitAngle) * node.orbitRadius;
-        node.x = Math.max(PADDING_LEFT + r, Math.min(width - PADDING_RIGHT - r, node.x));
-        node.y = Math.max(PADDING_TOP + r, Math.min(height - PADDING_BOTTOM - r, node.y));
+      // Camera target
+      if (focusedCategory) {
+        const catNode = nodesRef.current.find(n => n.isCategory && n.category === focusedCategory);
+        if (catNode) {
+          camRef.current.targetX = cx - catNode.x;
+          camRef.current.targetY = cy - catNode.y;
+          camRef.current.targetScale = 1.9;
+        }
+      } else {
+        camRef.current.targetX = 0; camRef.current.targetY = 0; camRef.current.targetScale = 1;
+      }
+      camRef.current.x += (camRef.current.targetX - camRef.current.x) * 0.08;
+      camRef.current.y += (camRef.current.targetY - camRef.current.y) * 0.08;
+      camRef.current.scale += (camRef.current.targetScale - camRef.current.scale) * 0.08;
+
+      for (const a of nodesRef.current) {
+        let swayX = 0; let swayY = 0;
+        if (!a.isCategory) {
+          swayX = Math.sin(timeRef.current * a.orbitSpeed * 15 + a.orbitAngle) * 1.5;
+          swayY = Math.cos(timeRef.current * a.orbitSpeed * 17 + a.orbitAngle) * 1.5;
+        }
+        a.x += ((a.targetX + swayX) - a.x) * 0.1;
+        a.y += ((a.targetY + swayY) - a.y) * 0.1;
       }
 
+      // Spawn particles for newly-deleting nodes
+      const newIds = deletingIds.filter(id => !prevDeletingRef.current.includes(id));
+      if (newIds.length > 0) {
+        for (const id of newIds) {
+          const node = nodesRef.current.find(n => n.id === id);
+          if (!node) continue;
+          const cat = CATEGORIES[node.category] || CATEGORIES.other;
+          // convert node world pos to screen pos
+          const sx = (node.x - cx) * camRef.current.scale + cx + camRef.current.x;
+          const sy = (node.y - cy) * camRef.current.scale + cy + camRef.current.y;
+          const numP = node.isCategory ? 22 : 14;
+          for (let p = 0; p < numP; p++) {
+            const angle = (p / numP) * Math.PI * 2 + Math.random() * 0.5;
+            const speed = 1.5 + Math.random() * 3.5;
+            particlesRef.current.push({
+              x: sx, y: sy,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed,
+              r: 2 + Math.random() * (node.isCategory ? 5 : 3),
+              alpha: 1,
+              color: cat.color,
+              life: 0, maxLife: 45 + Math.random() * 20,
+            });
+          }
+        }
+      }
+      prevDeletingRef.current = [...deletingIds];
+
+      // Update particles
+      particlesRef.current = particlesRef.current.filter(p => p.life < p.maxLife);
+      for (const p of particlesRef.current) { p.x += p.vx; p.y += p.vy; p.vx *= 0.93; p.vy *= 0.93; p.life++; p.alpha = 1 - p.life / p.maxLife; }
+
+      ctx.save();
+      ctx.translate(cx + camRef.current.x, cy + camRef.current.y);
+      ctx.scale(camRef.current.scale, camRef.current.scale);
+      ctx.translate(-cx, -cy);
+
+      // Edges
       for (const node of nodesRef.current) {
+        if (deletingIds.includes(node.id)) continue;
+        const isHovEdge = hoveredEdgeRef.current?.id === node.id;
+        if (node.isCategory) {
+          const ea = isHovEdge ? 0.95 : 0.1 + (node.avgStrength / 100) * 0.3;
+          const ew = 0.5 + (node.avgStrength / 100) * 4;
+          ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(node.x, node.y);
+          ctx.lineWidth = ew;
+          if (isHovEdge && activeTool === 'snip') {
+            ctx.setLineDash([6, 4]); ctx.strokeStyle = 'rgba(255,80,80,0.95)';
+            ctx.shadowColor = 'rgba(255,80,80,0.8)'; ctx.shadowBlur = 12;
+          } else { ctx.strokeStyle = `rgba(255,255,255,${ea})`; }
+          ctx.stroke(); ctx.setLineDash([]); ctx.shadowBlur = 0;
+        } else {
+          const p = node.parentCat;
+          if (!p || deletingIds.includes(p.id)) continue;
+          const isHovPEdge = hoveredEdgeRef.current?.id === node.id;
+          const rgb = strengthToEdgeColor(node.strength);
+          const ew = 0.5 + (node.strength / 100) * 4;
+          ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(node.x, node.y);
+          ctx.lineWidth = ew;
+          if (isHovPEdge && activeTool === 'snip') {
+            ctx.setLineDash([6, 4]); ctx.strokeStyle = 'rgba(255,80,80,0.95)';
+            ctx.shadowColor = 'rgba(255,80,80,0.8)'; ctx.shadowBlur = 12;
+          } else { ctx.strokeStyle = `rgba(${rgb}, 0.55)`; }
+          ctx.stroke(); ctx.setLineDash([]); ctx.shadowBlur = 0;
+        }
+      }
+
+      // Nodes
+      for (const node of nodesRef.current) {
+        if (deletingIds.includes(node.id)) continue;
+        const cat = CATEGORIES[node.category] || CATEGORIES.other;
         const isFiltered = activeFilter && activeFilter !== node.category;
-        const rgb = strengthToEdgeColor(node.strength);
-        const alpha = isFiltered ? 0.06 : 0.55;
-        const edgeWidth = isFiltered ? 0.3 : 0.5 + (node.strength / 100) * 5;
+        const isHov = hoveredRef.current?.id === node.id;
+        const nodeAlpha = isFiltered ? 0.15 : 1;
+        const r = node.radius * (isHov ? 1.12 : 1);
 
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(node.x, node.y);
-        ctx.strokeStyle = `rgba(${rgb}, ${alpha})`;
-        ctx.lineWidth = edgeWidth;
-        ctx.stroke();
-      }
-
-      for (let i = 0; i < nodesRef.current.length; i++) {
-        for (let j = i + 1; j < nodesRef.current.length; j++) {
-          const a = nodesRef.current[i];
-          const b = nodesRef.current[j];
-          if (activeFilter && (activeFilter !== a.category || activeFilter !== b.category)) continue;
-          if (a.category !== b.category) continue;
-          const dx = a.x - b.x;
-          const dy = a.y - b.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const threshold = 200;
-          if (dist < threshold) {
-            const alpha = (1 - dist / threshold) * 0.05;
-            ctx.beginPath();
-            ctx.moveTo(a.x, a.y);
-            ctx.lineTo(b.x, b.y);
-            ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-            ctx.lineWidth = 0.5;
-            ctx.setLineDash([4, 6]);
-            ctx.stroke();
-            ctx.setLineDash([]);
+        if (node.isCategory) {
+          ctx.beginPath(); ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+          ctx.fillStyle = hexWithAlpha(cat.color, nodeAlpha); ctx.fill();
+          ctx.strokeStyle = hexWithAlpha(cat.color, nodeAlpha); ctx.lineWidth = 1.5; ctx.stroke();
+          ctx.fillStyle = `rgba(11,15,25,${0.95 * nodeAlpha})`;
+          let cfs = Math.max(9, r * 0.52);
+          if (cfs * 0.6 * node.name.length > r * 1.75) cfs = Math.max(9, (r * 1.75) / (node.name.length * 0.6));
+          ctx.font = `600 ${cfs}px 'Inter',sans-serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(node.name, node.x, node.y);
+        } else {
+          drawMinimalNode(ctx, node, r, cat.color, nodeAlpha, isHov);
+          const nameFits = node.name.length <= 11;
+          const textInside = nameFits ? node.name : node.initials;
+          ctx.fillStyle = `rgba(11,15,25,${0.95 * nodeAlpha})`;
+          let fs = Math.max(9, r * 0.55);
+          if (fs * 0.6 * textInside.length > r * 1.75) fs = Math.max(9, (r * 1.75) / (textInside.length * 0.6));
+          ctx.font = `600 ${fs}px 'Inter',sans-serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(textInside, node.x, node.y);
+          if (!nameFits && !isFiltered) {
+            ctx.fillStyle = `rgba(255,255,255,${0.7 * nodeAlpha})`;
+            ctx.font = `500 11px 'Inter',sans-serif`;
+            ctx.fillText(node.name, node.x, node.y + r + 16);
           }
         }
       }
 
-      for (const node of nodesRef.current) {
-        const cat = CATEGORIES[node.category] || CATEGORIES.other;
-        const isFiltered = activeFilter && activeFilter !== node.category;
-        const isHovered = hoveredRef.current?.id === node.id;
-        const nodeAlpha = isFiltered ? 0.15 : 1;
-        const r = node.radius * (isHovered ? 1.12 : 1);
-
-        if (!isFiltered && node.daysSince < 7) {
-          const pulse = (Math.sin(t * 0.06) * 0.5 + 0.5);
-          const pulseAlpha = (0.16 + pulse * 0.18) * nodeAlpha;
-          const pulseR = r * 2.4 + pulse * r * 0.4;
-          const grad = ctx.createRadialGradient(node.x, node.y, r, node.x, node.y, pulseR);
-          grad.addColorStop(0, hexWithAlpha(cat.color, pulseAlpha));
-          grad.addColorStop(1, hexWithAlpha(cat.color, 0));
-          ctx.fillStyle = grad;
-          ctx.beginPath();
-          ctx.arc(node.x, node.y, pulseR, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        if (!isFiltered && node.daysSince >= 60 && Number.isFinite(node.daysSince)) {
-          const tailLen = r * 3.5;
-          const tx = node.x - Math.cos(node.orbitAngle) * tailLen;
-          const ty = node.y - Math.sin(node.orbitAngle) * tailLen;
-          const grad = ctx.createLinearGradient(tx, ty, node.x, node.y);
-          grad.addColorStop(0, hexWithAlpha(cat.color, 0));
-          grad.addColorStop(1, hexWithAlpha(cat.color, 0.28 * nodeAlpha));
-          ctx.strokeStyle = grad;
-          ctx.lineWidth = Math.max(1, r * 0.45);
-          ctx.lineCap = 'round';
-          ctx.beginPath();
-          ctx.moveTo(tx, ty);
-          ctx.lineTo(node.x, node.y);
-          ctx.stroke();
-        }
-
-        drawCelestialBody(ctx, node, r, cat.color, nodeAlpha, isHovered);
-
-        if (!isFiltered && node.isBirthday) {
-          const phase = (t % 360) / 360;
-          const flashR = r + phase * r * 4.5;
-          const flashAlpha = (1 - phase) * 0.7 * nodeAlpha;
-          ctx.beginPath();
-          ctx.arc(node.x, node.y, flashR, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(255, 245, 220, ${flashAlpha})`;
-          ctx.lineWidth = 2;
-          ctx.stroke();
-        }
-
-        ctx.fillStyle = `rgba(255, 255, 255, ${0.95 * nodeAlpha})`;
-        ctx.font = `600 ${r * 0.55}px 'Space Grotesk', sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(node.initials, node.x, node.y);
-
-        if (!isFiltered) {
-          ctx.fillStyle = `rgba(255, 255, 255, ${0.7 * nodeAlpha})`;
-          ctx.font = `500 11px 'Inter', sans-serif`;
-          ctx.fillText(node.name, node.x, node.y + r + 16);
-        }
-      }
-
-      const astrolabeR = 28;
-      const innerR = astrolabeR * 0.6;
-      const astrolabeAngle = t * 0.0035;
-
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(astrolabeAngle);
-
-      ctx.beginPath();
-      ctx.arc(0, 0, astrolabeR, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(232, 232, 240, 0.7)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.arc(0, 0, innerR, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(232, 232, 240, 0.4)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(-astrolabeR, 0);
-      ctx.lineTo(astrolabeR, 0);
-      ctx.moveTo(0, -astrolabeR);
-      ctx.lineTo(0, astrolabeR);
-      ctx.strokeStyle = 'rgba(232, 232, 240, 0.35)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-
-      const tickInner = astrolabeR * 0.85;
-      for (let i = 0; i < 12; i++) {
-        const a = (i / 12) * Math.PI * 2;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * tickInner, Math.sin(a) * tickInner);
-        ctx.lineTo(Math.cos(a) * astrolabeR, Math.sin(a) * astrolabeR);
-        ctx.strokeStyle = 'rgba(232, 232, 240, 0.45)';
-        ctx.lineWidth = 0.8;
-        ctx.stroke();
-      }
-
-      ctx.beginPath();
-      ctx.arc(0, 0, 3, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(232, 232, 240, 0.9)';
-      ctx.fill();
+      // YOU node always on top
+      ctx.beginPath(); ctx.arc(cx, cy, 44, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(232,232,240,1)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(232,232,240,0.95)'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = 'rgba(11,15,25,0.95)';
+      ctx.font = "600 16px 'Inter',sans-serif";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('YOU', cx, cy);
 
       ctx.restore();
 
-      ctx.fillStyle = 'rgba(232, 232, 240, 0.85)';
-      ctx.font = "600 11px 'Inter', sans-serif";
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('YOU', cx, cy + astrolabeR + 14);
+      // Render particles in screen space
+      for (const p of particlesRef.current) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = hexWithAlpha(p.color, p.alpha * 0.9);
+        ctx.fill();
+      }
 
       animRef.current = requestAnimationFrame(draw);
     };
     draw();
 
     window.addEventListener('resize', resize);
+    canvas.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('click', onClick);
+    window.addEventListener('keydown', onKeyDown);
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+
     return () => {
       cancelAnimationFrame(animRef.current);
       if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
       window.removeEventListener('resize', resize);
+      canvas.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mouseup', onMouseUp);
       canvas.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('click', onClick);
+      window.removeEventListener('keydown', onKeyDown);
+      canvas.removeEventListener('wheel', onWheel);
     };
-  }, [activeFilter, initNodes, onNodeClick, onNodeDoubleClick]);
+  }, [activeFilter, focusedCategory, activeTool, initNodes, onNodeClick, onNodeDoubleClick, onSnip, onZoomOut, deletingIds]);
 
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: 'absolute',
-        inset: 0,
-        zIndex: 1,
-      }}
-    />
-  );
+  return <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, zIndex: 1 }} />;
 }

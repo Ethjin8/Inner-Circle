@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import './PersonModal.css';
+import CloudinaryUpload from '../CloudinaryUpload/CloudinaryUpload';
 
 const CATEGORY_COLORS = {
   family: '#e8b06b',
@@ -56,7 +57,9 @@ function Pills({ label, items }) {
   );
 }
 
-export default function PersonModal({ person, originPoint, phase, onClose }) {
+export default function PersonModal({ person, originPoint, phase, onClose, photosByPerson = {}, onPhotosChange }) {
+  const [activeTab, setActiveTab] = useState('info');
+
   useEffect(() => {
     if (!person) return;
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -113,6 +116,23 @@ export default function PersonModal({ person, originPoint, phase, onClose }) {
           </svg>
         </button>
 
+        {/* Tab navigation */}
+        <div className="pm-tabs">
+          <button
+            className={`pm-tab ${activeTab === 'info' ? 'active' : ''}`}
+            onClick={() => setActiveTab('info')}
+          >Info</button>
+          <button
+            className={`pm-tab ${activeTab === 'photos' ? 'active' : ''}`}
+            onClick={() => setActiveTab('photos')}
+          >
+            Photos
+            {photosByPerson[person.id]?.length > 0 && (
+              <span className="pm-tab-badge">{photosByPerson[person.id].length}</span>
+            )}
+          </button>
+        </div>
+
         <div className="pm-header">
           <div className="pm-avatar-wrap" style={{ width: SIZE, height: SIZE }}>
             <svg className="pm-ring" width={SIZE} height={SIZE}>
@@ -149,55 +169,75 @@ export default function PersonModal({ person, originPoint, phase, onClose }) {
           )}
         </div>
 
-        {hasContext && (
+        {/* Info tab content */}
+        {activeTab === 'info' && (
           <>
-            <div className="pm-divider" />
-            <section className="pm-section">
-              <div className="pm-section-label">Context</div>
-              {ctx.how_we_met && <Field label="How we met" value={ctx.how_we_met} />}
-              {ctx.school && <Field label="School" value={ctx.school} />}
-              {ctx.work && <Field label="Work" value={ctx.work} />}
-              {ctx.hobbies?.length > 0 && <Pills label="Hobbies" items={ctx.hobbies} />}
-              {ctx.sports?.length > 0 && <Pills label="Sports" items={ctx.sports} />}
-              {fav.foods?.length > 0 && <Pills label="Favorite foods" items={fav.foods} />}
-              {fav.music?.length > 0 && <Pills label="Favorite music" items={fav.music} />}
-            </section>
+            {hasContext && (
+              <>
+                <div className="pm-divider" />
+                <section className="pm-section">
+                  <div className="pm-section-label">Context</div>
+                  {ctx.how_we_met && <Field label="How we met" value={ctx.how_we_met} />}
+                  {ctx.school && <Field label="School" value={ctx.school} />}
+                  {ctx.work && <Field label="Work" value={ctx.work} />}
+                  {ctx.hobbies?.length > 0 && <Pills label="Hobbies" items={ctx.hobbies} />}
+                  {ctx.sports?.length > 0 && <Pills label="Sports" items={ctx.sports} />}
+                  {fav.foods?.length > 0 && <Pills label="Favorite foods" items={fav.foods} />}
+                  {fav.music?.length > 0 && <Pills label="Favorite music" items={fav.music} />}
+                </section>
+              </>
+            )}
+
+            {hasMemories && (
+              <>
+                <div className="pm-divider" />
+                <section className="pm-section">
+                  <div className="pm-section-label">Memories</div>
+                  {hasMemoriesTogether && (
+                    <div className="pm-sublist">
+                      {showSubLabels && <div className="pm-sublabel">Together</div>}
+                      <ul className="pm-list">
+                        {history.memories_together.map((m, i) => <li key={i}>{m}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {hasImportantEvents && (
+                    <div className="pm-sublist">
+                      {showSubLabels && <div className="pm-sublabel">Important events</div>}
+                      <ul className="pm-list">
+                        {history.important_events.map((m, i) => <li key={i}>{m}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                </section>
+              </>
+            )}
+
+            {hasForward && (
+              <>
+                <div className="pm-divider" />
+                <section className="pm-section">
+                  <div className="pm-section-label">Looking Forward</div>
+                  <ul className="pm-list">
+                    {history.things_to_look_forward_to.map((m, i) => <li key={i}>{m}</li>)}
+                  </ul>
+                </section>
+              </>
+            )}
           </>
         )}
 
-        {hasMemories && (
+        {/* Photos tab content */}
+        {activeTab === 'photos' && (
           <>
             <div className="pm-divider" />
             <section className="pm-section">
-              <div className="pm-section-label">Memories</div>
-              {hasMemoriesTogether && (
-                <div className="pm-sublist">
-                  {showSubLabels && <div className="pm-sublabel">Together</div>}
-                  <ul className="pm-list">
-                    {history.memories_together.map((m, i) => <li key={i}>{m}</li>)}
-                  </ul>
-                </div>
-              )}
-              {hasImportantEvents && (
-                <div className="pm-sublist">
-                  {showSubLabels && <div className="pm-sublabel">Important events</div>}
-                  <ul className="pm-list">
-                    {history.important_events.map((m, i) => <li key={i}>{m}</li>)}
-                  </ul>
-                </div>
-              )}
-            </section>
-          </>
-        )}
-
-        {hasForward && (
-          <>
-            <div className="pm-divider" />
-            <section className="pm-section">
-              <div className="pm-section-label">Looking Forward</div>
-              <ul className="pm-list">
-                {history.things_to_look_forward_to.map((m, i) => <li key={i}>{m}</li>)}
-              </ul>
+              <div className="pm-section-label">Photos</div>
+              <CloudinaryUpload
+                personId={person.id}
+                photos={photosByPerson[person.id] ?? []}
+                onPhotosChange={(newPhotos) => onPhotosChange?.(person.id, newPhotos)}
+              />
             </section>
           </>
         )}

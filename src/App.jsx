@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import StarField from './components/Graph/StarField';
-import ConstellationGraph from './components/Graph/ConstellationGraph';
+import ConstellationGraph, { DEMO_PEOPLE } from './components/Graph/ConstellationGraph';
 import PersonModal from './components/PersonModal/PersonModal';
 import AddPersonModal from './components/AddPersonModal/AddPersonModal';
 import './App.css';
@@ -34,8 +34,49 @@ function App() {
   const [addPersonOpen, setAddPersonOpen] = useState(false);
   const [zoomTarget, setZoomTarget] = useState(null);
   const [cinematicState, setCinematicState] = useState('idle');
+  const [focusedCategory, setFocusedCategory] = useState(null);
+  const [expandedCats, setExpandedCats] = useState(new Set());
+  const [expandedPeople, setExpandedPeople] = useState(new Set());
+  const [activeTool, setActiveTool] = useState(null); // null | 'snip'
+  const [deletingIds, setDeletingIds] = useState([]); // ids being animated out
+  const [deletedHistory, setDeletedHistory] = useState([]); // undo stack: [{type:'person'|'category', ids:[]}]
+  const [photosByPerson, setPhotosByPerson] = useState({}); // { personId: [ { public_id, secure_url, ... }, ... ] }
+  const [people, setPeople] = useState(DEMO_PEOPLE);
+
+  const peopleByCategory = useMemo(() => {
+    const map = {};
+    FILTERS.forEach(f => { if (f.key) map[f.key] = { label: f.label, color: f.color, people: [] }; });
+    people.forEach(p => {
+      const c = p.relationship?.type;
+      if (c && map[c]) map[c].people.push(p);
+    });
+    return map;
+  }, [people]);
+
+  const toggleCat = (cat) => {
+    setExpandedCats(prev => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  };
+
+  const togglePerson = (id) => {
+    setExpandedPeople(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const handleNodeClick = useCallback((node) => {
+    if (node.isCategory) {
+      setFocusedCategory(node.category);
+      setExpandedCats(prev => new Set(prev).add(node.category)); // Ensure sidebar folder opens
+      return;
+    }
     setZoomTarget({ x: node.x, y: node.y });
     setCinematicState('zooming-in');
     setSelectedPerson(node);
@@ -62,6 +103,46 @@ function App() {
     setAttachedNodes((prev) => prev.filter((n) => n.id !== nodeId));
   }, []);
 
+  const handleSnip = useCallback((node) => {
+    // Determine which IDs to delete
+    let idsToDelete;
+    let snippedPeople = [];
+
+    if (node.isCategory) {
+      // snipping a cat line: delete the cat + all its people
+      snippedPeople = people.filter(p => p.relationship?.type === node.category);
+      idsToDelete = [node.id, ...snippedPeople.map(p => p.id)];
+    } else {
+      snippedPeople = people.filter(p => p.id === node.id);
+      idsToDelete = [node.id];
+    }
+
+    // Animate out
+    setDeletingIds(prev => [...prev, ...idsToDelete]);
+    // Push to undo stack
+    setDeletedHistory(prev => [...prev, { ids: idsToDelete, snippedPeople, node }]);
+
+    // Actually remove after animation (600ms)
+    setTimeout(() => {
+      setPeople(prev => prev.filter(p => !idsToDelete.includes(p.id)));
+      setDeletingIds(prev => prev.filter(id => !idsToDelete.includes(id)));
+    }, 600);
+  }, [people]);
+
+  const handleUndo = useCallback(() => {
+    if (deletedHistory.length === 0) return;
+    const last = deletedHistory[deletedHistory.length - 1];
+    setPeople(prev => [...prev, ...last.snippedPeople]);
+    setDeletedHistory(prev => prev.slice(0, -1));
+  }, [deletedHistory]);
+
+  const handlePhotosChange = useCallback((personId, newPhotos) => {
+    setPhotosByPerson(prev => ({
+      ...prev,
+      [personId]: newPhotos
+    }));
+  }, []);
+
   const handleSubmit = useCallback((e) => {
     e.preventDefault();
     if (!promptText.trim() && attachedNodes.length === 0) return;
@@ -79,96 +160,145 @@ function App() {
     <div className="app">
       <div className={`cosmos-stage ${cinematicState}`} style={stageStyle}>
         <StarField />
-
-        <header className="header">
-          <div className="logo">
-            <svg className="logo-glyph" width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="0.9" opacity="0.85" />
-              <circle cx="7" cy="7" r="3.5" stroke="currentColor" strokeWidth="0.7" opacity="0.6" />
-              <line x1="0.8" y1="7" x2="13.2" y2="7" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
-              <line x1="7" y1="0.8" x2="7" y2="13.2" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
-              <circle cx="7" cy="7" r="1" fill="currentColor" />
-            </svg>
-            <span className="logo-text">Inner Circle</span>
-          </div>
-
-          <div className="header-actions">
-            <button className="btn-primary" onClick={() => setAddPersonOpen(true)}>+ Add Person</button>
-          </div>
-        </header>
-
-        <aside className="sidebar">
-          <div className="sidebar-label">Categories</div>
-          {FILTERS.map((f) => (
-            <button
-              key={f.key ?? 'all'}
-              className={`sidebar-chip ${activeFilter === f.key ? 'active' : 'inactive'}`}
-              onClick={() => setActiveFilter(f.key === activeFilter ? null : f.key)}
-            >
-              {f.color && (
-                <span className="filter-dot" style={{ background: f.color }} />
-              )}
-              {f.label}
-            </button>
-          ))}
-        </aside>
-
         <div className="graph-container">
           <ConstellationGraph
             activeFilter={activeFilter}
+            focusedCategory={focusedCategory}
+            onZoomOut={() => setFocusedCategory(null)}
             onNodeClick={handleNodeClick}
             onNodeDoubleClick={handleNodeDoubleClick}
+            activeTool={activeTool}
+            onSnip={handleSnip}
+            deletingIds={deletingIds}
+            people={people}
           />
-        </div>
-
-        <div className="prompt-area">
-          {attachedNodes.length > 0 && (
-            <div className="attached-nodes">
-              {attachedNodes.map((node) => (
-                <span
-                  key={node.id}
-                  className="attached-chip"
-                  style={{ borderColor: CATEGORY_COLORS[node.category] || '#cdc9c0' }}
-                >
-                  <span
-                    className="attached-chip-dot"
-                    style={{ background: CATEGORY_COLORS[node.category] || '#cdc9c0' }}
-                  />
-                  {node.name}
-                  <button
-                    className="attached-chip-remove"
-                    onClick={() => removeAttachedNode(node.id)}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-          <form className="prompt-form" onSubmit={handleSubmit}>
-            <input
-              className="prompt-input"
-              type="text"
-              placeholder="Ask about your connections..."
-              value={promptText}
-              onChange={(e) => setPromptText(e.target.value)}
-            />
-            <button
-              className="prompt-submit"
-              type="submit"
-              disabled={!promptText.trim() && attachedNodes.length === 0}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
-          </form>
-          <div className="prompt-hint">Click a node to view details — double-click to attach as context</div>
         </div>
       </div>
 
+      <header className="header">
+        <div className="logo">
+          <svg className="logo-glyph" width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="0.9" opacity="0.85" />
+            <circle cx="7" cy="7" r="3.5" stroke="currentColor" strokeWidth="0.7" opacity="0.6" />
+            <line x1="0.8" y1="7" x2="13.2" y2="7" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
+            <line x1="7" y1="0.8" x2="7" y2="13.2" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
+            <circle cx="7" cy="7" r="1" fill="currentColor" />
+          </svg>
+          <span className="logo-text">Inner Circle</span>
+        </div>
+
+        {/* Center Toolbar */}
+        <div className="toolbar">
+          <button
+            className={`tool-btn ${activeTool === 'snip' ? 'active' : ''}`}
+            onClick={() => setActiveTool(t => t === 'snip' ? null : 'snip')}
+            title="Snip tool — cut a connection to delete a node"
+          >
+            ✂️
+          </button>
+          <button
+            className={`tool-btn ${deletedHistory.length === 0 ? 'disabled' : ''}`}
+            onClick={handleUndo}
+            disabled={deletedHistory.length === 0}
+            title="Undo last snip"
+          >
+            ↩
+          </button>
+        </div>
+
+        <div className="header-actions">
+          <button className="btn-primary" onClick={() => setAddPersonOpen(true)}>+ Add Person</button>
+        </div>
+      </header>
+
+      <aside className="sidebar">
+        <div className="sidebar-label">EXPLORER</div>
+        <div className="sidebar-tree">
+          <div className="tree-group">
+            <div
+              className="tree-item node-cat level-1"
+              style={{ background: 'rgba(232, 232, 240, 0.12)', marginBottom: '2px' }}
+              onClick={() => setFocusedCategory(null)}
+            >
+              <span className="filter-dot" style={{ background: '#e8e8f0', marginLeft: '12px' }} />
+              You
+            </div>
+          </div>
+          {Object.entries(peopleByCategory).map(([catKey, data]) => {
+            const isExpanded = expandedCats.has(catKey);
+            if (data.people.length === 0) return null;
+            const isCatFocused = focusedCategory === catKey;
+            return (
+              <div key={catKey} className="tree-group">
+                <div
+                  className="tree-item node-cat level-1"
+                  style={{ background: `${data.color}22`, marginBottom: '2px' }}
+                  onClick={() => toggleCat(catKey)}
+                >
+                  <div className={`chevron ${isExpanded ? 'expanded' : ''}`}>›</div>
+                  <span className="filter-dot" style={{ background: data.color }} />
+                  <span style={{ flex: 1 }}>{data.label}</span>
+                  <div
+                    className={`zoom-icon ${isCatFocused ? 'zoom-out' : ''}`}
+                    onClick={(e) => { e.stopPropagation(); setFocusedCategory(isCatFocused ? null : catKey); }}
+                    title={isCatFocused ? 'Back to Galaxy' : 'Focus Category'}
+                  >
+                    {isCatFocused ? '🔎' : '🔍'}
+                  </div>
+                </div>
+                {isExpanded && (
+                  <div className="tree-children">
+                    {data.people.map(person => {
+                      const isPersonExpanded = expandedPeople.has(person.id);
+                      return (
+                        <div key={person.id} className="tree-group">
+                          <div
+                            className="tree-item node-person level-2"
+                            style={{ background: `${data.color}15`, marginBottom: '1px' }}
+                            onClick={() => togglePerson(person.id)}
+                          >
+                            <div className={`chevron ${isPersonExpanded ? 'expanded' : ''}`}>›</div>
+                            <span style={{ flex: 1 }}>{person.name}</span>
+                            <div
+                              className="zoom-icon"
+                              onClick={(e) => { e.stopPropagation(); handleNodeClick(person); }}
+                              title="View Card"
+                            >
+                              🔍
+                            </div>
+                          </div>
+                          {isPersonExpanded && (
+                            <div className="person-info-panel level-3">
+                              {person.birthday && <div>🎉 {person.birthday}</div>}
+                              {person.relationship?.strength && (
+                                <div>🔥 Strength: {person.relationship.strength}/100</div>
+                              )}
+                              {person.context?.school && <div>🎓 {person.context.school}</div>}
+                              {person.context?.work && <div>💼 {person.context.work}</div>}
+                              <div className="open-card-btn" onClick={() => handleNodeClick(person)}>
+                                View Full Card ↗
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </aside>
+
+      {focusedCategory && (
+        <button className="back-to-galaxy-btn" onClick={() => setFocusedCategory(null)}>
+          ← Back to Galaxy
+        </button>
+      )}
+
       {cinematicState !== 'idle' && (
-        <div className={`bokeh-overlay ${cinematicState}`} onClick={closeModal} />
+        <div className={`bokeh-overlay ${cinematicState}`} />
       )}
 
       {showModal && (
@@ -177,8 +307,56 @@ function App() {
           originPoint={zoomTarget}
           phase={cinematicState}
           onClose={closeModal}
+          photosByPerson={photosByPerson}
+          onPhotosChange={handlePhotosChange}
         />
       )}
+
+      <div className="prompt-area">
+        {attachedNodes.length > 0 && (
+          <div className="attached-nodes">
+            {attachedNodes.map((node) => (
+              <span
+                key={node.id}
+                className="attached-chip"
+                style={{ borderColor: CATEGORY_COLORS[node.category] || '#cdc9c0' }}
+              >
+                <span
+                  className="attached-chip-dot"
+                  style={{ background: CATEGORY_COLORS[node.category] || '#cdc9c0' }}
+                />
+                {node.name}
+                <button
+                  className="attached-chip-remove"
+                  onClick={() => removeAttachedNode(node.id)}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <form className="prompt-form" onSubmit={handleSubmit}>
+          <input
+            className="prompt-input"
+            type="text"
+            placeholder="Ask about your connections..."
+            value={promptText}
+            onChange={(e) => setPromptText(e.target.value)}
+          />
+          <button
+            className="prompt-submit"
+            type="submit"
+            disabled={!promptText.trim() && attachedNodes.length === 0}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </form>
+        <div className="prompt-hint">Click a node to view details — double-click to attach as context</div>
+      </div>
+
       <AddPersonModal open={addPersonOpen} onClose={() => setAddPersonOpen(false)} />
     </div>
   );
