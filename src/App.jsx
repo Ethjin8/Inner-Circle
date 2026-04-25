@@ -170,6 +170,11 @@ function App() {
     }));
   }, []);
 
+  const handlePersonUpdate = useCallback((updatedPerson) => {
+    setPeople((prev) => prev.map((person) => (person.id === updatedPerson.id ? updatedPerson : person)));
+    setSelectedPerson(updatedPerson);
+  }, []);
+
   const handleSubmit = useCallback((e) => {
     e.preventDefault();
     if (!promptText.trim() && attachedNodes.length === 0) return;
@@ -353,12 +358,14 @@ function App() {
 
       {showModal && (
         <PersonModal
+          key={selectedPerson?.id}
           person={selectedPerson}
           originPoint={zoomTarget}
           phase={modalPhase}
           onClose={closeModal}
           photosByPerson={photosByPerson}
           onPhotosChange={handlePhotosChange}
+          onUpdatePerson={handlePersonUpdate}
         />
       )}
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import './AddPersonModal.css';
-import { GeminiLiveSession } from '../../services/geminiLive';
+import { GeminiLiveSession, extractPersonFromTranscript } from '../../services/geminiLive';
 
 // ─── voice helpers ────────────────────────────────────────────────────────────
 const STARDUST_PARTICLES = 28;
@@ -150,28 +150,37 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
   const [conversation, setConversation]     = useState([]);
   const [voiceError, setVoiceError]         = useState('');
 
-  const mediaStreamRef  = useRef(null);
-  const audioContextRef = useRef(null);
-  const sourceNodeRef   = useRef(null);
+  const mediaStreamRef   = useRef(null);
+  const audioContextRef  = useRef(null);
+  const sourceNodeRef    = useRef(null);
   const processorNodeRef = useRef(null);
-  const liveSessionRef  = useRef(null);
+  const liveSessionRef   = useRef(null);
+  const lastUserTextRef  = useRef(''); // tracks in-progress user utterance between agent turns
 
-  function stopVoiceFlow() {
+  const [extracting, setExtracting] = useState(false);
+
+  // Stop only the microphone pipeline — leaves the WebSocket session open for extraction
+  function stopMicInput() {
     processorNodeRef.current?.disconnect();
     if (processorNodeRef.current) { processorNodeRef.current.onaudioprocess = null; processorNodeRef.current = null; }
     sourceNodeRef.current?.disconnect(); sourceNodeRef.current = null;
     audioContextRef.current?.close(); audioContextRef.current = null;
     mediaStreamRef.current?.getTracks().forEach((t) => t.stop()); mediaStreamRef.current = null;
-    liveSessionRef.current?.disconnect(); liveSessionRef.current = null;
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     setListening(false); setCurrentTranscript(''); setLiveStatus('idle');
+  }
+
+  // Full teardown including WebSocket session
+  function stopVoiceFlow() {
+    stopMicInput();
+    liveSessionRef.current?.disconnect(); liveSessionRef.current = null;
   }
 
   const resetAll = () => {
     stopVoiceFlow();
+    lastUserTextRef.current = '';
     setListening(false); setBursting(false); setParticles([]);
     setVoiceStatus('Tap probe to start'); setCurrentTranscript(''); setVoiceError('');
-    setConversation([]);
+    setConversation([]); setExtracting(false);
     setStep(0); setForm(BLANK);
   };
 
@@ -202,15 +211,25 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
           setVoiceStatus('Tap probe to start');
         }
       },
-      onUserTranscript: (text) => setCurrentTranscript(text),
+      onUserTranscript: (text) => {
+        setCurrentTranscript(text);
+        lastUserTextRef.current = text; // keep the latest finalized user utterance
+      },
       onMessage: (text) => {
-        setConversation((prev) => prev.concat({ role: 'assistant', text }));
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-          const u = new SpeechSynthesisUtterance(text);
-          u.rate = 1.02; u.pitch = 1;
-          window.speechSynthesis.speak(u);
-        }
+        // Flush the completed user turn before adding the agent's reply
+        const userText = lastUserTextRef.current;
+        lastUserTextRef.current = '';
+        setCurrentTranscript('');
+        setConversation((prev) => {
+          const next = [...prev];
+          // Only add user entry if we have text and the last entry wasn't already user
+          if (userText && next[next.length - 1]?.role !== 'user') {
+            next.push({ role: 'user', text: userText });
+          }
+          next.push({ role: 'assistant', text });
+          return next;
+        });
+        // Audio plays directly via GeminiLiveSession.playAudioChunk
       },
       onError: (err) => { setVoiceError(err.message || 'Gemini Live failed.'); setVoiceStatus('Connection issue'); },
     });
@@ -246,10 +265,86 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
 
   const handleProbeToggle = () => {
     if (listening) {
-      stopVoiceFlow();
+      const pendingUser = lastUserTextRef.current;
+      lastUserTextRef.current = '';
+      const convSnapshot = pendingUser
+        ? [...conversation, { role: 'user', text: pendingUser }]
+        : [...conversation];
+
+      // Stop mic, keep WebSocket alive for extraction
+      stopMicInput();
       setParticles(generateParticles()); setBursting(true);
       setTimeout(() => { setBursting(false); setParticles([]); }, 720);
-      setVoiceStatus('Charting...');
+
+      const hasContent = convSnapshot.some((m) => m.role === 'user');
+      if (!hasContent) {
+        stopVoiceFlow();
+        setVoiceStatus('Tap probe to start');
+        return;
+      }
+
+      setExtracting(true);
+
+      const buildPerson = (extracted) => {
+        const rawName = (extracted?.name ?? '').trim();
+        if (!rawName) return null;
+        return {
+          id: String(Date.now()),
+          name: rawName,
+          initials: rawName.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase(),
+          ...(extracted.birthday ? { birthday: extracted.birthday } : {}),
+          relationship: extracted.relationship ?? { type: 'friend', strength: 60 },
+          context: extracted.context ?? {},
+          history: extracted.history ?? {},
+        };
+      };
+
+      const finish = (person) => {
+        setVoiceStatus(`Adding ${person.name} to your constellation...`);
+        onAdd?.(person);
+        resetAll();
+        onClose();
+      };
+
+      const fail = (msg) => {
+        liveSessionRef.current?.disconnect();
+        liveSessionRef.current = null;
+        setVoiceError(msg);
+        setVoiceStatus('Tap probe to start');
+        setExtracting(false);
+      };
+
+      // ── Step 1: extract via the open Live session (no extra quota needed) ──
+      setVoiceStatus('Requesting summary from agent...');
+      liveSessionRef.current.requestExtraction()
+        .then((extracted) => {
+          liveSessionRef.current?.disconnect();
+          liveSessionRef.current = null;
+          const person = buildPerson(extracted);
+          if (!person) { fail("Couldn't catch a name — try again."); return; }
+          finish(person);
+        })
+        .catch((liveErr) => {
+          console.warn('Live extraction failed, trying REST fallback:', liveErr.message);
+          liveSessionRef.current?.disconnect();
+          liveSessionRef.current = null;
+
+          // ── Step 2: fallback to REST generateContent ──
+          setVoiceStatus('Charting via REST...');
+          const transcript = convSnapshot
+            .map((m) => `${m.role === 'user' ? 'User' : 'Agent'}: ${m.text}`)
+            .join('\n');
+          extractPersonFromTranscript(transcript, import.meta.env.VITE_GEMINI_API_KEY, {
+            maxRetries: 2,
+            onRetry: (n) => setVoiceStatus(`Charting… retry ${n}`),
+          })
+            .then((extracted) => {
+              const person = buildPerson(extracted);
+              if (!person) { fail("Couldn't catch a name — try again."); return; }
+              finish(person);
+            })
+            .catch((restErr) => fail(restErr.message || 'Could not chart person'));
+        });
     } else {
       startVoiceFlow();
     }
@@ -362,19 +457,28 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
                 </div>
               )}
               <button
-                className={`apm-probe ${listening ? 'listening' : ''}`}
+                className={`apm-probe ${listening ? 'listening' : ''} ${extracting ? 'extracting' : ''}`}
                 onClick={handleProbeToggle}
+                disabled={extracting}
                 aria-pressed={listening}
                 aria-label={listening ? 'Stop listening' : 'Start listening'}
               >
-                <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 19 L4 24" /><path d="M22 6 L26 4" /><path d="M22 6 L20 8" />
-                  <path d="M9 19 a 9 9 0 0 1 0 -12.7 L21.7 19 a 9 9 0 0 1 -12.7 0 Z" />
-                  <circle cx="22" cy="6" r="1.6" fill="currentColor" />
-                </svg>
+                {extracting ? (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" className="apm-spin-icon" />
+                  </svg>
+                ) : (
+                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 19 L4 24" /><path d="M22 6 L26 4" /><path d="M22 6 L20 8" />
+                    <path d="M9 19 a 9 9 0 0 1 0 -12.7 L21.7 19 a 9 9 0 0 1 -12.7 0 Z" />
+                    <circle cx="22" cy="6" r="1.6" fill="currentColor" />
+                  </svg>
+                )}
               </button>
-              <div className={`apm-status ${listening ? 'live' : ''}`}>
-                {listening ? `${voiceStatus}${liveStatus === 'connected' ? '' : ' (connecting...)'}` : voiceStatus}
+              <div className={`apm-status ${listening ? 'live' : ''} ${extracting ? 'live' : ''}`}>
+                {listening
+                  ? `${voiceStatus}${liveStatus === 'connected' ? '' : ' (connecting...)'}`
+                  : voiceStatus}
               </div>
             </div>
 

@@ -57,8 +57,80 @@ function Pills({ label, items }) {
   );
 }
 
-export default function PersonModal({ person, originPoint, phase, onClose, photosByPerson = {}, onPhotosChange }) {
+function parseList(text) {
+  return (text || '')
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function listToText(items) {
+  return Array.isArray(items) ? items.join('\n') : '';
+}
+
+function toDraft(person) {
+  return {
+    name: person.name || '',
+    birthday: person.birthday || '',
+    relationshipType: person.relationship?.type || 'other',
+    relationshipStrength: String(person.relationship?.strength ?? 0),
+    howWeMet: person.context?.how_we_met || '',
+    school: person.context?.school || '',
+    work: person.context?.work || '',
+    hobbies: listToText(person.context?.hobbies),
+    sports: listToText(person.context?.sports),
+    favoriteFoods: listToText(person.context?.favorites?.foods),
+    favoriteMusic: listToText(person.context?.favorites?.music),
+    memoriesTogether: listToText(person.history?.memories_together),
+    importantEvents: listToText(person.history?.important_events),
+    forwardTo: listToText(person.history?.things_to_look_forward_to),
+  };
+}
+
+function fromDraft(person, draft) {
+  const hobbies = parseList(draft.hobbies);
+  const sports = parseList(draft.sports);
+  const favoriteFoods = parseList(draft.favoriteFoods);
+  const favoriteMusic = parseList(draft.favoriteMusic);
+  const memoriesTogether = parseList(draft.memoriesTogether);
+  const importantEvents = parseList(draft.importantEvents);
+  const forwardTo = parseList(draft.forwardTo);
+
+  return {
+    ...person,
+    name: draft.name.trim() || person.name,
+    birthday: draft.birthday || null,
+    relationship: {
+      ...(person.relationship || {}),
+      type: draft.relationshipType || 'other',
+      strength: Math.max(0, Math.min(100, Number(draft.relationshipStrength) || 0)),
+    },
+    context: {
+      ...(person.context || {}),
+      how_we_met: draft.howWeMet.trim() || null,
+      school: draft.school.trim() || null,
+      work: draft.work.trim() || null,
+      hobbies,
+      sports,
+      favorites: {
+        ...((person.context || {}).favorites || {}),
+        foods: favoriteFoods,
+        music: favoriteMusic,
+      },
+    },
+    history: {
+      ...(person.history || {}),
+      memories_together: memoriesTogether,
+      important_events: importantEvents,
+      things_to_look_forward_to: forwardTo,
+    },
+  };
+}
+
+export default function PersonModal({ person, originPoint, phase, onClose, photosByPerson = {}, onPhotosChange, onUpdatePerson }) {
   const [activeTab, setActiveTab] = useState('info');
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(() => toDraft(person));
 
   useEffect(() => {
     if (!person) return;
@@ -133,6 +205,39 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
               )}
             </button>
           </div>
+
+          {activeTab === 'info' && (
+            <div className="pm-edit-actions">
+              {isEditing ? (
+                <>
+                  <button
+                    className="pm-edit-btn"
+                    onClick={() => {
+                      setIsEditing(false);
+                      setDraft(toDraft(person));
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="pm-edit-btn primary"
+                    onClick={() => {
+                      const updated = fromDraft(person, draft || {});
+                      onUpdatePerson?.(updated);
+                      setIsEditing(false);
+                      setDraft(toDraft(updated));
+                    }}
+                  >
+                    Save
+                  </button>
+                </>
+              ) : (
+                <button className="pm-edit-btn primary" onClick={() => setIsEditing(true)}>
+                  Edit
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Scrollable body */}
@@ -176,6 +281,95 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
           {/* Info tab content */}
           {activeTab === 'info' && (
             <>
+              {isEditing && draft && (
+                <>
+                  <div className="pm-divider" />
+                  <section className="pm-section">
+                    <div className="pm-section-label">Edit Basics</div>
+                    <div className="pm-edit-grid">
+                      <label className="pm-input-label">
+                        Name
+                        <input
+                          className="pm-input"
+                          value={draft.name}
+                          onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))}
+                        />
+                      </label>
+                      <label className="pm-input-label">
+                        Birthday
+                        <input
+                          className="pm-input"
+                          type="date"
+                          value={draft.birthday}
+                          onChange={(e) => setDraft((prev) => ({ ...prev, birthday: e.target.value }))}
+                        />
+                      </label>
+                      <label className="pm-input-label">
+                        Category
+                        <select
+                          className="pm-input"
+                          value={draft.relationshipType}
+                          onChange={(e) => setDraft((prev) => ({ ...prev, relationshipType: e.target.value }))}
+                        >
+                          {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>{label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="pm-input-label">
+                        Strength (0-100)
+                        <input
+                          className="pm-input"
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={draft.relationshipStrength}
+                          onChange={(e) => setDraft((prev) => ({ ...prev, relationshipStrength: e.target.value }))}
+                        />
+                      </label>
+                    </div>
+                  </section>
+                  <div className="pm-divider" />
+                  <section className="pm-section">
+                    <div className="pm-section-label">Edit Details</div>
+                    <div className="pm-edit-grid">
+                      <label className="pm-input-label">How we met
+                        <input className="pm-input" value={draft.howWeMet} onChange={(e) => setDraft((prev) => ({ ...prev, howWeMet: e.target.value }))} />
+                      </label>
+                      <label className="pm-input-label">School
+                        <input className="pm-input" value={draft.school} onChange={(e) => setDraft((prev) => ({ ...prev, school: e.target.value }))} />
+                      </label>
+                      <label className="pm-input-label">Work
+                        <input className="pm-input" value={draft.work} onChange={(e) => setDraft((prev) => ({ ...prev, work: e.target.value }))} />
+                      </label>
+                      <label className="pm-input-label">Hobbies (one per line)
+                        <textarea className="pm-input pm-textarea" value={draft.hobbies} onChange={(e) => setDraft((prev) => ({ ...prev, hobbies: e.target.value }))} />
+                      </label>
+                      <label className="pm-input-label">Sports (one per line)
+                        <textarea className="pm-input pm-textarea" value={draft.sports} onChange={(e) => setDraft((prev) => ({ ...prev, sports: e.target.value }))} />
+                      </label>
+                      <label className="pm-input-label">Favorite foods (one per line)
+                        <textarea className="pm-input pm-textarea" value={draft.favoriteFoods} onChange={(e) => setDraft((prev) => ({ ...prev, favoriteFoods: e.target.value }))} />
+                      </label>
+                      <label className="pm-input-label">Favorite music (one per line)
+                        <textarea className="pm-input pm-textarea" value={draft.favoriteMusic} onChange={(e) => setDraft((prev) => ({ ...prev, favoriteMusic: e.target.value }))} />
+                      </label>
+                      <label className="pm-input-label">Memories together (one per line)
+                        <textarea className="pm-input pm-textarea" value={draft.memoriesTogether} onChange={(e) => setDraft((prev) => ({ ...prev, memoriesTogether: e.target.value }))} />
+                      </label>
+                      <label className="pm-input-label">Important events (one per line)
+                        <textarea className="pm-input pm-textarea" value={draft.importantEvents} onChange={(e) => setDraft((prev) => ({ ...prev, importantEvents: e.target.value }))} />
+                      </label>
+                      <label className="pm-input-label">Looking forward to (one per line)
+                        <textarea className="pm-input pm-textarea" value={draft.forwardTo} onChange={(e) => setDraft((prev) => ({ ...prev, forwardTo: e.target.value }))} />
+                      </label>
+                    </div>
+                  </section>
+                </>
+              )}
+
+              {!isEditing && (
+                <>
               {hasContext && (
                 <>
                   <div className="pm-divider" />
@@ -226,6 +420,8 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
                       {history.things_to_look_forward_to.map((m, i) => <li key={i}>{m}</li>)}
                     </ul>
                   </section>
+                </>
+              )}
                 </>
               )}
             </>

@@ -138,6 +138,28 @@
   padding-bottom: 0;
 }
 
+.pm-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+
+.pm-edit-btn {
+  border: 1px solid var(--border-default);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pm-edit-btn.primary {
+  border-color: rgba(125, 249, 255, 0.45);
+  background: rgba(125, 249, 255, 0.16);
+}
+
 .pm-tab {
   position: relative;
   background: transparent;
@@ -355,6 +377,37 @@
   width: 6px;
   height: 1px;
   background: var(--text-muted);
+}
+
+.pm-edit-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.pm-input-label {
+  display: grid;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.pm-input {
+  width: 100%;
+  border: 1px solid var(--border-default);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: var(--font-body);
+}
+
+.pm-textarea {
+  min-height: 72px;
+  resize: vertical;
 }
 
 @media (max-width: 480px) {
