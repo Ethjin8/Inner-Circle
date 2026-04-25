@@ -219,10 +219,10 @@ export default function ConstellationGraph({ activeFilters, focusedCategory, onZ
   const animRef = useRef(null);
   const hoveredRef = useRef(null);
   const hoveredEdgeRef = useRef(null);
+  const clickTimerRef = useRef(null);
   const timeRef = useRef(0);
   const mouseRef = useRef({ x: 0, y: 0 });
-  const clickTimerRef = useRef(null);
-  const userPanRef = useRef({ x: 0, y: 0 });
+const userPanRef = useRef({ x: 0, y: 0 });
   const youPosRef = useRef({ x: 0, y: 0 });
   const camRef = useRef({ x: 0, y: 0, scale: 1, targetX: 0, targetY: 0, targetScale: 1 });
   const dragStateRef = useRef({ active: false, nodeId: null, startMx: 0, startMy: 0, startNx: 0, startNy: 0, moved: false, suppressClick: false });
@@ -509,6 +509,10 @@ export default function ConstellationGraph({ activeFilters, focusedCategory, onZ
       if (activeTool === 'snip') { const edge = hitTestEdge(mx, my); if (edge) onSnip?.(edge); return; }
       const node = hitTest(mx, my);
       if (!node || node.isCenter) return;
+      if (e.shiftKey && !node.isCategory) {
+        onNodeDoubleClick?.(node);
+        return;
+      }
       if (clickTimerRef.current) {
         clearTimeout(clickTimerRef.current); clickTimerRef.current = null;
         onNodeDoubleClick?.(node);
@@ -732,6 +736,32 @@ export default function ConstellationGraph({ activeFilters, focusedCategory, onZ
       ctx.fillText('YOU', youWorldX, youWorldY);
 
       ctx.restore();
+
+      // Hover tooltip for person nodes
+      const hov = hoveredRef.current;
+      if (hov && !hov.isCategory && !hov.isCenter) {
+        const { cx: tcx, cy: tcy } = getCenter();
+        const sx = (hov.x - tcx) * camRef.current.scale + tcx + camRef.current.x;
+        const sy = (hov.y - tcy) * camRef.current.scale + tcy + camRef.current.y;
+        const label = 'Shift+click to add to context';
+        ctx.font = "500 8px 'Inter',sans-serif";
+        const tw = ctx.measureText(label).width;
+        const ph = 8; const pv = 6;
+        const bw = tw + ph * 2; const bh = 12 + pv * 2;
+        const bx = sx - bw / 2;
+        const by = sy - hov.radius * camRef.current.scale - bh - 10;
+        ctx.beginPath();
+        ctx.roundRect(bx, by, bw, bh, 6);
+        ctx.fillStyle = 'rgba(11,15,25,0.82)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(200,200,210,0.9)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, sx, by + bh / 2);
+      }
 
       // Render particles in screen space
       for (const p of particlesRef.current) {
