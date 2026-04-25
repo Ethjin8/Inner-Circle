@@ -6,7 +6,7 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  background: rgba(5, 5, 10, 0.6);
+  background: var(--backdrop);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   animation: fade-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -27,7 +27,7 @@
   height: 44px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border-strong);
   color: white;
   font-size: 20px;
   display: flex;

@@ -2,7 +2,7 @@
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(5, 5, 16, 0.6);
+  background: var(--backdrop);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   display: flex;
@@ -23,9 +23,10 @@
   max-width: 460px;
   max-height: 85vh;
   overflow-y: auto;
-  background: rgba(10, 10, 30, 0.95);
-  border: 1px solid var(--border-bright);
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
+  box-shadow: var(--elevation-lg);
   padding: 36px 32px 28px;
   font-family: var(--font-body);
   text-align: center;
@@ -106,7 +107,7 @@
   height: 80px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border-bright);
+  border: 1px solid var(--border-default);
   color: var(--text-primary);
   cursor: pointer;
   display: flex;
@@ -153,7 +154,7 @@
 /* ---------- Hints ---------- */
 .apm-hints {
   text-align: left;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-subtle);
   padding-top: 16px;
   margin-top: 4px;
 }

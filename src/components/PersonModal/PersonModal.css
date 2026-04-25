@@ -2,7 +2,7 @@
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(5, 5, 16, 0.6);
+  background: var(--backdrop);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   display: flex;
@@ -23,9 +23,10 @@
   max-width: 440px;
   max-height: 80vh;
   overflow-y: auto;
-  background: rgba(10, 10, 30, 0.95);
-  border: 1px solid var(--border-bright);
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
+  box-shadow: var(--elevation-lg);
   padding: 32px;
   font-family: var(--font-body);
   animation: pm-rise 0.22s var(--ease-out);
@@ -49,7 +50,7 @@
   display: flex;
   gap: 4px;
   margin-bottom: 4px;
-  border-bottom: 1px solid rgba(255,255,255,0.07);
+  border-bottom: 1px solid var(--border-subtle);
   padding-bottom: 0;
 }
 .pm-tab {
@@ -71,12 +72,12 @@
 }
 .pm-tab:hover { color: rgba(255,255,255,0.75); }
 .pm-tab.active {
-  color: #7df9ff;
-  border-bottom-color: #7df9ff;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 .pm-tab-badge {
   background: rgba(125, 249, 255, 0.2);
-  color: #7df9ff;
+  color: var(--accent);
   font-size: 10px;
   font-weight: 600;
   border-radius: 10px;
@@ -175,7 +176,7 @@
 /* ---------- Sections ---------- */
 .pm-divider {
   height: 1px;
-  background: var(--border);
+  background: var(--border-subtle);
   margin: 20px 0;
 }
 
