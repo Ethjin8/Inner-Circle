@@ -423,9 +423,9 @@ export default function ConstellationGraph({ activeFilter, people = DEMO_PEOPLE,
         baseX: bx,
         baseY: by,
         radius: 18 + (Math.min(infoFields, 8) / 8) * 18,
-        driftOffset: Math.random() * Math.PI * 2,
-        driftSpeed: 0.002 + Math.random() * 0.003,
-        driftAmount: 1.5 + Math.random() * 3,
+        orbitAngle: Math.random() * Math.PI * 2,
+        orbitRadius: 3 + Math.random() * 5,
+        orbitSpeed: 0.0006 + Math.random() * 0.0008,
       };
     });
 
@@ -506,8 +506,9 @@ export default function ConstellationGraph({ activeFilter, people = DEMO_PEOPLE,
 
       for (const node of nodesRef.current) {
         const r = node.radius + 20;
-        node.x = node.baseX + Math.sin(t * node.driftSpeed + node.driftOffset) * node.driftAmount;
-        node.y = node.baseY + Math.cos(t * node.driftSpeed * 0.7 + node.driftOffset) * node.driftAmount;
+        node.orbitAngle += node.orbitSpeed;
+        node.x = node.baseX + Math.cos(node.orbitAngle) * node.orbitRadius;
+        node.y = node.baseY + Math.sin(node.orbitAngle) * node.orbitRadius;
         node.x = Math.max(PADDING_LEFT + r, Math.min(width - PADDING_RIGHT - r, node.x));
         node.y = Math.max(PADDING_TOP + r, Math.min(height - PADDING_BOTTOM - r, node.y));
       }
