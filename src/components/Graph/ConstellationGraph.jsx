@@ -17,6 +17,21 @@ function strengthToEdgeColor(strength) {
   return '220, 130, 130';                         // dusty rose
 }
 
+function daysSince(iso) {
+  if (!iso) return Infinity;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return Infinity;
+  return (Date.now() - t) / (1000 * 60 * 60 * 24);
+}
+
+function isBirthdayToday(iso) {
+  if (!iso) return false;
+  const d = new Date(iso + 'T00:00:00');
+  if (Number.isNaN(d.getTime())) return false;
+  const today = new Date();
+  return d.getMonth() === today.getMonth() && Math.abs(d.getDate() - today.getDate()) <= 1;
+}
+
 function hexWithAlpha(hex, alpha) {
   const a = Math.max(0, Math.min(1, alpha));
   const h = hex.startsWith('#') ? hex.slice(1) : hex;
@@ -426,6 +441,8 @@ export default function ConstellationGraph({ activeFilter, people = DEMO_PEOPLE,
         orbitAngle: Math.random() * Math.PI * 2,
         orbitRadius: 3 + Math.random() * 5,
         orbitSpeed: 0.0006 + Math.random() * 0.0008,
+        daysSince: daysSince(person.lastContactAt),
+        isBirthday: isBirthdayToday(person.birthday),
       };
     });
 
@@ -560,7 +577,47 @@ export default function ConstellationGraph({ activeFilter, people = DEMO_PEOPLE,
         const nodeAlpha = isFiltered ? 0.15 : 1;
         const r = node.radius * (isHovered ? 1.12 : 1);
 
+        if (!isFiltered && node.daysSince < 7) {
+          const pulse = (Math.sin(t * 0.06) * 0.5 + 0.5);
+          const pulseAlpha = (0.16 + pulse * 0.18) * nodeAlpha;
+          const pulseR = r * 2.4 + pulse * r * 0.4;
+          const grad = ctx.createRadialGradient(node.x, node.y, r, node.x, node.y, pulseR);
+          grad.addColorStop(0, hexWithAlpha(cat.color, pulseAlpha));
+          grad.addColorStop(1, hexWithAlpha(cat.color, 0));
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, pulseR, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        if (!isFiltered && node.daysSince >= 60 && Number.isFinite(node.daysSince)) {
+          const tailLen = r * 3.5;
+          const tx = node.x - Math.cos(node.orbitAngle) * tailLen;
+          const ty = node.y - Math.sin(node.orbitAngle) * tailLen;
+          const grad = ctx.createLinearGradient(tx, ty, node.x, node.y);
+          grad.addColorStop(0, hexWithAlpha(cat.color, 0));
+          grad.addColorStop(1, hexWithAlpha(cat.color, 0.28 * nodeAlpha));
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = Math.max(1, r * 0.45);
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(tx, ty);
+          ctx.lineTo(node.x, node.y);
+          ctx.stroke();
+        }
+
         drawCelestialBody(ctx, node, r, cat.color, nodeAlpha, isHovered);
+
+        if (!isFiltered && node.isBirthday) {
+          const phase = (t % 360) / 360;
+          const flashR = r + phase * r * 4.5;
+          const flashAlpha = (1 - phase) * 0.7 * nodeAlpha;
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, flashR, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(255, 245, 220, ${flashAlpha})`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
 
         ctx.fillStyle = `rgba(255, 255, 255, ${0.95 * nodeAlpha})`;
         ctx.font = `600 ${r * 0.55}px 'Space Grotesk', sans-serif`;
