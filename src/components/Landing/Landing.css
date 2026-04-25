@@ -74,22 +74,19 @@
 .landing.zooming .landing-foreground {
   animation: trees-rush 1.4s cubic-bezier(0.6, 0, 0.85, 0.2) forwards;
 }
-.landing.zooming .landing-flash {
-  animation: flash-bloom 1.8s ease-in forwards;
-}
 .landing.zooming .signin-panel,
 .landing.zooming .landing-hint {
   animation: fade-out 0.3s ease-out forwards;
 }
 
 @keyframes sky-zoom {
-  from { transform: scale(1);  filter: brightness(1); opacity: 1; }
-  to   { transform: scale(14); filter: brightness(2); opacity: 0; }
+  from { opacity: 1; }
+  to   { opacity: 0; }
 }
 
 @keyframes trees-rush {
-  from { transform: scale(1)  translateY(0);   opacity: 1; }
-  to   { transform: scale(10) translateY(90%); opacity: 0; }
+  from { transform: scale(1)  translateY(0); }
+  to   { transform: scale(10) translateY(100%); }
 }
 
 @keyframes flash-bloom {
