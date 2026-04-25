@@ -1,4 +1,4 @@
-# Relationship Copilot
+# Inner Circle
 
 An AI-powered personal relationship manager that helps you nurture the connections that matter most.
 
