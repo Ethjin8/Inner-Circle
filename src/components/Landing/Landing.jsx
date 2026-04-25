@@ -43,14 +43,35 @@ const findHoveredConstellation = (constellations, mx, my) => {
   return null;
 };
 
-const generateAmbientStars = (w, h, count) =>
-  Array.from({ length: count }, () => ({
-    x: Math.random() * w,
-    y: Math.random() * h * 0.85,
-    r: Math.random() * 1.2 + 0.25,
-    phase: Math.random() * Math.PI * 2,
-    speed: 0.4 + Math.random() * 0.8,
-  }));
+const AMBIENT_EXCLUSION = 28;
+
+const tooCloseToConstellation = (x, y, constellations) => {
+  for (const c of constellations) {
+    for (const s of c.stars) {
+      if (Math.hypot(s.x - x, s.y - y) < AMBIENT_EXCLUSION) return true;
+    }
+  }
+  return false;
+};
+
+const generateAmbientStars = (w, h, count, constellations) => {
+  const stars = [];
+  let tries = 0;
+  while (stars.length < count && tries < count * 8) {
+    tries += 1;
+    const x = Math.random() * w;
+    const y = Math.random() * h * 0.85;
+    if (tooCloseToConstellation(x, y, constellations)) continue;
+    stars.push({
+      x,
+      y,
+      r: Math.random() * 1.2 + 0.25,
+      phase: Math.random() * Math.PI * 2,
+      speed: 0.4 + Math.random() * 0.8,
+    });
+  }
+  return stars;
+};
 
 const spawnShootingStar = (w, h) => {
   const fromLeft = Math.random() < 0.5;
@@ -116,8 +137,13 @@ export default function Landing({ onEnter }) {
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      stateRef.current.ambient = generateAmbientStars(w, h, STAR_COUNT);
       stateRef.current.constellations = buildConstellations(w, h);
+      stateRef.current.ambient = generateAmbientStars(
+        w,
+        h,
+        STAR_COUNT,
+        stateRef.current.constellations,
+      );
     };
     resize();
 
