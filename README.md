@@ -58,7 +58,4 @@ LA Hacks 2026
 
 ## Team
 
-Nathan So
-Eric Le
-Alex Xiao
-Ethan Jin
+Nathan So, Eric Le, Alex Xiao, Ethan Jin
