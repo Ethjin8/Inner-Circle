@@ -1,7 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import './AddPersonModal.css';
 import { GeminiLiveSession, extractPersonFromTranscript } from '../../services/geminiLive';
-import { buildPersonFromExtraction } from '../../constants/personSchema.js';
+import {
+  BLANK_PERSON,
+  RELATIONSHIP_TYPES,
+  TENURE_OPTIONS,
+  FREQUENCY_OPTIONS,
+  LAST_INTERACTION_OPTIONS,
+  CHANNEL_OPTIONS,
+  SUPPORT_OPTIONS,
+  KNOWS_OPTIONS,
+  buildPersonFromForm,
+  buildPersonFromExtraction,
+} from '../../constants/personSchema.js';
 
 // ─── voice helpers ────────────────────────────────────────────────────────────
 const STARDUST_PARTICLES = 28;
@@ -41,30 +52,14 @@ function floatTo16BitPCM(floatBuffer) {
 }
 
 // ─── form constants ───────────────────────────────────────────────────────────
-const REL_TYPES = [
-  { key: 'family',       label: 'Family',       color: '#e8b06b' },
-  { key: 'friend',       label: 'Friend',        color: '#ffce5c' },
-  { key: 'classmate',    label: 'School',        color: '#b9d0ff' },
-  { key: 'coworker',     label: 'Work',          color: '#9be6c4' },
-  { key: 'professional', label: 'Professional',  color: '#ff9c5a' },
-  { key: 'romantic',     label: 'Romantic',      color: '#ffc8d6' },
-  { key: 'mentor',       label: 'Mentor',        color: '#7df9ff' },
-  { key: 'other',        label: 'Other',         color: '#cdc9c0' },
-];
 
 const STEPS = [
-  { id: 'identity',  label: 'Who'      },
-  { id: 'context',   label: 'Context'  },
-  { id: 'interests', label: 'Interests'},
-  { id: 'memories',  label: 'Memories' },
+  { id: 'identity',   label: 'Who'        },
+  { id: 'connection', label: 'Connection' },
+  { id: 'context',    label: 'Context'    },
+  { id: 'interests',  label: 'Interests'  },
+  { id: 'memories',   label: 'Memories'   },
 ];
-
-const BLANK = {
-  name: '', birthday: '', relType: 'friend', notes: '',
-  howWeMet: '', school: '', work: '',
-  hobbies: [], sports: [], favoritesFoods: [], favoritesMusic: [],
-  memoriesTogether: [], importantEvents: [], thingsToLookForwardTo: [],
-};
 
 // ─── small reusable form pieces ───────────────────────────────────────────────
 function TagInput({ label, items, onChange, placeholder }) {
@@ -135,11 +130,55 @@ function ListInput({ label, items, onChange, placeholder }) {
   );
 }
 
+function PillGroup({ label, options, value, onChange }) {
+  return (
+    <div className="apm-field">
+      <div className="apm-label">{label}</div>
+      <div className="apm-pill-row">
+        {options.map((opt) => (
+          <button
+            key={opt.key}
+            type="button"
+            className={`apm-pill ${value === opt.key ? 'active' : ''}`}
+            onClick={() => onChange(opt.key)}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ChipMultiGroup({ label, options, values, onChange }) {
+  const toggle = (key) => {
+    if (values.includes(key)) onChange(values.filter((v) => v !== key));
+    else onChange([...values, key]);
+  };
+  return (
+    <div className="apm-field">
+      <div className="apm-label">{label}</div>
+      <div className="apm-pill-row">
+        {options.map((opt) => (
+          <button
+            key={opt.key}
+            type="button"
+            className={`apm-pill ${values.includes(opt.key) ? 'active' : ''}`}
+            onClick={() => toggle(opt.key)}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── main component ───────────────────────────────────────────────────────────
 export default function AddPersonModal({ open, onClose, onAdd }) {
   const [mode, setMode] = useState('voice');
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState(BLANK);
+  const [form, setForm] = useState(BLANK_PERSON());
 
   // voice state
   const [listening, setListening]           = useState(false);
@@ -182,7 +221,7 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
     setListening(false); setBursting(false); setParticles([]);
     setVoiceStatus('Tap probe to start'); setCurrentTranscript(''); setVoiceError('');
     setConversation([]); setExtracting(false);
-    setStep(0); setForm(BLANK);
+    setStep(0); setForm(BLANK_PERSON());
   };
 
   const handleClose = () => { resetAll(); onClose(); };
@@ -349,30 +388,8 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleFormSubmit = () => {
-    if (!form.name.trim()) return;
-    const rawName = form.name.trim();
-    const initials = rawName.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
-    const person = {
-      id: String(Date.now()),
-      name: rawName,
-      initials,
-      ...(form.birthday ? { birthday: form.birthday } : {}),
-      ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
-      relationship: { type: form.relType },
-      context: {
-        how_we_met: form.howWeMet.trim() || null,
-        school:     form.school.trim()   || null,
-        work:       form.work.trim()     || null,
-        hobbies:    form.hobbies,
-        sports:     form.sports,
-        favorites: { foods: form.favoritesFoods, music: form.favoritesMusic },
-      },
-      history: {
-        memories_together:        form.memoriesTogether,
-        important_events:         form.importantEvents,
-        things_to_look_forward_to: form.thingsToLookForwardTo,
-      },
-    };
+    const person = buildPersonFromForm(form);
+    if (!person) return;
     onAdd?.(person);
     resetAll();
     onClose();
@@ -514,10 +531,11 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
             <div className="apm-header">
               <div className="apm-eyebrow">Manual entry</div>
               <h2 className="apm-title">
-                {step === 0 && 'Who are they?'}
-                {step === 1 && 'How do you know them?'}
-                {step === 2 && "What are they into?"}
-                {step === 3 && 'What do you remember?'}
+                {STEPS[step].id === 'identity'   && 'Who are they?'}
+                {STEPS[step].id === 'connection' && 'How connected are you?'}
+                {STEPS[step].id === 'context'    && 'How do you know them?'}
+                {STEPS[step].id === 'interests'  && "What are they into?"}
+                {STEPS[step].id === 'memories'   && 'What do you remember?'}
               </h2>
             </div>
 
@@ -536,7 +554,7 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
             <div className="apm-form-body">
 
               {/* ── Step 0: Identity ── */}
-              {step === 0 && (
+              {STEPS[step].id === 'identity' && (
                 <>
                   <div className="apm-field">
                     <label className="apm-label" htmlFor="apm-name">Name <span className="apm-required">*</span></label>
@@ -554,7 +572,7 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
                   <div className="apm-field">
                     <div className="apm-label">Relationship</div>
                     <div className="apm-rel-grid">
-                      {REL_TYPES.map((r) => (
+                      {RELATIONSHIP_TYPES.map((r) => (
                         <button
                           key={r.key}
                           type="button"
@@ -597,8 +615,56 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
                 </>
               )}
 
-              {/* ── Step 1: Context ── */}
-              {step === 1 && (
+              {/* ── Step 1: Connection ── */}
+              {STEPS[step].id === 'connection' && (
+                <>
+                  <PillGroup
+                    label="How long have you known them?"
+                    options={TENURE_OPTIONS}
+                    value={form.tenure}
+                    onChange={(v) => set('tenure', v)}
+                  />
+                  <PillGroup
+                    label="How often do you interact?"
+                    options={FREQUENCY_OPTIONS}
+                    value={form.frequency}
+                    onChange={(v) => set('frequency', v)}
+                  />
+                  <PillGroup
+                    label="When did you last talk or hang out?"
+                    options={LAST_INTERACTION_OPTIONS}
+                    value={form.lastInteraction}
+                    onChange={(v) => set('lastInteraction', v)}
+                  />
+                  <ChipMultiGroup
+                    label="How do you usually connect?"
+                    options={CHANNEL_OPTIONS}
+                    values={form.channels}
+                    onChange={(v) => set('channels', v)}
+                  />
+                  <PillGroup
+                    label="When you're going through something, do they show up for you?"
+                    options={SUPPORT_OPTIONS}
+                    value={form.theyShowUpForMe}
+                    onChange={(v) => set('theyShowUpForMe', v)}
+                  />
+                  <PillGroup
+                    label="When they're going through something, do you show up for them?"
+                    options={SUPPORT_OPTIONS}
+                    value={form.iShowUpForThem}
+                    onChange={(v) => set('iShowUpForThem', v)}
+                  />
+                  <PillGroup
+                    label="Do they know your big stuff — family, fears, goals?"
+                    options={KNOWS_OPTIONS}
+                    value={form.knowsAboutMe}
+                    onChange={(v) => set('knowsAboutMe', v)}
+                  />
+                </>
+              )}
+
+              {/* ── Step 2: Context ── */}
+              {STEPS[step].id === 'context' && (
                 <>
                   <div className="apm-field">
                     <label className="apm-label" htmlFor="apm-met">How you met</label>
@@ -637,8 +703,8 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
                 </>
               )}
 
-              {/* ── Step 2: Interests ── */}
-              {step === 2 && (
+              {/* ── Step 3: Interests ── */}
+              {STEPS[step].id === 'interests' && (
                 <>
                   <p className="apm-step-hint">Press Enter or comma to add each item.</p>
                   <TagInput label="Hobbies"        items={form.hobbies}       onChange={(v) => set('hobbies', v)}       placeholder="gaming, reading…" />
@@ -648,8 +714,8 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
                 </>
               )}
 
-              {/* ── Step 3: Memories ── */}
-              {step === 3 && (
+              {/* ── Step 4: Memories ── */}
+              {STEPS[step].id === 'memories' && (
                 <>
                   <p className="apm-step-hint">Press Enter or + to add each item.</p>
                   <ListInput label="Memories together"       items={form.memoriesTogether}       onChange={(v) => set('memoriesTogether', v)}       placeholder="Beach day at Santa Monica…" />
