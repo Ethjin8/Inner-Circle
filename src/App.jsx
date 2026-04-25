@@ -4,6 +4,10 @@ import ConstellationGraph, { DEMO_PEOPLE } from './components/Graph/Constellatio
 import PersonModal from './components/PersonModal/PersonModal';
 import AddPersonModal from './components/AddPersonModal/AddPersonModal';
 import MemoryCarousel from './components/MemoryCarousel/MemoryCarousel';
+import SignIn from './components/SignIn/SignIn';
+import { useAuth } from './contexts/AuthContext';
+import { usePeople } from './hooks/usePeople';
+import { usePhotos } from './hooks/usePhotos';
 import './App.css';
 
 const FILTERS = [
@@ -28,6 +32,10 @@ const CATEGORY_COLORS = {
 };
 
 function App() {
+  const { user, loading: authLoading, signOut } = useAuth();
+  const { people, addPerson, updatePerson, removePeople, restorePeople } = usePeople();
+  const { photosByPerson, setPhotosForPerson } = usePhotos();
+
   const [activeFilters, setActiveFilters] = useState(() => new Set());
   const [attachedNodes, setAttachedNodes] = useState([]);
   const [promptText, setPromptText] = useState('');
@@ -40,10 +48,13 @@ function App() {
   const [activeTool, setActiveTool] = useState(null); // null | 'snip'
   const [deletingIds, setDeletingIds] = useState([]); // ids being animated out
   const [deletedHistory, setDeletedHistory] = useState([]); // undo stack: [{type:'person'|'category', ids:[]}]
-  const [photosByPerson, setPhotosByPerson] = useState({}); // { personId: [ { public_id, secure_url, ... }, ... ] }
-  const [people, setPeople] = useState(DEMO_PEOPLE);
   const [searchQuery, setSearchQuery] = useState('');
-  
+  const [showDemo, setShowDemo] = useState(false); // testing: show demo people without persisting
+
+  const displayPeople = useMemo(() => (
+    showDemo ? [...people, ...DEMO_PEOPLE.map(p => ({ ...p, isDemo: true }))] : people
+  ), [people, showDemo]);
+
   const [viewMode, setViewMode] = useState('graph'); // 'graph' | 'gallery'
   const [modalPhase, setModalPhase] = useState(null); // null | 'zooming-in' | 'open' | 'zooming-out'
   const modalTimerRef = useRef(null);
@@ -51,26 +62,26 @@ function App() {
   const allPhotos = useMemo(() => {
     const photos = [];
     Object.entries(photosByPerson).forEach(([personId, pList]) => {
-      const person = people.find(p => p.id === personId);
+      const person = displayPeople.find(p => p.id === personId);
       if (person) {
         pList.forEach(photo => photos.push({ ...photo, personName: person.name }));
       }
     });
     // Sort by upload date, newest first
     return photos.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
-  }, [photosByPerson, people]);
+  }, [photosByPerson, displayPeople]);
 
   const peopleByCategory = useMemo(() => {
     const map = {};
     FILTERS.forEach(f => { if (f.key) map[f.key] = { label: f.label, color: f.color, people: [] }; });
     const q = searchQuery.trim().toLowerCase();
-    people.forEach(p => {
+    displayPeople.forEach(p => {
       if (q && !p.name.toLowerCase().includes(q)) return;
       const c = p.relationship?.type;
       if (c && map[c]) map[c].people.push(p);
     });
     return map;
-  }, [people, searchQuery]);
+  }, [displayPeople, searchQuery]);
 
   const isSearching = searchQuery.trim().length > 0;
 
@@ -142,43 +153,41 @@ function App() {
 
     if (node.isCategory) {
       // snipping a cat line: delete the cat + all its people
-      snippedPeople = people.filter(p => p.relationship?.type === node.category);
+      snippedPeople = displayPeople.filter(p => p.relationship?.type === node.category);
       idsToDelete = [node.id, ...snippedPeople.map(p => p.id)];
     } else {
-      snippedPeople = people.filter(p => p.id === node.id);
+      snippedPeople = displayPeople.filter(p => p.id === node.id);
       idsToDelete = [node.id];
     }
 
     // Animate out
     setDeletingIds(prev => [...prev, ...idsToDelete]);
-    // Push to undo stack
-    setDeletedHistory(prev => [...prev, { ids: idsToDelete, snippedPeople, node }]);
+    // Push to undo stack (only persist real, non-demo people for restore)
+    const realSnipped = snippedPeople.filter(p => !p.isDemo);
+    setDeletedHistory(prev => [...prev, { ids: idsToDelete, snippedPeople: realSnipped, node }]);
 
-    // Actually remove after animation (600ms)
+    // Actually remove after animation (600ms) — demo people are visual-only, skip Firestore
     setTimeout(() => {
-      setPeople(prev => prev.filter(p => !idsToDelete.includes(p.id)));
+      removePeople(realSnipped.map((p) => p.id));
       setDeletingIds(prev => prev.filter(id => !idsToDelete.includes(id)));
     }, 600);
-  }, [people]);
+  }, [displayPeople, removePeople]);
 
   const handleUndo = useCallback(() => {
     if (deletedHistory.length === 0) return;
     const last = deletedHistory[deletedHistory.length - 1];
-    setPeople(prev => [...prev, ...last.snippedPeople]);
+    restorePeople(last.snippedPeople);
     setDeletedHistory(prev => prev.slice(0, -1));
-  }, [deletedHistory]);
+  }, [deletedHistory, restorePeople]);
 
   const handlePhotosChange = useCallback((personId, newPhotos) => {
-    setPhotosByPerson(prev => ({
-      ...prev,
-      [personId]: newPhotos
-    }));
-  }, []);
+    setPhotosForPerson(personId, newPhotos);
+  }, [setPhotosForPerson]);
 
   const handlePersonUpdate = useCallback((updatedPerson) => {
-    setPeople((prev) => prev.map((person) => (person.id === updatedPerson.id ? updatedPerson : person)));
+    if (!updatedPerson.isDemo) updatePerson(updatedPerson);
     setSelectedPerson(updatedPerson);
-  }, []);
+  }, [updatePerson]);
 
   const handleSubmit = useCallback((e) => {
     e.preventDefault();
@@ -192,6 +201,9 @@ function App() {
     : undefined;
 
   const showModal = !!selectedPerson || modalPhase === 'zooming-out';
+
+  if (authLoading) return <div className="app" style={{ background: '#0a0a0f' }} />;
+  if (!user) return <SignIn />;
 
   return (
     <div className="app">
@@ -207,7 +219,7 @@ function App() {
             activeTool={activeTool}
             onSnip={handleSnip}
             deletingIds={deletingIds}
-            people={people}
+            people={displayPeople}
           />
         </div>
       </div>
@@ -272,6 +284,13 @@ function App() {
 
         <div className="header-actions">
           <button className="btn-primary" onClick={() => setAddPersonOpen(true)}>+ Add Person</button>
+          <button className="btn-ghost" onClick={signOut} title={user.email || 'Sign out'}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          </button>
         </div>
       </header>
 
@@ -390,6 +409,15 @@ function App() {
         </button>
       )}
 
+      <button
+        className={`demo-toggle ${showDemo ? 'active' : ''}`}
+        onClick={() => setShowDemo(s => !s)}
+        title={showDemo ? 'Hide demo people' : 'Show demo people (not saved)'}
+      >
+        <span className="demo-toggle-dot" />
+        {showDemo ? 'Demo on' : 'Demo'}
+      </button>
+
       {showModal && (
         <PersonModal
           key={selectedPerson?.id}
@@ -451,7 +479,7 @@ function App() {
       <AddPersonModal
         open={addPersonOpen}
         onClose={() => setAddPersonOpen(false)}
-        onAdd={(person) => setPeople((prev) => [...prev, person])}
+        onAdd={(person) => addPerson(person)}
       />
     </div>
   );
