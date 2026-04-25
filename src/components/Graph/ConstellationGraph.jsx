@@ -530,8 +530,6 @@ export default function ConstellationGraph({ activeFilter, people = DEMO_PEOPLE,
         node.y = Math.max(PADDING_TOP + r, Math.min(height - PADDING_BOTTOM - r, node.y));
       }
 
-      const centerRadius = 28;
-
       for (const node of nodesRef.current) {
         const isFiltered = activeFilter && activeFilter !== node.category;
         const rgb = strengthToEdgeColor(node.strength);

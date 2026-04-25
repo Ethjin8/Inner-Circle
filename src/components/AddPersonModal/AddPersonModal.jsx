@@ -3,29 +3,47 @@ import './AddPersonModal.css';
 
 const STARDUST_PARTICLES = 28;
 
+function generateParticles() {
+  return Array.from({ length: STARDUST_PARTICLES }, (_, i) => {
+    const angle = (i / STARDUST_PARTICLES) * Math.PI * 2 + Math.random() * 0.4;
+    const dist = 60 + Math.random() * 60;
+    return {
+      dx: Math.cos(angle) * dist,
+      dy: Math.sin(angle) * dist,
+      delay: Math.random() * 60,
+    };
+  });
+}
+
 export default function AddPersonModal({ open, onClose }) {
   const [listening, setListening] = useState(false);
   const [bursting, setBursting] = useState(false);
+  const [particles, setParticles] = useState([]);
+
+  const handleClose = () => {
+    setListening(false);
+    setBursting(false);
+    setParticles([]);
+    onClose();
+  };
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e) => { if (e.key === 'Escape') handleClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
-  useEffect(() => {
-    if (!open) {
-      setListening(false);
-      setBursting(false);
-    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const handleProbeToggle = () => {
     if (listening) {
       setListening(false);
+      setParticles(generateParticles());
       setBursting(true);
-      setTimeout(() => setBursting(false), 720);
+      setTimeout(() => {
+        setBursting(false);
+        setParticles([]);
+      }, 720);
     } else {
       setListening(true);
     }
@@ -34,7 +52,7 @@ export default function AddPersonModal({ open, onClose }) {
   if (!open) return null;
 
   return (
-    <div className="apm-backdrop" onClick={onClose} role="presentation">
+    <div className="apm-backdrop" onClick={handleClose} role="presentation">
       <div
         className="apm-panel"
         onClick={(e) => e.stopPropagation()}
@@ -42,7 +60,7 @@ export default function AddPersonModal({ open, onClose }) {
         aria-modal="true"
         aria-label="Add a person"
       >
-        <button className="apm-close" onClick={onClose} aria-label="Close">
+        <button className="apm-close" onClick={handleClose} aria-label="Close">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
@@ -79,19 +97,13 @@ export default function AddPersonModal({ open, onClose }) {
 
           {bursting && (
             <div className="apm-stardust" aria-hidden>
-              {Array.from({ length: STARDUST_PARTICLES }, (_, i) => {
-                const angle = (i / STARDUST_PARTICLES) * Math.PI * 2 + Math.random() * 0.4;
-                const dist = 60 + Math.random() * 60;
-                const dx = Math.cos(angle) * dist;
-                const dy = Math.sin(angle) * dist;
-                return (
-                  <span
-                    key={i}
-                    className="apm-stardust-particle"
-                    style={{ '--dx': `${dx}px`, '--dy': `${dy}px`, animationDelay: `${Math.random() * 60}ms` }}
-                  />
-                );
-              })}
+              {particles.map((p, i) => (
+                <span
+                  key={i}
+                  className="apm-stardust-particle"
+                  style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, animationDelay: `${p.delay}ms` }}
+                />
+              ))}
             </div>
           )}
 
