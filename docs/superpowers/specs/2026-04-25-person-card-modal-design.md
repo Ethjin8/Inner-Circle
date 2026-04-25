@@ -4,6 +4,72 @@
 
 A centered overlay modal that appears when clicking a graph node, displaying detailed information about a person. The modal blurs the background graph so the user can focus on the card content. Empty/null fields are hidden entirely to keep the card clean and adaptive to how much is known about each person.
 
+## Person Schema (v1)
+
+Canonical shape of a person record. Source of truth for the manual form, the Gemini Live voice agent, Firebase persistence, the Claude scoring pipeline, and the constellation renderer. All components must read/write this shape.
+
+```json
+{
+  "id": "person_abc123",
+  "name": "Jane Doe",
+  "birthday": "1998-05-14",
+  "profile_image": {
+    "cloudinary_public_id": "inner_circle/people/jane_doe_abc123",
+    "url": "https://res.cloudinary.com/.../jane_doe_abc123.jpg"
+  },
+  "relationship": {
+    "type": "friend",
+    "strength": 85
+  },
+  "context": {
+    "how_we_met": "Met in biology 101 lab",
+    "school": "UCLA",
+    "work": "Software Engineer at Google",
+    "hobbies": ["hiking", "photography"],
+    "sports": ["tennis"],
+    "favorites": {
+      "foods": ["sushi", "tacos"],
+      "music": ["indie rock", "jazz"]
+    }
+  },
+  "history": {
+    "memories_together": ["Road trip to Yosemite 2023", "Staying up all night studying for finals"],
+    "important_events": ["Jane's wedding next September", "Monthly dinner clubs"],
+    "things_to_look_forward_to": ["Planning a trip to Japan together next year"]
+  },
+  "scoring": {
+    "aggregate": 85,
+    "dimensions": {
+      "depth_of_knowledge":     { "score": 8, "reasoning": "User knows specific personal details across multiple life domains." },
+      "emotional_intimacy":     { "score": 9, "reasoning": "Memories indicate vulnerability and shared formative experiences." },
+      "recency_frequency":      { "score": 8, "reasoning": "Monthly dinner clubs + upcoming wedding suggest active, recurring contact." },
+      "shared_history_density": { "score": 8, "reasoning": "Multiple distinct memories spanning years and contexts." },
+      "reciprocity":            { "score": 9, "reasoning": "Bilateral planning signals mutual investment." }
+    },
+    "variance": "low",
+    "samples": [85, 84, 86],
+    "scored_at": "2026-04-25T14:32:11Z",
+    "model": "claude-opus-4-6",
+    "rubric_version": "v1"
+  },
+  "created_at": "2026-04-25T13:10:00Z",
+  "updated_at": "2026-04-25T14:32:11Z",
+  "last_interaction_at": "2026-04-20T00:00:00Z"
+}
+```
+
+**Notes:**
+
+- `relationship.strength` is the rendered value on the constellation. It mirrors `scoring.aggregate`; the scoring pipeline writes both. Treat `scoring.aggregate` as the source of truth and `relationship.strength` as a denormalized cache for fast reads.
+- `relationship.type` is the category — drives which branch of the constellation the node attaches to. If unknown at intake, default to `"miscellaneous"`.
+- All `context` and `history` fields are optional. Empty/null fields are hidden in the card.
+- `profile_image` is optional; cards fall back to the initials placeholder when absent.
+- `scoring.samples` stores the 3 self-consistency runs. `variance` is derived: `"low"` if max-min ≤ 10, else `"high"` (flagged as uncertain in the UI).
+- `rubric_version` lets old scores stay tagged when the rubric evolves — never silently re-grade.
+- `last_interaction_at` is the ground-truth timestamp the recency/frequency dimension reads from. Update it when the user logs a new memory/event.
+
+The demo data in this spec predates the `scoring` block and `profile_image`; it should be migrated alongside the manual form work.
+
 ## Trigger & Dismissal
 
 - **Single click** on a graph node opens the modal for that person
