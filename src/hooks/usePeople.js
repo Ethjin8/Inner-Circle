@@ -53,5 +53,5 @@ export function usePeople() {
     await batch.commit();
   };
 
-  return { people, loading, addPerson, updatePerson, removePeople, restorePeople };
+  return { people, setPeople, loading, addPerson, updatePerson, removePeople, restorePeople };
 }
