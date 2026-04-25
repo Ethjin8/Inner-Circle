@@ -73,7 +73,8 @@ export const KNOWS_KEYS            = keysOf(KNOWS_OPTIONS);
 export const RELATIONSHIP_TYPE_KEYS = keysOf(RELATIONSHIP_TYPES);
 
 // Empty form state used by AddPersonModal.
-export const BLANK_PERSON = {
+// Returns a fresh object on every call so callers can't mutate shared state.
+export const BLANK_PERSON = () => ({
   name: '',
   birthday: '',
   relType: 'friend',
@@ -101,7 +102,14 @@ export const BLANK_PERSON = {
   memoriesTogether: [],
   importantEvents: [],
   thingsToLookForwardTo: [],
-};
+});
+
+// Helper: trim a string value, returning null for empty/non-string input.
+function trimOrNull(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
 
 // Helper: validate enum-or-null. Returns the value if it's in `keys`,
 // otherwise null. Use for fields where invalid input should be dropped.
@@ -128,13 +136,14 @@ export function buildPersonFromForm(formState) {
     .toUpperCase();
 
   const id = String(Date.now());
+  const notesTrimmed = trimOrNull(formState.notes);
 
   return {
     id,
     name: rawName,
     initials,
     ...(formState.birthday ? { birthday: formState.birthday } : {}),
-    ...(formState.notes?.trim() ? { notes: formState.notes.trim() } : {}),
+    ...(notesTrimmed ? { notes: notesTrimmed } : {}),
 
     relationship: {
       type: enumOrNull(formState.relType, RELATIONSHIP_TYPE_KEYS) || 'friend',
@@ -148,9 +157,9 @@ export function buildPersonFromForm(formState) {
     },
 
     context: {
-      how_we_met: formState.howWeMet?.trim() || null,
-      school:     formState.school?.trim()   || null,
-      work:       formState.work?.trim()     || null,
+      how_we_met: trimOrNull(formState.howWeMet),
+      school:     trimOrNull(formState.school),
+      work:       trimOrNull(formState.work),
       hobbies:    formState.hobbies    || [],
       sports:     formState.sports     || [],
       favorites:  {
@@ -185,13 +194,14 @@ export function buildPersonFromExtraction(extracted) {
   const rel = extracted.relationship || {};
   const ctx = extracted.context || {};
   const hist = extracted.history || {};
+  const notesTrimmed = trimOrNull(extracted.notes);
 
   return {
     id,
     name: rawName,
     initials,
     ...(extracted.birthday ? { birthday: extracted.birthday } : {}),
-    ...(extracted.notes ? { notes: extracted.notes } : {}),
+    ...(notesTrimmed ? { notes: notesTrimmed } : {}),
 
     relationship: {
       type: enumOrNull(rel.type, RELATIONSHIP_TYPE_KEYS) || 'friend',
@@ -205,9 +215,9 @@ export function buildPersonFromExtraction(extracted) {
     },
 
     context: {
-      how_we_met: ctx.how_we_met || null,
-      school:     ctx.school     || null,
-      work:       ctx.work       || null,
+      how_we_met: trimOrNull(ctx.how_we_met),
+      school:     trimOrNull(ctx.school),
+      work:       trimOrNull(ctx.work),
       hobbies:    ctx.hobbies    || [],
       sports:     ctx.sports     || [],
       favorites:  {

@@ -7,8 +7,8 @@ import {
 } from './personSchema.js';
 
 test('buildPersonFromForm returns null for blank name', () => {
-  assert.equal(buildPersonFromForm({ ...BLANK_PERSON, name: '' }), null);
-  assert.equal(buildPersonFromForm({ ...BLANK_PERSON, name: '   ' }), null);
+  assert.equal(buildPersonFromForm({ ...BLANK_PERSON(), name: '' }), null);
+  assert.equal(buildPersonFromForm({ ...BLANK_PERSON(), name: '   ' }), null);
 });
 
 test('buildPersonFromForm produces full v2 shape with all 7 connection fields', () => {
@@ -50,7 +50,7 @@ test('buildPersonFromForm drops invalid enum values to null', () => {
 });
 
 test('buildPersonFromForm omits empty notes / birthday fields', () => {
-  const result = buildPersonFromForm({ ...BLANK_PERSON, name: 'Test' });
+  const result = buildPersonFromForm({ ...BLANK_PERSON(), name: 'Test' });
   assert.equal('notes' in result, false);
   assert.equal('birthday' in result, false);
 });
@@ -91,4 +91,46 @@ test('buildPersonFromExtraction defaults to coherent skeleton when fields are mi
   assert.deepEqual(result.relationship.channels, []);
   assert.deepEqual(result.context.hobbies, []);
   assert.deepEqual(result.history.memories_together, []);
+});
+
+test('buildPersonFromForm maps context and history fields with trim', () => {
+  const result = buildPersonFromForm({
+    ...BLANK_PERSON(),
+    name: 'Alice Bob',
+    howWeMet: '  through college  ',
+    school: 'UCLA',
+    work: '',
+    hobbies: ['reading', 'hiking'],
+    sports: ['tennis'],
+    favoritesFoods: ['ramen'],
+    favoritesMusic: [],
+    memoriesTogether: ['that one road trip'],
+    importantEvents: [],
+    thingsToLookForwardTo: ['summer plans'],
+  });
+  assert.equal(result.initials, 'AB');
+  assert.equal(result.context.how_we_met, 'through college');
+  assert.equal(result.context.school, 'UCLA');
+  assert.equal(result.context.work, null);
+  assert.deepEqual(result.context.hobbies, ['reading', 'hiking']);
+  assert.deepEqual(result.context.favorites.foods, ['ramen']);
+  assert.deepEqual(result.context.favorites.music, []);
+  assert.deepEqual(result.history.memories_together, ['that one road trip']);
+  assert.deepEqual(result.history.things_to_look_forward_to, ['summer plans']);
+});
+
+test('buildPersonFromExtraction trims context and notes whitespace for parity with form path', () => {
+  const result = buildPersonFromExtraction({
+    name: 'Carol',
+    notes: '  some prose  ',
+    context: {
+      how_we_met: '  through work  ',
+      school: '  UCLA  ',
+      work: '   ',
+    },
+  });
+  assert.equal(result.notes, 'some prose');
+  assert.equal(result.context.how_we_met, 'through work');
+  assert.equal(result.context.school, 'UCLA');
+  assert.equal(result.context.work, null);
 });
