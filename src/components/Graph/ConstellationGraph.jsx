@@ -513,7 +513,8 @@ export default function ConstellationGraph({ activeFilters, focusedCategory, onZ
         clearTimeout(clickTimerRef.current); clickTimerRef.current = null;
         onNodeDoubleClick?.(node);
       } else {
-        clickTimerRef.current = setTimeout(() => { clickTimerRef.current = null; onNodeClick?.(node); }, 250);
+        const cx = e.clientX; const cy = e.clientY;
+        clickTimerRef.current = setTimeout(() => { clickTimerRef.current = null; onNodeClick?.(node, { x: cx, y: cy }); }, 250);
       }
     };
 

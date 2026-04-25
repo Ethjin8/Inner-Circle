@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import StarField from './components/Graph/StarField';
 import ConstellationGraph, { DEMO_PEOPLE } from './components/Graph/ConstellationGraph';
 import PersonModal from './components/PersonModal/PersonModal';
@@ -44,6 +44,8 @@ function App() {
   const [people, setPeople] = useState(DEMO_PEOPLE);
   
   const [viewMode, setViewMode] = useState('graph'); // 'graph' | 'gallery'
+  const [modalPhase, setModalPhase] = useState(null); // null | 'zooming-in' | 'open' | 'zooming-out'
+  const modalTimerRef = useRef(null);
 
   const allPhotos = useMemo(() => {
     const photos = [];
@@ -85,12 +87,16 @@ function App() {
     });
   };
 
-  const handleNodeClick = useCallback((node) => {
+  const handleNodeClick = useCallback((node, screenPos) => {
     if (node.isCategory) {
       setFocusedCategory(node.category);
       return;
     }
+    clearTimeout(modalTimerRef.current);
+    setZoomTarget(screenPos ?? null);
     setSelectedPerson(node);
+    setModalPhase('zooming-in');
+    modalTimerRef.current = setTimeout(() => setModalPhase('open'), 380);
   }, []);
 
   const handleNodeDoubleClick = useCallback((node) => {
@@ -111,8 +117,13 @@ function App() {
   }, []);
 
   const closeModal = useCallback(() => {
-    setSelectedPerson(null);
-    setZoomTarget(null);
+    clearTimeout(modalTimerRef.current);
+    setModalPhase('zooming-out');
+    modalTimerRef.current = setTimeout(() => {
+      setSelectedPerson(null);
+      setModalPhase(null);
+      setZoomTarget(null);
+    }, 240);
   }, []);
 
   const removeAttachedNode = useCallback((nodeId) => {
@@ -170,7 +181,7 @@ function App() {
     ? { transformOrigin: `${zoomTarget.x}px ${zoomTarget.y}px` }
     : undefined;
 
-  const showModal = !!selectedPerson;
+  const showModal = !!selectedPerson || modalPhase === 'zooming-out';
 
   return (
     <div className="app">
@@ -344,7 +355,7 @@ function App() {
         <PersonModal
           person={selectedPerson}
           originPoint={zoomTarget}
-          phase="open"
+          phase={modalPhase}
           onClose={closeModal}
           photosByPerson={photosByPerson}
           onPhotosChange={handlePhotosChange}
@@ -396,7 +407,11 @@ function App() {
         <div className="prompt-hint">Click a node to view details — double-click to attach as context</div>
       </div>
 
-      <AddPersonModal open={addPersonOpen} onClose={() => setAddPersonOpen(false)} />
+      <AddPersonModal
+        open={addPersonOpen}
+        onClose={() => setAddPersonOpen(false)}
+        onAdd={(person) => setPeople((prev) => [...prev, person])}
+      />
     </div>
   );
 }
