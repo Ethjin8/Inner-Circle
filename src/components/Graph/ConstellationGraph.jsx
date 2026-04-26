@@ -670,9 +670,9 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       const { cx, cy } = getCenter();
       ctx.clearRect(0, 0, width, height);
 
-      // Auto-recenter after 30s of inactivity (skip while dragging or in first-experience).
+      // Auto-recenter after 10s of inactivity (skip while dragging or in first-experience).
       if (!recenteredRef.current && !dragStateRef.current.active && !isFirstExperience &&
-          performance.now() - lastActivityRef.current > 30000) {
+          performance.now() - lastActivityRef.current > 10000) {
         recenteredRef.current = true;
         stopMomentum();
         userPanRef.current.x = 0;

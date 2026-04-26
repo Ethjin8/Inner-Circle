@@ -70,6 +70,9 @@ function App() {
   const [deletingIds, setDeletingIds] = useState([]); // ids being animated out
   const [deletedHistory, setDeletedHistory] = useState([]); // undo stack: [{type:'person'|'category', ids:[]}]
   const [searchQuery, setSearchQuery] = useState('');
+  const [explorerOpen, setExplorerOpen] = useState(true);
+  const [pastChatsOpen, setPastChatsOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showDemo, setShowDemo] = useState(false); // testing: show demo people without persisting
   const promptInputRef = useRef(null);
   const [autoExpanded, setAutoExpanded] = useState(false);
@@ -377,16 +380,7 @@ function App() {
       )}
 
       {!isFirstExperience && <header className="header">
-        <div className="logo">
-          <svg className="logo-glyph" width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="0.9" opacity="0.85" />
-            <circle cx="7" cy="7" r="3.5" stroke="currentColor" strokeWidth="0.7" opacity="0.6" />
-            <line x1="0.8" y1="7" x2="13.2" y2="7" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
-            <line x1="7" y1="0.8" x2="7" y2="13.2" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
-            <circle cx="7" cy="7" r="1" fill="currentColor" />
-          </svg>
-          <span className="logo-text">Inner Circle</span>
-        </div>
+        <div />
 
         {/* Center Toolbar */}
         <div className="toolbar">
@@ -427,19 +421,52 @@ function App() {
           </button>
         </div>
 
-        <div className="header-actions">
-          <button className="btn-ghost" onClick={signOut} title={user.email || 'Sign out'}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
+        <div />
+      </header>}
+
+      {!isFirstExperience && <aside className={`sidebar ${viewMode === 'gallery' ? 'hidden' : ''} ${sidebarCollapsed ? 'collapsed' : ''}`}>
+        <div className="sidebar-top">
+          <div className="sidebar-logo">
+            <svg className="logo-glyph" width="20" height="20" viewBox="0 0 14 14" fill="none">
+              <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="0.9" opacity="0.85" />
+              <circle cx="7" cy="7" r="3.5" stroke="currentColor" strokeWidth="0.7" opacity="0.6" />
+              <line x1="0.8" y1="7" x2="13.2" y2="7" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
+              <line x1="7" y1="0.8" x2="7" y2="13.2" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
+              <circle cx="7" cy="7" r="1" fill="currentColor" />
+            </svg>
+            {!sidebarCollapsed && <span className="logo-text">Inner Circle</span>}
+          </div>
+          <button
+            type="button"
+            className="sidebar-collapse-btn"
+            onClick={() => setSidebarCollapsed(c => !c)}
+            title={sidebarCollapsed ? 'Open sidebar' : 'Collapse sidebar'}
+            aria-label={sidebarCollapsed ? 'Open sidebar' : 'Collapse sidebar'}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <line x1="9" y1="4" x2="9" y2="20" />
             </svg>
           </button>
         </div>
-      </header>}
 
-      {!isFirstExperience && <aside className={`sidebar ${viewMode === 'gallery' ? 'hidden' : ''}`}>
-        <div className="sidebar-label">EXPLORER</div>
+        <div className="sidebar-body">
+        <button
+          type="button"
+          className="sidebar-section-header"
+          onClick={() => { if (sidebarCollapsed) setSidebarCollapsed(false); setExplorerOpen(o => sidebarCollapsed ? true : !o); }}
+          aria-expanded={explorerOpen}
+          title="Explorer"
+        >
+          <svg className="sidebar-section-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+          </svg>
+          {!sidebarCollapsed && <>
+            <span className={`chevron ${explorerOpen ? 'expanded' : ''}`}>›</span>
+            <span>EXPLORER</span>
+          </>}
+        </button>
+        {!sidebarCollapsed && explorerOpen && (<>
         <div className="sidebar-search">
           <svg className="sidebar-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <circle cx="11" cy="11" r="7" />
@@ -557,6 +584,58 @@ function App() {
             );
           })}
         </div>
+        </>)}
+        <button
+          type="button"
+          className="sidebar-section-header"
+          onClick={() => { if (sidebarCollapsed) setSidebarCollapsed(false); setPastChatsOpen(o => sidebarCollapsed ? true : !o); }}
+          aria-expanded={pastChatsOpen}
+          title="Past chats"
+        >
+          <svg className="sidebar-section-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          {!sidebarCollapsed && <>
+            <span className={`chevron ${pastChatsOpen ? 'expanded' : ''}`}>›</span>
+            <span>PAST CHATS</span>
+            {chatThreads.length > 0 && <span className="sidebar-section-count">{chatThreads.length}</span>}
+          </>}
+        </button>
+        {!sidebarCollapsed && pastChatsOpen && (
+          <ChatHistory
+            threads={chatThreads}
+            onOpenThread={handleOpenThread}
+            onDeleteThread={deleteChatThread}
+          />
+        )}
+        </div>
+
+        <div className="sidebar-footer">
+          <button
+            type="button"
+            className={`sidebar-signout demo-row ${showDemo ? 'active' : ''}`}
+            onClick={() => setShowDemo(s => !s)}
+            title={showDemo ? 'Hide demo people' : 'Show demo people (not saved)'}
+            aria-pressed={showDemo}
+          >
+            <span className="demo-toggle-dot" />
+            {!sidebarCollapsed && <span>{showDemo ? 'Demo on' : 'Demo'}</span>}
+          </button>
+          <button
+            type="button"
+            className="sidebar-signout"
+            onClick={signOut}
+            title={user.email || 'Sign out'}
+            aria-label="Sign out"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            {!sidebarCollapsed && <span>Sign out</span>}
+          </button>
+        </div>
       </aside>}
 
       {!isFirstExperience && focusedCategory && (
@@ -564,15 +643,6 @@ function App() {
           ← Back to Galaxy
         </button>
       )}
-
-      <button
-        className={`demo-toggle ${showDemo ? 'active' : ''}`}
-        onClick={() => setShowDemo(s => !s)}
-        title={showDemo ? 'Hide demo people' : 'Show demo people (not saved)'}
-      >
-        <span className="demo-toggle-dot" />
-        {showDemo ? 'Demo on' : 'Demo'}
-      </button>
 
       {showModal && (
         <PersonModal
@@ -613,11 +683,6 @@ function App() {
           </div>
         )}
         <div className="prompt-switcher">
-          <ChatHistory
-            threads={chatThreads}
-            onOpenThread={handleOpenThread}
-            onDeleteThread={deleteChatThread}
-          />
           <button
             className="prompt-add-button"
             onClick={() => { setAddPersonIsSelf(false); setAddPersonOpen(true); }}
