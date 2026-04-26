@@ -71,7 +71,14 @@ function App() {
   const [calendarEvent, setCalendarEvent] = useState(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const promptInputRef = useRef(null);
-  const isPromptExpanded = promptText.length > 0 || attachedNodes.length > 0;
+  const [autoExpanded, setAutoExpanded] = useState(false);
+  const [interactionTick, setInteractionTick] = useState(0);
+  const [autoCycles, setAutoCycles] = useState(0);
+  const bumpInteraction = useCallback(() => {
+    setInteractionTick((t) => t + 1);
+    setAutoExpanded(false);
+  }, []);
+  const isPromptExpanded = promptText.length > 0 || attachedNodes.length > 0 || autoExpanded;
 
   const displayPeople = useMemo(() => (
     showDemo ? [...people, ...DEMO_PEOPLE.map(p => ({ ...p, isDemo: true }))] : people
@@ -126,6 +133,7 @@ function App() {
   };
 
   const handleNodeClick = useCallback((node, screenPos) => {
+    bumpInteraction();
     if (node.isCategory) {
       setFocusedCategory(node.category);
       return;
@@ -135,15 +143,16 @@ function App() {
     setSelectedPerson(node);
     setModalPhase('zooming-in');
     modalTimerRef.current = setTimeout(() => setModalPhase('open'), 380);
-  }, []);
+  }, [bumpInteraction]);
 
   const handleNodeDoubleClick = useCallback((node) => {
+    bumpInteraction();
     if (node.isCategory) return;
     setAttachedNodes((prev) => {
       if (prev.some((n) => n.id === node.id)) return prev;
       return [...prev, node];
     });
-  }, []);
+  }, [bumpInteraction]);
 
   const toggleBranchHighlight = useCallback((catKey) => {
     setActiveFilters((prev) => {
@@ -288,6 +297,25 @@ function App() {
     }
   }, [isPromptExpanded]);
 
+  // Auto-expand the typing bar after 6.7s of no node interaction — first cycle only.
+  useEffect(() => {
+    if (isFirstExperience || autoCycles > 0) return;
+    if (promptText.length > 0 || attachedNodes.length > 0 || autoExpanded) return;
+    const t = setTimeout(() => setAutoExpanded(true), 6700);
+    return () => clearTimeout(t);
+  }, [interactionTick, promptText, attachedNodes, autoExpanded, isFirstExperience, autoCycles]);
+
+  // Auto-collapse 6.7s after auto-expanding if no typing happened.
+  useEffect(() => {
+    if (!autoExpanded) return;
+    if (promptText.length > 0 || attachedNodes.length > 0) return;
+    const t = setTimeout(() => {
+      setAutoExpanded(false);
+      setAutoCycles((c) => c + 1);
+    }, 6700);
+    return () => clearTimeout(t);
+  }, [autoExpanded, promptText, attachedNodes]);
+
   useEffect(() => {
     if (isFirstExperience || isPromptExpanded) return;
     const onKeyDown = (e) => {
@@ -400,7 +428,6 @@ function App() {
         </div>
 
         <div className="header-actions">
-          <button className="btn-primary" onClick={() => setAddPersonOpen(true)}>+ Add Person</button>
           <button className="btn-ghost" onClick={signOut} title={user.email || 'Sign out'}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
