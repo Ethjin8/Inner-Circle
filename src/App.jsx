@@ -644,11 +644,6 @@ function App() {
         </button>
       )}
 
-      {!isFirstExperience && focusedCategory && (
-        <button className="back-to-galaxy-btn" onClick={() => setFocusedCategory(null)}>
-          ← Back to Galaxy
-        </button>
-      )}
 
       {showModal && (
         <PersonModal

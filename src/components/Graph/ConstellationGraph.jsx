@@ -248,6 +248,8 @@ const internalPanRef = useRef({ x: 0, y: 0 });
   const youPosRef = useRef({ x: 0, y: 0 });
   const camRef = useRef({ x: 0, y: 0, scale: 1, targetX: 0, targetY: 0, targetScale: 1 });
   const zoomRef = useRef(1);
+  const focusedCategoryRef = useRef(focusedCategory);
+  useEffect(() => { focusedCategoryRef.current = focusedCategory; }, [focusedCategory]);
   const dragStateRef = useRef({ active: false, nodeId: null, startMx: 0, startMy: 0, startNx: 0, startNy: 0, moved: false, suppressClick: false, lastMx: 0, lastMy: 0, vx: 0, vy: 0 });
   const panMomentumRef = useRef({ vx: 0, vy: 0, raf: null });
   const particlesRef = useRef([]); // [{x,y,vx,vy,r,alpha,color,life,maxLife}]
@@ -408,7 +410,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       const youX = cx + youPosRef.current.x;
       const youY = cy + youPosRef.current.y;
       const ydist = Math.sqrt((wx - youX) ** 2 + (wy - youY) ** 2);
-      if (ydist < 44 && !focusedCategory) return { id: 'center', isCenter: true };
+      if (ydist < 44 && !focusedCategoryRef.current) return { id: 'center', isCenter: true };
       for (const node of [...nodesRef.current].reverse()) {
         if (Math.sqrt((wx - node.x) ** 2 + (wy - node.y) ** 2) < node.radius + 6) return node;
       }
@@ -445,8 +447,9 @@ const internalPanRef = useRef({ x: 0, y: 0 });
     };
 
     const applyPanToCamera = () => {
-      if (focusedCategory) {
-        const catNode = nodesRef.current.find(n => n.isCategory && n.category === focusedCategory);
+      const fc = focusedCategoryRef.current;
+      if (fc) {
+        const catNode = nodesRef.current.find(n => n.isCategory && n.category === fc);
         if (catNode) {
           const s = camRef.current.scale;
           camRef.current.x = (width / 2 - catNode.x) * s + userPanRef.current.x;
@@ -541,8 +544,8 @@ const internalPanRef = useRef({ x: 0, y: 0 });
           userPanRef.current.y = dragState.startNy + dyPx;
           // Snap camera to the correct target (focusOffset + userPan when focused, else userPan)
           // so cursor tracks 1:1 with no spring lag.
-          if (focusedCategory) {
-            const catNode = nodesRef.current.find(n => n.isCategory && n.category === focusedCategory);
+          if (focusedCategoryRef.current) {
+            const catNode = nodesRef.current.find(n => n.isCategory && n.category === focusedCategoryRef.current);
             if (catNode) {
               const s = camRef.current.scale;
               camRef.current.x = (width / 2 - catNode.x) * s + userPanRef.current.x;
@@ -624,10 +627,27 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       }
     };
 
-    const onKeyDown = (e) => { if (e.key === 'Escape' || e.key === '-') onZoomOut?.(); };
+    let wheelLockUntil = 0;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape' || e.key === '-') {
+        stopMomentum();
+        markActivity();
+        wheelLockUntil = performance.now() + 500;
+        userPanRef.current.x = 0;
+        userPanRef.current.y = 0;
+        youPosRef.current.x = 0;
+        youPosRef.current.y = 0;
+        zoomRef.current = 1;
+        camRef.current.targetX = 0;
+        camRef.current.targetY = 0;
+        camRef.current.targetScale = 1;
+        onZoomOut?.();
+      }
+    };
     const onWheel = (e) => {
-      markActivity();
       e.preventDefault();
+      if (performance.now() < wheelLockUntil) return;
+      markActivity();
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
@@ -650,9 +670,10 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       camRef.current.targetY = newCamY;
       // Sync userPan so the draw loop's spring target equals current cam.
       // In focused mode: cam = (cx - catNode.x) * scale + userPan.
-      const exitingFocus = focusedCategory && newScale < 1.2;
-      if (focusedCategory && !exitingFocus) {
-        const catNode = nodesRef.current.find(n => n.isCategory && n.category === focusedCategory);
+      const fc = focusedCategoryRef.current;
+      const exitingFocus = fc && newScale < 1.2;
+      if (fc && !exitingFocus) {
+        const catNode = nodesRef.current.find(n => n.isCategory && n.category === fc);
         if (catNode) {
           userPanRef.current.x = newCamX - (cx - catNode.x) * newScale;
           userPanRef.current.y = newCamY - (cy - catNode.y) * newScale;
@@ -680,14 +701,14 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         youPosRef.current.x = 0;
         youPosRef.current.y = 0;
         zoomRef.current = 1;
-        if (focusedCategory) onZoomOut?.();
+        if (focusedCategoryRef.current) onZoomOut?.();
       }
 
       // Camera target. Treat as unfocused once zoom drops below the exit
       // threshold even if focusedCategory hasn't cleared yet — otherwise the
       // focused-mode formula misuses the just-set absolute pan and jumps.
-      if (focusedCategory && zoomRef.current >= 1.2) {
-        const catNode = nodesRef.current.find(n => n.isCategory && n.category === focusedCategory);
+      if (focusedCategoryRef.current && zoomRef.current >= 1.2) {
+        const catNode = nodesRef.current.find(n => n.isCategory && n.category === focusedCategoryRef.current);
         if (catNode) {
           const focusScale = zoomRef.current;
           camRef.current.targetX = (cx - catNode.x) * focusScale + userPanRef.current.x;
@@ -936,8 +957,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         const greetingOffset = 40;
         const lineHeight = 50;
         const baseY = youWorldY + 44 + greetingOffset;
-        ctx.fillText(`Hi ${userName}, talk to me about someone.`, youWorldX, baseY);
-        // ctx.fillText(`Lets start you?`, youWorldX, baseY + lineHeight);
+        ctx.fillText(`Talk to me, ${userName}`, youWorldX, baseY);
       }
 
       ctx.restore();
@@ -1013,7 +1033,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       window.removeEventListener('keydown', onKeyDown);
       canvas.removeEventListener('wheel', onWheel);
     };
-  }, [activeFilters, focusedCategory, activeTool, initNodes, onNodeClick, onNodeDoubleClick, onSnip, onZoomOut, onZoomIn, deletingIds]);
+  }, [activeFilters, activeTool, initNodes, onNodeClick, onNodeDoubleClick, onSnip, onZoomOut, onZoomIn, deletingIds]);
 
   return <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, zIndex: 1 }} />;
 }
