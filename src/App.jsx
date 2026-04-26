@@ -251,6 +251,7 @@ function App() {
     ? { transformOrigin: `${zoomTarget.x}px ${zoomTarget.y}px` }
     : undefined;
 
+  const isFirstExperience = people.length === 0;
   const showModal = !!selectedPerson || modalPhase === 'zooming-out';
   // Pull the latest copy from `people` so async scoring updates flow into an
   // already-open modal. Falls back to the snapshot for the zooming-out frame.
@@ -281,6 +282,7 @@ function App() {
             onSnip={handleSnip}
             deletingIds={deletingIds}
             people={displayPeople}
+            isFirstExperience={isFirstExperience}
           />
         </div>
       </div>
@@ -292,7 +294,7 @@ function App() {
         />
       )}
 
-      <header className="header">
+      {!isFirstExperience && <header className="header">
         <div className="logo">
           <svg className="logo-glyph" width="14" height="14" viewBox="0 0 14 14" fill="none">
             <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="0.9" opacity="0.85" />
@@ -353,9 +355,9 @@ function App() {
             </svg>
           </button>
         </div>
-      </header>
+      </header>}
 
-      <aside className={`sidebar ${viewMode === 'gallery' ? 'hidden' : ''}`}>
+      {!isFirstExperience && <aside className={`sidebar ${viewMode === 'gallery' ? 'hidden' : ''}`}>
         <div className="sidebar-label">EXPLORER</div>
         <div className="sidebar-search">
           <svg className="sidebar-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -486,9 +488,9 @@ function App() {
             );
           })}
         </div>
-      </aside>
+      </aside>}
 
-      {focusedCategory && (
+      {!isFirstExperience && focusedCategory && (
         <button className="back-to-galaxy-btn" onClick={() => setFocusedCategory(null)}>
           ← Back to Galaxy
         </button>
@@ -517,7 +519,7 @@ function App() {
         />
       )}
 
-      <div className="prompt-area">
+      {!isFirstExperience && <div className="prompt-area">
         {attachedNodes.length > 0 && (
           <div className="attached-nodes">
             {attachedNodes.map((node) => (
@@ -560,7 +562,7 @@ function App() {
           </button>
         </form>
         <div className="prompt-hint">Click a node to view details — double-click to attach as context</div>
-      </div>
+      </div>}
 
       <AddPersonModal
         open={addPersonOpen}

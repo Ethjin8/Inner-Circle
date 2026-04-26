@@ -218,7 +218,7 @@ function clampToBounds(node, width, height) {
   node.baseY = Math.max(PADDING_TOP + r, Math.min(height - PADDING_BOTTOM - r, node.baseY));
 }
 
-export default function ConstellationGraph({ activeFilters, focusedCategory, onZoomOut, people = DEMO_PEOPLE, onNodeClick, onNodeDoubleClick, activeTool, onSnip, deletingIds = [], panRef: externalPanRef }) {
+export default function ConstellationGraph({ activeFilters, focusedCategory, onZoomOut, people = DEMO_PEOPLE, onNodeClick, onNodeDoubleClick, activeTool, onSnip, deletingIds = [], panRef: externalPanRef, isFirstExperience = false }) {
   const filterSet = activeFilters instanceof Set ? activeFilters : new Set();
   const hasFilter = filterSet.size > 0;
   const isDimmed = (cat) => {
@@ -471,6 +471,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       dragState.moved = false;
       dragState.suppressClick = false;
       if (!node) {
+        if (isFirstExperience) { dragState.active = false; return; }
         dragState.nodeId = 'pan';
         dragState.startNx = userPanRef.current.x;
         dragState.startNy = userPanRef.current.y;
@@ -816,7 +817,13 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       }
 
       // YOU drawn in world space, last so it stays on top
-      ctx.beginPath(); ctx.arc(youWorldX, youWorldY, 44, 0, Math.PI * 2);
+      const bpm = 5;
+      const cycleFrames = (20 / bpm) * 60;
+      const phase = (timeRef.current % cycleFrames) / cycleFrames;
+      const d1 = (phase - 0.1) * 28; const b1 = Math.exp(-(d1 * d1)) * 0.18;
+      const d2 = (phase - 0.22) * 36; const b2 = Math.exp(-(d2 * d2)) * 0.10;
+      const youRadius = isFirstExperience ? 44 * (1 + b1 + b2) : 44;
+      ctx.beginPath(); ctx.arc(youWorldX, youWorldY, youRadius, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(232,232,240,1)'; ctx.fill();
       ctx.strokeStyle = 'rgba(232,232,240,0.95)'; ctx.lineWidth = 2; ctx.stroke();
       ctx.fillStyle = 'rgba(11,15,25,0.95)';
