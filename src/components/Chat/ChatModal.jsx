@@ -57,7 +57,7 @@ export default function ChatModal({
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, streaming]);
 
-  const send = useCallback(async (text) => {
+  const send = useCallback(async (text, attachedIdsOverride) => {
     const trimmed = text.trim();
     if (!trimmed || streaming) return;
     setErrorMsg(null);
@@ -82,8 +82,9 @@ export default function ChatModal({
     }));
 
     let buffered = '';
+    const idsForRequest = attachedIdsOverride ?? attachedNodeIds;
     await streamChat(
-      { messages: wireMessages, people, attachedNodeIds, signal: controller.signal },
+      { messages: wireMessages, people, attachedNodeIds: idsForRequest, signal: controller.signal },
       (ev) => {
         // Drop late events from an aborted stream.
         if (controller.signal.aborted) return;
@@ -145,7 +146,7 @@ export default function ChatModal({
     if (!open || autoSentRef.current) return;
     if (!initialThread && initialPrompt && initialPrompt.trim()) {
       autoSentRef.current = true;
-      send(initialPrompt);
+      send(initialPrompt, initialAttachedNodeIds);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
