@@ -18,6 +18,41 @@ import { useChatHistory } from './hooks/useChatHistory';
 import './App.css';
 import './components/Chat/Chat.css';
 
+function ScrollFadePicker({ children, activeIndex }) {
+  const ref = useRef(null);
+  const [edges, setEdges] = useState({ top: false, bottom: false });
+  const update = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const top = el.scrollTop > 1;
+    const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+    setEdges((p) => (p.top === top && p.bottom === bottom) ? p : { top, bottom });
+  }, []);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    update();
+    el.addEventListener('scroll', update);
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => { el.removeEventListener('scroll', update); ro.disconnect(); };
+  }, [update, children]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || activeIndex == null) return;
+    const item = el.children[activeIndex];
+    if (item && item.scrollIntoView) item.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex]);
+  const cls = `mention-picker${edges.top ? ' fade-top' : ''}${edges.bottom ? ' fade-bottom' : ''}`;
+  return (
+    <div className={cls}>
+      <div className="mention-picker-list" role="listbox" ref={ref}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 const FILTERS = [
   { key: null, label: 'All' },
   { key: 'family', label: 'Family', color: '#e8b06b' },
@@ -30,13 +65,14 @@ const FILTERS = [
 ];
 
 const CATEGORY_COLORS = {
-  family: '#e8b06b',
-  friend: '#ffce5c',
-  classmate: '#b9d0ff',
-  coworker: '#9be6c4',
-  professional: '#ff9c5a',
-  romantic: '#ffc8d6',
-  mentor: '#7df9ff',
+  family: '#f5a25b',
+  friend: '#f3d24d',
+  coworker: '#5fd496',
+  classmate: '#7ea8ff',
+  mentor: '#a884ff',
+  romantic: '#f9a3c0',
+  professional: '#f06d6d',
+  other: '#bdc1c6',
 };
 
 function App() {
@@ -61,6 +97,7 @@ function App() {
   const [promptText, setPromptText] = useState('');
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [addPersonOpen, setAddPersonOpen] = useState(false);
+  const [addPersonInitialMode, setAddPersonInitialMode] = useState('voice');
   const [zoomTarget, setZoomTarget] = useState(null);
   const [focusedCategory, setFocusedCategory] = useState(null);
   const [expandedCats, setExpandedCats] = useState(new Set());
@@ -75,6 +112,10 @@ function App() {
   const [showDemo, setShowDemo] = useState(false);
   const [demoPeople, setDemoPeople] = useState(DEMO_PEOPLE.map(p => ({ ...p, isDemo: true })));
   const promptInputRef = useRef(null);
+  const [mentionRange, setMentionRange] = useState(null); // { start, query } | null
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [slashRange, setSlashRange] = useState(null); // { query } | null
+  const [slashIndex, setSlashIndex] = useState(0);
   const [autoExpanded, setAutoExpanded] = useState(false);
   const [interactionTick, setInteractionTick] = useState(0);
   const [autoCycles, setAutoCycles] = useState(0);
@@ -82,7 +123,7 @@ function App() {
     setInteractionTick((t) => t + 1);
     setAutoExpanded(false);
   }, []);
-  const isPromptExpanded = promptText.length > 0 || attachedNodes.length > 0 || autoExpanded;
+  const isPromptExpanded = true;
 
   const [chatModalOpen, setChatModalOpen] = useState(false);
   const [chatInitialThread, setChatInitialThread] = useState(null);
@@ -100,6 +141,43 @@ function App() {
   const displayPeople = useMemo(() => (
     showDemo ? [...people, ...demoPeople] : people
   ), [people, demoPeople, showDemo]);
+
+  const NEW_MODE_OPTIONS = useMemo(() => ([
+    { id: '__new_audio', name: 'audio', mode: 'voice', desc: 'Voice interview' },
+    { id: '__new_text', name: 'text', mode: 'form', desc: 'Fill out the form' },
+  ]), []);
+
+  const mentionMatches = useMemo(() => {
+    if (!mentionRange) return [];
+    const q = mentionRange.query.toLowerCase();
+    if (mentionRange.kind === 'newMode') {
+      return NEW_MODE_OPTIONS.filter((o) => !q || o.name.startsWith(q));
+    }
+    const filtered = displayPeople.filter((p) => {
+      if (!p?.name) return false;
+      if (!q) return true;
+      return p.name.toLowerCase().includes(q);
+    });
+    const score = (p) => p.relationship?.strength ?? p.scoring?.aggregate ?? 0;
+    const sorted = filtered
+      .sort((a, b) => {
+        const an = a.name.toLowerCase();
+        const bn = b.name.toLowerCase();
+        if (q) {
+          const aStarts = an.startsWith(q) ? 0 : 1;
+          const bStarts = bn.startsWith(q) ? 0 : 1;
+          if (aStarts !== bStarts) return aStarts - bStarts;
+        }
+        return score(b) - score(a);
+      });
+    if (mentionRange.kind === 'deletePerson') {
+      const everyoneMatches = !q || 'everyone'.startsWith(q);
+      if (everyoneMatches) {
+        return [{ id: '__everyone__', name: 'everyone', isEveryone: true }, ...sorted];
+      }
+    }
+    return sorted;
+  }, [mentionRange, displayPeople, NEW_MODE_OPTIONS]);
 
   const [viewMode, setViewMode] = useState('graph'); // 'graph' | 'gallery'
   const [modalPhase, setModalPhase] = useState(null); // null | 'zooming-in' | 'open' | 'zooming-out'
@@ -169,6 +247,10 @@ function App() {
       if (prev.some((n) => n.id === node.id)) return prev;
       return [...prev, node];
     });
+    setPromptText((prev) => {
+      const needsSpace = prev.length > 0 && !/\s$/.test(prev);
+      return `${prev}${needsSpace ? ' ' : ''}@${node.name} `;
+    });
   }, [bumpInteraction]);
 
   const toggleBranchHighlight = useCallback((catKey) => {
@@ -228,6 +310,21 @@ function App() {
     setDeletedHistory(prev => prev.slice(0, -1));
   }, [deletedHistory, restorePeople]);
 
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.key !== 'z' && e.key !== 'Z') return;
+      if (e.shiftKey) return;
+      const t = e.target;
+      const tag = t?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || t?.isContentEditable) return;
+      e.preventDefault();
+      handleUndo();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleUndo]);
+
   const handlePhotosChange = useCallback((personId, newPhotos) => {
     setPhotosForPerson(personId, newPhotos);
   }, [setPhotosForPerson]);
@@ -282,16 +379,199 @@ function App() {
     scoreAndPatch(updatedPerson);
   }, [updatePerson, scoreAndPatch]);
 
+  const SLASH_COMMANDS = useMemo(() => ([
+    { name: 'new', desc: 'Add a new connection' },
+    { name: 'delete', desc: 'Remove @mentioned people' },
+  ]), []);
+
+  const slashMatches = useMemo(() => {
+    if (!slashRange) return [];
+    const q = slashRange.query.toLowerCase();
+    return SLASH_COMMANDS.filter((c) => !q || c.name.startsWith(q));
+  }, [slashRange, SLASH_COMMANDS]);
+
+  const detectSlash = (value, caret) => {
+    if (caret !== value.length) return null;
+    const m = /^\/([a-z]*)$/i.exec(value);
+    if (!m) return null;
+    return { query: m[1] };
+  };
+
+  const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  const highlightTokens = useMemo(() => {
+    if (!promptText) return null;
+    if (!attachedNodes.length) return promptText;
+    const sorted = [...attachedNodes].sort((a, b) => (b.name?.length || 0) - (a.name?.length || 0));
+    const pattern = sorted.map((n) => escapeRegex(n.name)).join('|');
+    if (!pattern) return promptText;
+    const re = new RegExp(`(?:^|\\s)@(${pattern})(?=\\s|$)`, 'g');
+    const parts = [];
+    let last = 0;
+    let m;
+    while ((m = re.exec(promptText)) !== null) {
+      const at = m.index + (m[0].length - m[1].length - 1);
+      if (at > last) parts.push(promptText.slice(last, at));
+      const node = sorted.find((n) => n.name === m[1]);
+      const color = CATEGORY_COLORS[node?.relationship?.type] || '#cdc9c0';
+      parts.push(<span key={parts.length} style={{ color }}>{`@${m[1]}`}</span>);
+      last = at + 1 + m[1].length;
+    }
+    if (last < promptText.length) parts.push(promptText.slice(last));
+    return parts;
+  }, [promptText, attachedNodes]);
+
+  const highlightRef = useRef(null);
+  const syncHighlightScroll = useCallback(() => {
+    if (highlightRef.current && promptInputRef.current) {
+      highlightRef.current.scrollLeft = promptInputRef.current.scrollLeft;
+    }
+  }, []);
+  useEffect(() => { syncHighlightScroll(); }, [promptText, syncHighlightScroll]);
+
+  useEffect(() => {
+    setAttachedNodes((prev) => {
+      if (prev.length === 0) return prev;
+      const next = prev.filter((n) => {
+        if (!n?.name) return true;
+        const re = new RegExp(`(?:^|\\s)@${escapeRegex(n.name)}(?=\\s|$)`);
+        return re.test(promptText);
+      });
+      return next.length === prev.length ? prev : next;
+    });
+  }, [promptText]);
+
+  const detectMention = (value, caret) => {
+    const before = value.slice(0, caret);
+    const m = /(?:^|\s)@([^\s@]*)$/.exec(before);
+    if (!m) return null;
+    const start = caret - m[1].length - 1;
+    const prefix = value.slice(0, start);
+    const kind = /^\/new\s+$/i.test(prefix)
+      ? 'newMode'
+      : (/^\/delete\s+$/i.test(prefix) ? 'deletePerson' : 'person');
+    return { start, query: m[1], kind };
+  };
+
+  const handlePromptChange = useCallback((e) => {
+    const value = e.target.value;
+    const caret = e.target.selectionStart ?? value.length;
+    setPromptText(value);
+    setMentionRange(detectMention(value, caret));
+    setMentionIndex(0);
+    setSlashRange(detectSlash(value, caret));
+    setSlashIndex(0);
+  }, []);
+
+  const insertMention = useCallback((item) => {
+    if (!mentionRange) return;
+    if (mentionRange.kind === 'newMode') {
+      setAddPersonInitialMode(item.mode);
+      setAddPersonOpen(true);
+      setPromptText('');
+      setAttachedNodes([]);
+      setMentionRange(null);
+      setMentionIndex(0);
+      return;
+    }
+    setPromptText((prev) => {
+      const before = prev.slice(0, mentionRange.start);
+      const after = prev.slice(mentionRange.start + 1 + mentionRange.query.length);
+      const inserted = `@${item.name} `;
+      const next = before + inserted + after;
+      const caret = before.length + inserted.length;
+      requestAnimationFrame(() => {
+        const el = promptInputRef.current;
+        if (el) { el.focus(); el.setSelectionRange(caret, caret); }
+      });
+      return next;
+    });
+    if (!item.isEveryone) {
+      setAttachedNodes((prev) => prev.some((n) => n.id === item.id) ? prev : [...prev, item]);
+    }
+    setMentionRange(null);
+    setMentionIndex(0);
+  }, [mentionRange]);
+
+  const insertSlash = useCallback((cmd) => {
+    const opensNewMode = cmd.name === 'new';
+    const opensMention = cmd.name === 'delete';
+    const next = (opensMention || opensNewMode) ? `/${cmd.name} @` : `/${cmd.name} `;
+    setPromptText(next);
+    setSlashRange(null);
+    setSlashIndex(0);
+    if (opensNewMode) {
+      setMentionRange({ start: next.length - 1, query: '', kind: 'newMode' });
+      setMentionIndex(0);
+    } else if (opensMention) {
+      setMentionRange({ start: next.length - 1, query: '', kind: 'person' });
+      setMentionIndex(0);
+    }
+    requestAnimationFrame(() => {
+      const el = promptInputRef.current;
+      if (el) { el.focus(); el.setSelectionRange(next.length, next.length); }
+    });
+  }, []);
+
+  const handlePromptKeyDown = useCallback((e) => {
+    if (slashRange && slashMatches.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSlashIndex((i) => (i + 1) % slashMatches.length); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setSlashIndex((i) => (i - 1 + slashMatches.length) % slashMatches.length); return; }
+      if (e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); insertSlash(slashMatches[slashIndex]); return; }
+      if (e.key === 'Escape') { e.preventDefault(); setSlashRange(null); return; }
+    }
+    if (!mentionRange || mentionMatches.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setMentionIndex((i) => (i + 1) % mentionMatches.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setMentionIndex((i) => (i - 1 + mentionMatches.length) % mentionMatches.length);
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      insertMention(mentionMatches[mentionIndex]);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setMentionRange(null);
+    }
+  }, [mentionRange, mentionMatches, mentionIndex, insertMention, slashRange, slashMatches, slashIndex, insertSlash]);
+
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
-    if (!promptText.trim() && attachedNodes.length === 0) return;
+    const trimmed = promptText.trim();
+    if (trimmed.startsWith('/')) {
+      const [rawCmd] = trimmed.slice(1).split(/\s+/);
+      const cmd = rawCmd.toLowerCase();
+      if (cmd === 'new') {
+        const sub = (trimmed.slice(1).split(/\s+/)[1] || '').replace(/^@/, '').toLowerCase();
+        const mode = sub === 'text' ? 'form' : 'voice';
+        setAddPersonInitialMode(mode);
+        setAddPersonOpen(true);
+        setPromptText('');
+        setAttachedNodes([]);
+        setSlashRange(null);
+        return;
+      }
+      if (cmd === 'delete') {
+        const isEveryone = /@everyone\b/i.test(trimmed);
+        const targets = isEveryone
+          ? displayPeople
+          : attachedNodes.filter((n) => !n.isCategory);
+        targets.forEach((n) => handleSnip(n));
+        setPromptText('');
+        setAttachedNodes([]);
+        setSlashRange(null);
+        return;
+      }
+    }
+    if (!trimmed && attachedNodes.length === 0) return;
     setChatInitialThread(null);
     setChatInitialPrompt(promptText);
     setChatInitialAttachedIds(attachedNodes.map((n) => n.id));
     setChatModalOpen(true);
     setPromptText('');
     setAttachedNodes([]);
-  }, [promptText, attachedNodes]);
+  }, [promptText, attachedNodes, handleSnip, displayPeople]);
 
   const handleOpenThread = useCallback((thread) => {
     setChatInitialThread(thread);
@@ -332,7 +612,18 @@ function App() {
   }, [autoExpanded, promptText, attachedNodes]);
 
   useEffect(() => {
-    if (isFirstExperience || isPromptExpanded) return;
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault();
+        setAddPersonOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  useEffect(() => {
+    if (isFirstExperience) return;
     const onKeyDown = (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key.length !== 1) return;
@@ -340,12 +631,12 @@ function App() {
       const tag = (t?.tagName || '').toLowerCase();
       if (tag === 'input' || tag === 'textarea' || t?.isContentEditable) return;
       e.preventDefault();
-      setPromptText(e.key);
+      setPromptText((prev) => prev + e.key);
       requestAnimationFrame(() => promptInputRef.current?.focus());
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isFirstExperience, isPromptExpanded]);
+  }, [isFirstExperience]);
   const showModal = !!selectedPerson || modalPhase === 'zooming-out';
   // Pull the latest copy from `people` so async scoring updates flow into an
   // already-open modal. Falls back to the snapshot for the zooming-out frame.
@@ -679,11 +970,11 @@ function App() {
               <span
                 key={node.id}
                 className="attached-chip"
-                style={{ borderColor: CATEGORY_COLORS[node.category] || '#cdc9c0' }}
+                style={{ borderColor: CATEGORY_COLORS[node.relationship?.type] || '#cdc9c0' }}
               >
                 <span
                   className="attached-chip-dot"
-                  style={{ background: CATEGORY_COLORS[node.category] || '#cdc9c0' }}
+                  style={{ background: CATEGORY_COLORS[node.relationship?.type] || '#cdc9c0' }}
                 />
                 {node.name}
                 <button
@@ -701,23 +992,83 @@ function App() {
             className="prompt-add-button"
             onClick={() => setAddPersonOpen(true)}
             aria-label="Add person"
-            tabIndex={isPromptExpanded ? -1 : 0}
+            title="Add person"
           >
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
               <path d="M10 4v12M4 10h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
-            <span>Add Person</span>
           </button>
           <form className="prompt-form" onSubmit={handleSubmit}>
-            <input
-              ref={promptInputRef}
-              className="prompt-input"
-              type="text"
-              placeholder="Ask about your connections..."
-              value={promptText}
-              onChange={(e) => setPromptText(e.target.value)}
-              tabIndex={isPromptExpanded ? 0 : -1}
-            />
+            {slashRange && slashMatches.length > 0 && (
+              <ScrollFadePicker activeIndex={slashIndex}>
+                {slashMatches.map((c, i) => (
+                  <button
+                    type="button"
+                    key={c.name}
+                    role="option"
+                    aria-selected={i === slashIndex}
+                    className={`mention-item ${i === slashIndex ? 'is-active' : ''}`}
+                    onMouseDown={(e) => { e.preventDefault(); insertSlash(c); }}
+                    onMouseEnter={() => setSlashIndex(i)}
+                  >
+                    <span className="mention-name">/{c.name}</span>
+                    <span className="mention-meta">{c.desc}</span>
+                  </button>
+                ))}
+              </ScrollFadePicker>
+            )}
+            {mentionRange && mentionMatches.length > 0 && (
+              <ScrollFadePicker activeIndex={mentionIndex}>
+                {mentionMatches.map((p, i) => {
+                  const isNewMode = mentionRange?.kind === 'newMode';
+                  return (
+                  <button
+                    type="button"
+                    key={p.id}
+                    role="option"
+                    aria-selected={i === mentionIndex}
+                    className={`mention-item ${i === mentionIndex ? 'is-active' : ''}`}
+                    onMouseDown={(e) => { e.preventDefault(); insertMention(p); }}
+                    onMouseEnter={() => setMentionIndex(i)}
+                  >
+                    <span
+                      className="mention-dot"
+                      style={{ background: isNewMode ? '#cdc9c0' : (CATEGORY_COLORS[p.relationship?.type] || '#cdc9c0') }}
+                    />
+                    <span className="mention-name">{p.name}</span>
+                    {isNewMode ? (
+                      <span className="mention-meta">{p.desc}</span>
+                    ) : p.relationship?.type && (
+                      <span className="mention-meta">{p.relationship.type}</span>
+                    )}
+                  </button>
+                  );
+                })}
+              </ScrollFadePicker>
+            )}
+            <div className="prompt-input-wrap">
+              <div className="prompt-highlight" ref={highlightRef} aria-hidden="true">
+                {highlightTokens}
+              </div>
+              <input
+                ref={promptInputRef}
+                className="prompt-input"
+                type="text"
+                placeholder="Ask about your connections..."
+                value={promptText}
+                onChange={handlePromptChange}
+                onKeyDown={handlePromptKeyDown}
+                onScroll={syncHighlightScroll}
+                onSelect={(e) => {
+                  const v = e.target.value;
+                  const caret = e.target.selectionStart ?? v.length;
+                  setMentionRange(detectMention(v, caret));
+                  syncHighlightScroll();
+                }}
+                onBlur={() => setTimeout(() => { setMentionRange(null); setSlashRange(null); }, 120)}
+                tabIndex={isPromptExpanded ? 0 : -1}
+              />
+            </div>
             <button
               className="prompt-submit"
               type="submit"
@@ -757,6 +1108,7 @@ function App() {
       )}
       <AddPersonModal
         open={addPersonOpen}
+        initialMode={addPersonInitialMode}
         onClose={() => setAddPersonOpen(false)}
         onAdd={(person) => {
           // Optimistic local insert (renderer treats unscored nodes as

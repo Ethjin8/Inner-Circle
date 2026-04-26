@@ -177,8 +177,9 @@ function ChipMultiGroup({ label, options, values, onChange }) {
 }
 
 // ─── main component ───────────────────────────────────────────────────────────
-export default function AddPersonModal({ open, onClose, onAdd }) {
-  const [mode, setMode] = useState('voice');
+export default function AddPersonModal({ open, onClose, onAdd, initialMode = 'voice' }) {
+  const [mode, setMode] = useState(initialMode);
+  useEffect(() => { if (open) setMode(initialMode); }, [open, initialMode]);
   const [step, setStep] = useState(0);
   const [form, setForm] = useState(BLANK_PERSON());
 
