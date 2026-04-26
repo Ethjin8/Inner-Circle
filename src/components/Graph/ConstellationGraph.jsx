@@ -253,6 +253,8 @@ const internalPanRef = useRef({ x: 0, y: 0 });
   const particlesRef = useRef([]); // [{x,y,vx,vy,r,alpha,color,life,maxLife}]
   const prevDeletingRef = useRef([]); // track when ids newly enter deleting
   const youHoverTRef = useRef(0); // 0..1 fade between YOU and +
+  const lastActivityRef = useRef(performance.now());
+  const recenteredRef = useRef(false);
 
   const initNodes = useCallback((width, height) => {
     const cx = width / 2;
@@ -470,7 +472,13 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       m.raf = requestAnimationFrame(stepMomentum);
     };
 
+    const markActivity = () => {
+      lastActivityRef.current = performance.now();
+      recenteredRef.current = false;
+    };
+
     const onMouseDown = (e) => {
+      markActivity();
       if (activeTool === 'snip') return;
       stopMomentum();
       const rect = canvas.getBoundingClientRect();
@@ -513,6 +521,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
     };
 
     const onMouseMove = (e) => {
+      markActivity();
       const rect = canvas.getBoundingClientRect();
       mouseRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
 
@@ -615,6 +624,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
 
     const onKeyDown = (e) => { if (e.key === 'Escape' || e.key === '-') onZoomOut?.(); };
     const onWheel = (e) => {
+      markActivity();
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;
@@ -658,8 +668,23 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       const { cx, cy } = getCenter();
       ctx.clearRect(0, 0, width, height);
 
-      // Camera target
-      if (focusedCategory) {
+      // Auto-recenter after 30s of inactivity (skip while dragging or in first-experience).
+      if (!recenteredRef.current && !dragStateRef.current.active && !isFirstExperience &&
+          performance.now() - lastActivityRef.current > 30000) {
+        recenteredRef.current = true;
+        stopMomentum();
+        userPanRef.current.x = 0;
+        userPanRef.current.y = 0;
+        youPosRef.current.x = 0;
+        youPosRef.current.y = 0;
+        zoomRef.current = 1;
+        if (focusedCategory) onZoomOut?.();
+      }
+
+      // Camera target. Treat as unfocused once zoom drops below the exit
+      // threshold even if focusedCategory hasn't cleared yet — otherwise the
+      // focused-mode formula misuses the just-set absolute pan and jumps.
+      if (focusedCategory && zoomRef.current >= 1.2) {
         const catNode = nodesRef.current.find(n => n.isCategory && n.category === focusedCategory);
         if (catNode) {
           const focusScale = zoomRef.current;
