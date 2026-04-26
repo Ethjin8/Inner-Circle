@@ -1,6 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { Camera, X } from 'lucide-react';
 import './PersonModal.css';
 import CloudinaryUpload from '../CloudinaryUpload/CloudinaryUpload';
+
+const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+const PROFILE_PIC_WIDGET_STYLES = {
+  palette: {
+    window: '#0e0e0e', windowBorder: 'rgba(255,255,255,0.10)',
+    tabIcon: '#e8e8f0', inactiveTabIcon: '#55556a', menuIcons: '#8a8a9a',
+    textLight: '#e8e8f0', textDark: '#0e0e0e',
+    link: '#7df9ff', action: '#7df9ff', inProgress: '#7df9ff',
+    complete: '#5fd496', error: '#f06d6d', sourceBg: '#0e0e0e',
+  },
+  fonts: {
+    default: null,
+    "'Geist', sans-serif": {
+      url: 'https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap',
+      active: true,
+    },
+  },
+};
 
 const CATEGORY_COLORS = {
   family: '#e8b06b',
@@ -154,6 +174,52 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
     return () => window.removeEventListener('keydown', onKey);
   }, [person, onClose]);
 
+  // Profile pic upload — Cloudinary widget, single image
+  const profileWidgetRef = useRef(null);
+  const personRef = useRef(person);
+  useEffect(() => { personRef.current = person; }, [person]);
+  const onUpdatePersonRef = useRef(onUpdatePerson);
+  useEffect(() => { onUpdatePersonRef.current = onUpdatePerson; }, [onUpdatePerson]);
+
+  const openProfilePicker = useCallback(() => {
+    if (!CLOUD_NAME || !window.cloudinary) return;
+    if (!profileWidgetRef.current) {
+      profileWidgetRef.current = window.cloudinary.createUploadWidget(
+        {
+          cloudName: CLOUD_NAME,
+          uploadPreset: UPLOAD_PRESET,
+          multiple: false,
+          maxFiles: 1,
+          sources: ['local', 'camera', 'url'],
+          showAdvancedOptions: false,
+          cropping: false,
+          defaultSource: 'local',
+          showPoweredBy: false,
+          styles: PROFILE_PIC_WIDGET_STYLES,
+        },
+        (error, result) => {
+          if (!error && result?.event === 'success') {
+            const { public_id, secure_url } = result.info;
+            const current = personRef.current;
+            onUpdatePersonRef.current?.({
+              ...current,
+              profilePic: { public_id, secure_url },
+            });
+          }
+        }
+      );
+    }
+    profileWidgetRef.current.open();
+  }, []);
+
+  const removeProfilePic = useCallback((e) => {
+    e?.stopPropagation();
+    const current = personRef.current;
+    if (!current) return;
+    const { profilePic, ...rest } = current;
+    onUpdatePersonRef.current?.(rest);
+  }, []);
+
   if (!person) return null;
 
   const type = person.relationship?.type ?? 'other';
@@ -288,12 +354,45 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
                   transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
                 />
               </svg>
-              <div className="pm-avatar">
-                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="8" r="3.6" />
-                  <path d="M4.5 20c0-3.9 3.4-6.8 7.5-6.8s7.5 2.9 7.5 6.8" />
-                </svg>
-              </div>
+              <button
+                type="button"
+                className="pm-avatar"
+                onClick={openProfilePicker}
+                aria-label={person.profilePic ? 'Change profile picture' : 'Add profile picture'}
+              >
+                {person.profilePic?.secure_url ? (
+                  <img
+                    src={person.profilePic.secure_url}
+                    alt={`${person.name} profile`}
+                    className="pm-avatar-img"
+                  />
+                ) : (
+                  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="8" r="3.6" />
+                    <path d="M4.5 20c0-3.9 3.4-6.8 7.5-6.8s7.5 2.9 7.5 6.8" />
+                  </svg>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className="pm-avatar-edit"
+                onClick={openProfilePicker}
+                aria-label={person.profilePic ? 'Change profile picture' : 'Upload profile picture'}
+              >
+                <Camera size={12} strokeWidth={2} aria-hidden="true" />
+              </button>
+
+              {person.profilePic?.secure_url && (
+                <button
+                  type="button"
+                  className="pm-avatar-remove"
+                  onClick={removeProfilePic}
+                  aria-label="Remove profile picture"
+                >
+                  <X size={11} strokeWidth={2.5} aria-hidden="true" />
+                </button>
+              )}
             </div>
 
             <div className="pm-name">{person.name}</div>
