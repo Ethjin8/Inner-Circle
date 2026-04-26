@@ -9,6 +9,9 @@ import { useAuth } from './contexts/AuthContext';
 import { usePeople } from './hooks/usePeople';
 import { usePhotos } from './hooks/usePhotos';
 import { scorePerson } from './services/scoring';
+import ChatModal from './components/Chat/ChatModal';
+import ChatHistory from './components/Chat/ChatHistory';
+import { useChatHistory } from './hooks/useChatHistory';
 import './App.css';
 import './components/Chat/Chat.css';
 
@@ -52,6 +55,11 @@ function App() {
   const [deletedHistory, setDeletedHistory] = useState([]); // undo stack: [{type:'person'|'category', ids:[]}]
   const [searchQuery, setSearchQuery] = useState('');
   const [showDemo, setShowDemo] = useState(false); // testing: show demo people without persisting
+  const [chatModalOpen, setChatModalOpen] = useState(false);
+  const [chatInitialThread, setChatInitialThread] = useState(null);
+  const [chatInitialPrompt, setChatInitialPrompt] = useState('');
+  const [chatInitialAttachedIds, setChatInitialAttachedIds] = useState([]);
+  const { threads: chatThreads, addThread: addChatThread, deleteThread: deleteChatThread } = useChatHistory();
 
   const displayPeople = useMemo(() => (
     showDemo ? [...people, ...DEMO_PEOPLE.map(p => ({ ...p, isDemo: true }))] : people
@@ -227,9 +235,20 @@ function App() {
   const handleSubmit = useCallback((e) => {
     e.preventDefault();
     if (!promptText.trim() && attachedNodes.length === 0) return;
+    setChatInitialThread(null);
+    setChatInitialPrompt(promptText);
+    setChatInitialAttachedIds(attachedNodes.map((n) => n.id));
+    setChatModalOpen(true);
     setPromptText('');
     setAttachedNodes([]);
   }, [promptText, attachedNodes]);
+
+  const handleOpenThread = useCallback((thread) => {
+    setChatInitialThread(thread);
+    setChatInitialPrompt('');
+    setChatInitialAttachedIds([]);
+    setChatModalOpen(true);
+  }, []);
 
   const stageStyle = zoomTarget
     ? { transformOrigin: `${zoomTarget.x}px ${zoomTarget.y}px` }
@@ -541,6 +560,20 @@ function App() {
         <div className="prompt-hint">Click a node to view details — double-click to attach as context</div>
       </div>
 
+      <ChatHistory
+        threads={chatThreads}
+        onOpenThread={handleOpenThread}
+        onDeleteThread={deleteChatThread}
+      />
+      <ChatModal
+        open={chatModalOpen}
+        onClose={() => setChatModalOpen(false)}
+        people={displayPeople}
+        initialThread={chatInitialThread}
+        initialPrompt={chatInitialPrompt}
+        initialAttachedNodeIds={chatInitialAttachedIds}
+        addThread={addChatThread}
+      />
       <AddPersonModal
         open={addPersonOpen}
         onClose={() => setAddPersonOpen(false)}
