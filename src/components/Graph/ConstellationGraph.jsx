@@ -1,5 +1,9 @@
 import { useRef, useEffect, useCallback } from 'react';
 
+// Pan momentum after release. Higher = longer glide. Range ~0.85–0.97.
+const PAN_INERTIA_DECAY = 0.92;
+const PAN_INERTIA_MIN_VELOCITY = 0.1;
+
 const CATEGORIES = {
   family: { color: '#e8b06b' },
   romantic: { color: '#ffc8d6' },
@@ -225,6 +229,7 @@ export default function ConstellationGraph({ activeFilters, focusedCategory, onZ
   const nodesRef = useRef([]);
   const animRef = useRef(null);
   const hoveredRef = useRef(null);
+  const hoverStartRef = useRef(0);
   const hoveredEdgeRef = useRef(null);
   const clickTimerRef = useRef(null);
   const timeRef = useRef(0);
@@ -233,7 +238,8 @@ const internalPanRef = useRef({ x: 0, y: 0 });
   const userPanRef = externalPanRef ?? internalPanRef;
   const youPosRef = useRef({ x: 0, y: 0 });
   const camRef = useRef({ x: 0, y: 0, scale: 1, targetX: 0, targetY: 0, targetScale: 1 });
-  const dragStateRef = useRef({ active: false, nodeId: null, startMx: 0, startMy: 0, startNx: 0, startNy: 0, moved: false, suppressClick: false });
+  const dragStateRef = useRef({ active: false, nodeId: null, startMx: 0, startMy: 0, startNx: 0, startNy: 0, moved: false, suppressClick: false, lastMx: 0, lastMy: 0, vx: 0, vy: 0 });
+  const panMomentumRef = useRef({ vx: 0, vy: 0, raf: null });
   const particlesRef = useRef([]); // [{x,y,vx,vy,r,alpha,color,life,maxLife}]
   const prevDeletingRef = useRef([]); // track when ids newly enter deleting
 
@@ -413,13 +419,55 @@ const internalPanRef = useRef({ x: 0, y: 0 });
 
     const dragState = dragStateRef.current;
 
+    const stopMomentum = () => {
+      if (panMomentumRef.current.raf) {
+        cancelAnimationFrame(panMomentumRef.current.raf);
+        panMomentumRef.current.raf = null;
+      }
+      panMomentumRef.current.vx = 0;
+      panMomentumRef.current.vy = 0;
+    };
+
+    const applyPanToCamera = () => {
+      if (focusedCategory) {
+        const catNode = nodesRef.current.find(n => n.isCategory && n.category === focusedCategory);
+        if (catNode) {
+          const s = camRef.current.scale;
+          camRef.current.x = (width / 2 - catNode.x) * s + userPanRef.current.x;
+          camRef.current.y = (height / 2 - Math.min(width, height) * 0.05 - catNode.y) * s + userPanRef.current.y;
+        }
+      } else {
+        camRef.current.x = userPanRef.current.x;
+        camRef.current.y = userPanRef.current.y;
+      }
+    };
+
+    const stepMomentum = () => {
+      const m = panMomentumRef.current;
+      userPanRef.current.x += m.vx;
+      userPanRef.current.y += m.vy;
+      applyPanToCamera();
+      m.vx *= PAN_INERTIA_DECAY;
+      m.vy *= PAN_INERTIA_DECAY;
+      if (Math.abs(m.vx) < PAN_INERTIA_MIN_VELOCITY && Math.abs(m.vy) < PAN_INERTIA_MIN_VELOCITY) {
+        m.raf = null;
+        return;
+      }
+      m.raf = requestAnimationFrame(stepMomentum);
+    };
+
     const onMouseDown = (e) => {
       if (activeTool === 'snip') return;
+      stopMomentum();
       const rect = canvas.getBoundingClientRect();
       const node = hitTest(e.clientX - rect.left, e.clientY - rect.top);
       dragState.active = true;
       dragState.startMx = e.clientX;
       dragState.startMy = e.clientY;
+      dragState.lastMx = e.clientX;
+      dragState.lastMy = e.clientY;
+      dragState.vx = 0;
+      dragState.vy = 0;
       dragState.moved = false;
       dragState.suppressClick = false;
       if (!node) {
@@ -439,6 +487,11 @@ const internalPanRef = useRef({ x: 0, y: 0 });
 
     const onMouseUp = () => {
       if (dragState.active && dragState.moved) dragState.suppressClick = true;
+      if (dragState.active && dragState.nodeId === 'pan' && (Math.abs(dragState.vx) > 0.5 || Math.abs(dragState.vy) > 0.5)) {
+        panMomentumRef.current.vx = dragState.vx;
+        panMomentumRef.current.vy = dragState.vy;
+        if (!panMomentumRef.current.raf) panMomentumRef.current.raf = requestAnimationFrame(stepMomentum);
+      }
       dragState.active = false;
       dragState.nodeId = null;
     };
@@ -455,6 +508,10 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         const dyW = dyPx / camRef.current.scale;
 
         if (dragState.nodeId === 'pan') {
+          dragState.vx = e.clientX - dragState.lastMx;
+          dragState.vy = e.clientY - dragState.lastMy;
+          dragState.lastMx = e.clientX;
+          dragState.lastMy = e.clientY;
           userPanRef.current.x = dragState.startNx + dxPx;
           userPanRef.current.y = dragState.startNy + dyPx;
           // Snap camera to the correct target (focusOffset + userPan when focused, else userPan)
@@ -503,11 +560,16 @@ const internalPanRef = useRef({ x: 0, y: 0 });
 
       if (activeTool === 'snip') {
         hoveredEdgeRef.current = hitTestEdge(mouseRef.current.x, mouseRef.current.y);
+        if (hoveredRef.current) hoverStartRef.current = 0;
         hoveredRef.current = null;
         canvas.style.cursor = 'crosshair';
       } else {
         hoveredEdgeRef.current = null;
         const found = hitTest(mouseRef.current.x, mouseRef.current.y);
+        const prev = hoveredRef.current;
+        if (found?.id !== prev?.id) {
+          hoverStartRef.current = found && !found.isCategory && !found.isCenter ? performance.now() : 0;
+        }
         hoveredRef.current = found;
         canvas.style.cursor = found ? (found.isCenter ? 'grab' : 'pointer') : 'grab';
       }
@@ -764,30 +826,43 @@ const internalPanRef = useRef({ x: 0, y: 0 });
 
       ctx.restore();
 
-      // Hover tooltip for person nodes
+      // Hover tooltip for person nodes — 170ms delay, then animate in
       const hov = hoveredRef.current;
-      if (hov && !hov.isCategory && !hov.isCenter) {
-        const { cx: tcx, cy: tcy } = getCenter();
-        const sx = (hov.x - tcx) * camRef.current.scale + tcx + camRef.current.x;
-        const sy = (hov.y - tcy) * camRef.current.scale + tcy + camRef.current.y;
-        const label = 'Shift+click to add to context';
-        ctx.font = "500 8px 'Inter',sans-serif";
-        const tw = ctx.measureText(label).width;
-        const ph = 8; const pv = 6;
-        const bw = tw + ph * 2; const bh = 12 + pv * 2;
-        const bx = sx - bw / 2;
-        const by = sy - hov.radius * camRef.current.scale - bh - 10;
-        ctx.beginPath();
-        ctx.roundRect(bx, by, bw, bh, 6);
-        ctx.fillStyle = 'rgba(11,15,25,0.82)';
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.fillStyle = 'rgba(200,200,210,0.9)';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(label, sx, by + bh / 2);
+      const HOVER_DELAY = 314;
+      const ANIM_DUR = 140;
+      if (hov && !hov.isCategory && !hov.isCenter && hoverStartRef.current) {
+        const elapsed = performance.now() - hoverStartRef.current;
+        if (elapsed >= HOVER_DELAY) {
+          const t = Math.min(1, (elapsed - HOVER_DELAY) / ANIM_DUR);
+          const ease = 1 - Math.pow(1 - t, 3);
+          const scale = 0.85 + 0.15 * ease;
+          const alpha = ease;
+          const { cx: tcx, cy: tcy } = getCenter();
+          const sx = (hov.x - tcx) * camRef.current.scale + tcx + camRef.current.x;
+          const sy = (hov.y - tcy) * camRef.current.scale + tcy + camRef.current.y;
+          const label = 'Shift+click to add to context';
+          ctx.font = "500 8px 'Inter',sans-serif";
+          const tw = ctx.measureText(label).width;
+          const ph = 8; const pv = 6;
+          const bw = tw + ph * 2; const bh = 12 + pv * 2;
+          const by = sy - hov.radius * camRef.current.scale - bh - 10;
+          const offsetY = (1 - ease) * 4;
+          ctx.save();
+          ctx.translate(sx, by + bh / 2 + offsetY);
+          ctx.scale(scale, scale);
+          ctx.beginPath();
+          ctx.roundRect(-bw / 2, -bh / 2, bw, bh, 6);
+          ctx.fillStyle = `rgba(11,15,25,${0.82 * alpha})`;
+          ctx.fill();
+          ctx.strokeStyle = `rgba(255,255,255,${0.15 * alpha})`;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.fillStyle = `rgba(200,200,210,${0.9 * alpha})`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(label, 0, 0);
+          ctx.restore();
+        }
       }
 
       // Render particles in screen space
@@ -812,6 +887,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
 
     return () => {
       cancelAnimationFrame(animRef.current);
+      if (panMomentumRef.current.raf) cancelAnimationFrame(panMomentumRef.current.raf);
       if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('mousedown', onMouseDown);
