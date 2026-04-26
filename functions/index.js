@@ -42,7 +42,7 @@ function formatRefresher(person) {
  * Scheduled function: Runs at 3:00 AM PDT
  */
 exports.dailyNudge = onSchedule({
-  schedule: "0 3 * * *",
+  schedule: "7 6 * * *",
   timeZone: "America/Los_Angeles"
 }, async (event) => {
   const now = new Date();
@@ -101,7 +101,7 @@ exports.dailyNudge = onSchedule({
         console.log(`Found ${nudges.length} nudges for ${user.email}. Sending email...`);
         
         const emailBody = nudges.map(n => 
-          `------------------------------------------------------------\n` +
+          `----------------------------------------------------\n` +
           `📢 ${n.message}\n` +
           `${n.refresher}\n`
         ).join('\n\n');
