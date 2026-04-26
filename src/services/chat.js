@@ -3,15 +3,17 @@
 // Event types: 'text-delta' {delta}, 'tool-use' {name}, 'tool-result' {name, output},
 // 'done' {}, 'error' {message}.
 
-export async function streamChat({ messages, people, attachedNodeIds }, onEvent) {
+export async function streamChat({ messages, people, attachedNodeIds, signal }, onEvent) {
   let res;
   try {
     res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages, people, attachedNodeIds }),
+      signal,
     });
   } catch (err) {
+    if (err?.name === 'AbortError') return; // caller aborted; silent
     onEvent({ type: 'error', message: `network: ${err.message}` });
     return;
   }
@@ -54,6 +56,7 @@ export async function streamChat({ messages, people, attachedNodeIds }, onEvent)
       }
     }
   } catch (err) {
+    if (err?.name === 'AbortError' || signal?.aborted) return; // caller aborted; silent
     onEvent({ type: 'error', message: `stream interrupted: ${err.message}` });
     return;
   }

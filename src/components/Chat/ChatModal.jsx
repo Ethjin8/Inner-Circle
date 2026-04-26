@@ -25,10 +25,15 @@ export default function ChatModal({
   const [errorMsg, setErrorMsg] = useState(null);
   const scrollerRef = useRef(null);
   const autoSentRef = useRef(false);
+  const abortRef = useRef(null);
 
   // Initialize / reset when modal opens.
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      abortRef.current?.abort();
+      abortRef.current = null;
+      return;
+    }
     autoSentRef.current = false;
     if (initialThread) {
       setThreadId(initialThread.id ?? null);
@@ -57,6 +62,11 @@ export default function ChatModal({
     if (!trimmed || streaming) return;
     setErrorMsg(null);
 
+    // Abort any prior in-flight stream (defensive — should already be done).
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     const userMsg = { role: 'user', text: trimmed, content: trimmed };
     const assistantMsg = { role: 'assistant', text: '', toolEvents: [], streaming: true, content: '' };
     const baseMessages = [...messages, userMsg];
@@ -73,8 +83,10 @@ export default function ChatModal({
 
     let buffered = '';
     await streamChat(
-      { messages: wireMessages, people, attachedNodeIds },
+      { messages: wireMessages, people, attachedNodeIds, signal: controller.signal },
       (ev) => {
+        // Drop late events from an aborted stream.
+        if (controller.signal.aborted) return;
         if (ev.type === 'text-delta') {
           buffered += ev.delta;
           setMessages((prev) => {
@@ -98,8 +110,7 @@ export default function ChatModal({
             const next = [...prev];
             const last = { ...next[next.length - 1] };
             const events = [...(last.toolEvents || [])];
-            const idx = events.findLastIndex?.((e) => e.name === ev.name && e.status === 'running')
-              ?? events.map((e) => e.name === ev.name && e.status === 'running').lastIndexOf(true);
+            const idx = events.findLastIndex((e) => e.name === ev.name && e.status === 'running');
             const summary = summarizeToolOutput(ev.output);
             if (idx >= 0) events[idx] = { name: ev.name, status: 'done', summary };
             last.toolEvents = events;
@@ -145,6 +156,8 @@ export default function ChatModal({
   };
 
   const handleClose = useCallback(async () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
     // Persist if we have at least one user message.
     const hasUser = messages.some((m) => m.role === 'user');
     if (hasUser) {
@@ -160,6 +173,8 @@ export default function ChatModal({
   }, [messages, attachedNodeIds, threadId, addThread, onClose]);
 
   const handleNewChat = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
     setThreadId(null);
     setMessages([]);
     setAttachedNodeIds([]);
