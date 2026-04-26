@@ -12,11 +12,10 @@ This is the **online** counterpart to the offline scoring agent (`scripts/score.
 
 ## Non-goals
 
-- Chat over Firestore (uses `localStorage` for now; promote later).
 - Write tools (no `update_person_memory` — read-only agent).
-- Cross-tab chat-history sync.
 - Auth on `/api/chat` (matches scoring's posture; fine for hackathon).
 - Embedding-cache persistence across server restarts.
+- Server-side chat storage (chats live in Firestore, written directly from the client — same pattern as `usePeople` / `usePhotos`).
 
 ## Architecture
 
@@ -34,9 +33,9 @@ ChatModal.jsx     ─POST──►    /api/chat                ──►   Anthr
                               │ embedCache (in-memory) │
                               └────────────────────────┘
 
-ChatHistory.jsx ◄─── localStorage["inner-circle:chats:v1"]
-  (right drawer,
-   collapsible)
+ChatHistory.jsx ◄─── Firestore: users/{uid}/chats/{chatId}
+  (right drawer,        (real-time onSnapshot, per-user scoped,
+   collapsible)          mirrors usePeople / usePhotos pattern)
 ```
 
 **Key decisions:**
@@ -44,7 +43,7 @@ ChatHistory.jsx ◄─── localStorage["inner-circle:chats:v1"]
 - **Model:** Claude Sonnet 4.6, streaming. Sonnet beats Haiku on multi-tool reasoning over structured data; streaming hides Sonnet's latency disadvantage vs Haiku/Grok behind typewriter perception.
 - **Embeddings:** Voyage `voyage-3` via batch endpoint. In-memory `Map<"id:hash", Vector>` cache on the server. No vector DB (n ≈ 15; cosine over a small `Map` is microseconds).
 - **Stateless server:** every `/api/chat` POST sends `{messages, people, attachedNodeIds}`. The server doesn't hold any per-user state. Cache key includes a content hash, so edits invalidate per-person, not globally.
-- **Persistence:** chat threads saved to `localStorage` on modal close (if thread has ≥1 user message). Right-side `ChatHistory` drawer lists past threads, click to reopen, defaults collapsed on first load.
+- **Persistence:** chat threads saved to Firestore at `users/{uid}/chats/{chatId}` on modal close (if thread has ≥1 user message). Per-user scoped via signed-in `user.uid`. Right-side `ChatHistory` drawer lists past threads via real-time `onSnapshot`, click to reopen, defaults collapsed on first load. Survives browser clears, syncs across the user's devices, offline writes queue automatically (Firestore SDK handles).
 - **Modal flow:** modal opens with seeded `attachedNodes` + `initialPrompt` from the existing prompt area; multi-turn within session; close persists.
 
 ## Components
@@ -56,7 +55,7 @@ ChatHistory.jsx ◄─── localStorage["inner-circle:chats:v1"]
 | `src/components/Chat/ChatModal.jsx` | Full-screen modal overlay. Owns active thread state, input box, scrolling transcript, "New Chat" + close buttons. Handles streaming token append. |
 | `src/components/Chat/ChatHistory.jsx` | Right-side collapsible drawer listing past threads. Click to reopen, hover to delete. Toggle pill on right edge when collapsed. |
 | `src/components/Chat/MessageBubble.jsx` | Renders one message. User right-aligned plain text; assistant left-aligned with markdown; tool calls render as inline status that collapses on tool result. |
-| `src/hooks/useChatHistory.js` | localStorage adapter. Exposes `{threads, addThread, deleteThread, getThread}`. Catches parse errors → reset to `[]`. Catches quota errors → drop oldest. |
+| `src/hooks/useChatHistory.js` | Firestore adapter for `users/{uid}/chats/{chatId}`. Real-time list via `onSnapshot`; writes via `setDoc`; deletes via `deleteDoc`. Mirrors `usePhotos.js` shape. Exposes `{threads, addThread, deleteThread, getThread}`. Returns `{threads: []}` while no user is signed in. |
 | `src/services/chat.js` | Thin streaming client. `streamChat({messages, people, attachedNodeIds}, onEvent)` — fetches `/api/chat`, parses SSE, dispatches `text-delta` / `tool-use` / `tool-result` / `done` / `error` events. |
 
 **Server (Vite middleware):**
@@ -79,7 +78,7 @@ ChatHistory.jsx ◄─── localStorage["inner-circle:chats:v1"]
 
 - `ChatModal` knows nothing about embeddings, Voyage, or tools — only consumes the SSE event stream.
 - `embedCache` is the only file that imports the Voyage SDK. Swapping providers = one-file change.
-- `useChatHistory` is the only file that touches `localStorage`. Promoting to Firestore = one-file change.
+- `useChatHistory` is the only file that touches Firestore. Schema migration or backend swap = one-file change.
 
 ## Data flow
 
@@ -130,9 +129,9 @@ loop:
 
 **6. Multi-turn:** follow-up reuses the open modal. `messages` includes prior turns; `people` re-sent (cheap, cache warm); zero new Voyage calls unless someone was edited between turns.
 
-**7. Modal close:** if thread has ≥1 user message, `useChatHistory.addThread({id, title, createdAt, messages, attachedNodeIds})` writes to `localStorage`. Title is the user's first prompt, truncated to 60 chars. `ChatHistory` drawer updates. Modal unmounts.
+**7. Modal close:** if thread has ≥1 user message, `useChatHistory.addThread({id, title, createdAt, messages, attachedNodeIds})` writes to `users/{uid}/chats/{chatId}` via `setDoc`. Title is the user's first prompt, truncated to 60 chars. `chatId` is a client-generated UUID (or `crypto.randomUUID()`) — same approach as `usePeople`. `ChatHistory` drawer updates automatically via the open `onSnapshot` listener. Modal unmounts.
 
-**8. Reopen from history:** click thread in drawer → modal opens with `messages` and `attachedNodeIds` restored. **No auto-send.** User can read or continue.
+**8. Reopen from history:** click thread in drawer → modal opens with `messages` and `attachedNodeIds` restored. **No auto-send.** User can read or continue. Continuing a thread updates the existing Firestore doc on next close (same `chatId`, `setDoc` overwrites).
 
 ## Embedding details
 
@@ -156,8 +155,8 @@ loop:
 | Voyage fails during initial batch embed | Omit `semantic_search` from tool list for this request. Log warning. | None — chat works with two tools instead of three. |
 | Claude calls a tool with malformed input | Tool executor validates against schema; returns `{error: "invalid input: <reason>"}`. | None — Claude self-corrects on next turn. |
 | Stream interrupted mid-reply | Client detects `close` without `done` event. | Banner: *"Connection lost — partial reply saved. Send to retry."* Partial bubble preserved. |
-| `localStorage` parse fail | `useChatHistory` resets to `[]`. | None — drawer just appears empty. |
-| `localStorage` quota exceeded | `addThread` drops oldest threads one at a time and retries; if still failing at 1 thread, silently skip persisting. | None. |
+| Firestore offline / write fails | Firestore SDK queues writes locally and flushes on reconnect — handled automatically. `onSnapshot` keeps showing the cached list. | None — chat saves silently when connection returns. |
+| User signed out | `useChatHistory` returns `{threads: []}`; drawer shows empty state. Modal still works in-session but won't persist. | Drawer empty; subtle hint *"Sign in to save chats."* |
 
 **Deliberately NOT handled:**
 - Concurrent submits (input disabled while stream open — simpler than queueing).
@@ -175,7 +174,7 @@ Existing repo pattern: `node --test src/**/*.test.mjs` via `npm run test`.
 |---|---|
 | `server/embedCache.test.mjs` | Hash stability, cache hit/miss, batch missing-only, query embedding called separately. Stub Voyage client returns deterministic fake vectors — fully offline. |
 | `server/tools.test.mjs` | `get_person_details` returns JSON or `{error}` on missing id. `find_people_by_attribute({hobby})` filters across `context.hobbies`. Cosine similarity ranking returns expected order on a hand-crafted vector set. |
-| `src/hooks/useChatHistory.test.mjs` | Roundtrip add/get/delete via mock `localStorage`. Corrupt JSON resets to `[]`. Quota error drops oldest first. |
+| `src/hooks/useChatHistory.test.mjs` | Roundtrip add/get/delete via a stubbed Firestore `db` (in-memory `Map` mock honoring `setDoc` / `onSnapshot` / `deleteDoc` semantics). Verifies the path shape `users/{uid}/chats/{chatId}` and that signed-out users yield `{threads: []}`. |
 
 **Manual smoke tests (golden path before declaring done):**
 
@@ -201,3 +200,10 @@ Existing repo pattern: `node --test src/**/*.test.mjs` via `npm run test`.
 - `VOYAGE_API_KEY` env var must be set in `.env` before chat works. Anthropic key already present.
 - Voyage access via raw `fetch` against `https://api.voyageai.com/v1/embeddings` (no SDK; avoids extra dep, the REST surface is two endpoints).
 - No schema changes. Reads existing Person Schema v2.
+- **Firestore security rules** must allow `users/{uid}/chats/{chatId}` reads and writes for the authenticated user. Confirm the rule set already in place for `users/{uid}/people/**` and `users/{uid}/photos/**` either covers chats via wildcard, or add an explicit rule. Example minimal rule:
+  ```
+  match /users/{uid}/chats/{chatId} {
+    allow read, write: if request.auth.uid == uid;
+  }
+  ```
+- **No Firebase Admin SDK.** All Firestore access is from the browser via the client SDK, scoped by the signed-in user's identity. No service-account JSON needed in this codebase.
