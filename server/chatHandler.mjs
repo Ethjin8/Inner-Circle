@@ -89,11 +89,17 @@ function buildSystemPrompt(people, attachedNodeIds) {
     "- Keep answers concrete and actionable. Cite specific fields ('Mom's gardening hobby suggests...') rather than vague generalities.",
     "- The user's chat is informal. Match that tone; don't over-format.",
     "- NEVER use emoji in your replies (no 😊, 🎉, ✨, 🔥, etc.). The interface is editorial; emoji clash with the typography. Use plain words for emphasis instead.",
-    "- CRITICAL SPACING RULES:",
-    "  • ALWAYS put exactly ONE space after ALL punctuation marks: periods (. ), exclamation marks (! ), question marks (? ), commas (, ), colons (: ), semicolons (; )",
+    "- CRITICAL SPACING RULES (HIGHEST PRIORITY — SPACING ERRORS MAKE TEXT UNREADABLE):",
+    "  • MANDATORY: Put EXACTLY ONE SPACE after EVERY punctuation mark",
+    "  • Period: 'word. Next' NOT 'word.Next'",
+    "  • Exclamation: 'Great! Let' NOT 'Great!Let'",
+    "  • Question: 'Why? Because' NOT 'Why?Because'",
+    "  • Comma: 'Yes, I' NOT 'Yes,I'",
+    "  • Colon: 'Note: This' NOT 'Note:This'",
     "  • ALWAYS put exactly ONE space between words",
-    "  • NEVER run words together (e.g. write 'Mom and Dad' not 'MomandDad', write 'That's great! Let me help.' not 'That'sgreat!Let me help.')",
-    "  • Double-check every sentence before sending: 'Jake!That's' is WRONG → 'Jake! That's' is CORRECT",
+    "  • NEVER concatenate words: 'Mom and Dad' NOT 'MomandDad'",
+    "  • CHECK EVERY SENTENCE: If you write 'Jake!That's' it is WRONG — you MUST write 'Jake! That's'",
+    "  • This is NOT optional. Missing spaces after punctuation is a critical error.",
     "- Use paragraph breaks (a literal blank line — two newline characters '\\n\\n') between distinct trains of thought. A single newline is NOT enough — your renderer treats it as the same paragraph. Required transitions that MUST get a blank-line break:",
     "  • after narrating a tool action, before commentary/recommendation",
     "  • after listing what you found, before how you'd interpret or act on it",
@@ -159,11 +165,22 @@ async function runAgentLoop({ client, system, messages, tools, ctx, res }) {
       } else if (event.type === 'content_block_delta') {
         if (event.delta.type === 'text_delta') {
           const last = assistantBlocks[assistantBlocks.length - 1];
-          // Fix common spacing issues: ensure space after punctuation
           let fixedText = event.delta.text;
-          // Add space after punctuation if missing (but preserve existing double spaces)
-          fixedText = fixedText.replace(/([.!?:;,])([A-Z])/g, '$1 $2');
-          fixedText = fixedText.replace(/([.!?])([a-z])/g, '$1 $2');
+
+          // Streaming-aware spacing fix: check if we need a space after previous chunk's punctuation
+          if (last?.type === 'text' && last.text.length > 0) {
+            const lastChar = last.text[last.text.length - 1];
+            const firstChar = fixedText[0];
+
+            // If previous chunk ended with punctuation and current chunk starts with a letter (no space)
+            if (/[.!?:;,]/.test(lastChar) && firstChar && /[a-zA-Z]/.test(firstChar) && firstChar !== ' ') {
+              fixedText = ' ' + fixedText;
+            }
+          }
+
+          // Also fix spacing within the current chunk
+          fixedText = fixedText.replace(/([.!?:;,])([A-Za-z])/g, '$1 $2');
+
           if (last?.type === 'text') last.text += fixedText;
           sseWrite(res, 'text-delta', { delta: fixedText });
         } else if (event.delta.type === 'input_json_delta') {

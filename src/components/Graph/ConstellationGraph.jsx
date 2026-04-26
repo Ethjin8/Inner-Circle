@@ -258,18 +258,32 @@ export const DEMO_PEOPLE = [
     lastContactAt: '2026-04-23T18:30:00Z',
     relationship: { type: 'family', strength: 92 },
     context: {
-      how_we_met: null, school: null, work: 'Retired teacher',
-      hobbies: ['gardening', 'cooking', 'reading'], sports: [],
-      favorites: { foods: ['pasta', 'chocolate cake'], music: ['classical', 'oldies'] },
+      how_we_met: null, school: 'Stanford University', work: 'Retired elementary school teacher',
+      hobbies: ['gardening', 'cooking', 'reading', 'watercolor painting', 'bird watching'],
+      sports: ['yoga', 'walking'],
+      favorites: {
+        foods: ['homemade pasta', 'chocolate cake', 'lemon chicken', 'fresh garden salad'],
+        music: ['classical', 'oldies', 'Frank Sinatra', 'Etta James']
+      },
     },
     history: {
       memories_together: [
         'Family road trip to Grand Canyon 2019',
-        'Teaching me to cook her pasta recipe',
-        'Movie nights every Sunday',
+        'Teaching me to cook her famous pasta recipe on Sunday afternoons',
+        'Movie nights every Sunday with homemade popcorn',
+        'Her surprise visit to campus with care packages during finals week',
+        'Annual tradition of baking Christmas cookies together',
       ],
-      important_events: ["Parents' 30th anniversary in June"],
-      things_to_look_forward_to: ['Planning a family reunion this summer'],
+      important_events: [
+        "Parents' 30th anniversary celebration in June",
+        'Her retirement party last year',
+        'Recently started taking watercolor classes',
+      ],
+      things_to_look_forward_to: [
+        'Planning a family reunion this summer in Napa',
+        'Wants to visit me at UCLA for parents weekend',
+        'Her garden tour in May',
+      ],
     },
   },
   {
@@ -277,96 +291,362 @@ export const DEMO_PEOPLE = [
     lastContactAt: '2026-04-24T22:00:00Z',
     relationship: { type: 'friend', strength: 78 },
     context: {
-      how_we_met: 'Freshman orientation at UCLA', school: 'UCLA', work: null,
-      hobbies: ['gaming', 'skateboarding'], sports: ['basketball'],
-      favorites: { foods: ['ramen', 'burritos'], music: ['hip-hop', 'electronic'] },
+      how_we_met: 'Freshman orientation at UCLA, bonded over mutual love of tech and sneakers',
+      school: 'UCLA',
+      work: 'Part-time at the campus tech support center',
+      hobbies: ['gaming', 'skateboarding', 'sneaker collecting', 'building custom PCs', 'photography'],
+      sports: ['basketball', 'pickup soccer'],
+      favorites: {
+        foods: ['ramen', 'burritos', 'korean BBQ', 'boba tea'],
+        music: ['hip-hop', 'electronic', 'lo-fi beats', 'Tyler the Creator']
+      },
     },
     history: {
-      memories_together: ['Late-night study sessions for CS 31', 'Beach day at Santa Monica'],
-      important_events: ['His birthday party in November'],
-      things_to_look_forward_to: ['LA Hacks 2026 together'],
+      memories_together: [
+        'Late-night study sessions for CS 31, survived on energy drinks',
+        'Beach day at Santa Monica, taught me to skateboard',
+        'Road trip to San Diego Comic-Con',
+        'All-nighter building our hackathon project',
+        'Weekly basketball games at Wooden Center',
+      ],
+      important_events: [
+        'His birthday party in November',
+        'Just got accepted to Google Summer of Code',
+        'Recently broke up with his girlfriend',
+      ],
+      things_to_look_forward_to: [
+        'LA Hacks 2026 together',
+        'Summer internship at Meta starting June',
+        'Planning a camping trip to Big Sur',
+      ],
     },
   },
   {
     id: '3', name: 'Sarah', initials: 'SA', birthday: '2003-04-25',
     lastContactAt: '2026-01-10T14:00:00Z',
     relationship: { type: 'friend', strength: 65 },
-    context: { how_we_met: 'Met through Jake at a house party', hobbies: ['photography'] },
+    context: {
+      how_we_met: 'Met through Jake at a house party in Westwood, talked for hours about movies',
+      school: 'UCLA',
+      work: 'Freelance photographer for campus events',
+      hobbies: ['photography', 'film development', 'vintage record collecting', 'thrifting', 'journaling'],
+      sports: ['pilates', 'hiking'],
+      favorites: {
+        foods: ['pho', 'açai bowls', 'dark chocolate', 'cold brew'],
+        music: ['indie folk', 'alternative', 'Phoebe Bridgers', 'The National'],
+      },
+    },
+    history: {
+      memories_together: [
+        'Late-night philosophical conversations at Jake\'s apartment',
+        'She photographed my birthday party last year',
+        'Thrift shopping adventure in Silver Lake',
+        'Showed me her darkroom and film development process',
+      ],
+      important_events: [
+        'Her photography exhibition at the Broad last month',
+        'Birthday coming up on April 25th',
+        'Recently started dating someone new',
+      ],
+      things_to_look_forward_to: [
+        'Wants to collaborate on a photo project together',
+        'Planning to visit Japan this summer',
+      ],
+    },
   },
   {
-    id: '4', name: 'Prof. Chen', initials: 'PC',
+    id: '4', name: 'Prof. Chen', initials: 'PC', birthday: '1978-09-15',
     lastContactAt: '2026-04-08T16:00:00Z',
     relationship: { type: 'mentor', strength: 55 },
-    context: { school: 'UCLA', work: 'CS faculty, machine learning' },
+    context: {
+      how_we_met: 'Took his CS M146 Machine Learning class, stayed after lecture with questions',
+      school: 'UCLA',
+      work: 'CS faculty specializing in machine learning and computer vision',
+      hobbies: ['chess', 'reading research papers', 'playing piano', 'running marathons'],
+      sports: ['running', 'marathon training'],
+      favorites: {
+        foods: ['taiwanese food', 'matcha', 'dumplings'],
+        music: ['classical piano', 'jazz'],
+      },
+    },
+    history: {
+      memories_together: [
+        'Office hours discussions about neural networks',
+        'He wrote my recommendation letter for internships',
+        'Invited me to collaborate on his research project',
+        'Coffee chat about career paths in AI',
+      ],
+      important_events: [
+        'Recently published a paper at NeurIPS',
+        'Leading the new AI safety initiative at UCLA',
+      ],
+      things_to_look_forward_to: [
+        'Possible summer research position in his lab',
+        'He mentioned I should apply for the PhD program',
+      ],
+    },
   },
   {
-    id: '5', name: 'Marcus', initials: 'MA',
+    id: '5', name: 'Marcus', initials: 'MA', birthday: '2003-07-22',
     lastContactAt: '2025-12-05T20:00:00Z',
     relationship: { type: 'friend', strength: 40 },
-    context: { hobbies: ['climbing'] },
+    context: {
+      how_we_met: 'Met at the UCLA climbing wall during orientation week',
+      school: 'UCLA',
+      work: 'Summer camp counselor',
+      hobbies: ['rock climbing', 'bouldering', 'slacklining', 'mountain biking', 'camping'],
+      sports: ['climbing', 'mountain biking', 'trail running'],
+      favorites: {
+        foods: ['trail mix', 'protein bars', 'thai food', 'smoothies'],
+        music: ['alternative rock', 'indie', 'podcast listener'],
+      },
+    },
+    history: {
+      memories_together: [
+        'Climbing sessions at Touchstone Gym',
+        'Road trip to Joshua Tree for outdoor bouldering',
+        'He taught me basic climbing techniques',
+      ],
+      important_events: [
+        'Training for a climbing competition',
+        'Planning a Yosemite trip',
+      ],
+      things_to_look_forward_to: [
+        'Should reconnect and hit the climbing wall again',
+      ],
+    },
   },
   {
-    id: '6', name: 'Alex', initials: 'AX',
+    id: '6', name: 'Alex', initials: 'AX', birthday: '2003-05-30',
     lastContactAt: '2026-04-22T11:00:00Z',
     relationship: { type: 'classmate', strength: 70 },
-    context: { school: 'UCLA', hobbies: ['chess'] },
+    context: {
+      how_we_met: 'Lab partners in CS 111 Operating Systems',
+      school: 'UCLA',
+      work: 'TA for intro CS courses',
+      hobbies: ['chess', 'competitive programming', 'teaching', 'reading sci-fi', 'puzzle solving'],
+      sports: ['tennis', 'swimming'],
+      favorites: {
+        foods: ['indian food', 'bubble tea', 'pizza', 'energy drinks during late coding'],
+        music: ['soundtrack music', 'video game OSTs', 'lo-fi'],
+      },
+    },
+    history: {
+      memories_together: [
+        'All-nighter finishing the OS project together',
+        'Chess matches in the student union between classes',
+        'Competed together in ACM programming competitions',
+        'Study group sessions for algorithms class',
+      ],
+      important_events: [
+        'Just became TA for CS 31',
+        'Placed in top 10 at recent coding competition',
+        'Considering grad school applications',
+      ],
+      things_to_look_forward_to: [
+        'Planning to do research together next quarter',
+        'Weekend chess tournament coming up',
+      ],
+    },
   },
   {
     id: '7', name: 'Dad', initials: 'DA', birthday: '1970-07-09',
     lastContactAt: '2026-04-12T19:00:00Z',
     relationship: { type: 'family', strength: 85 },
     context: {
-      work: 'Civil engineer',
-      hobbies: ['woodworking', 'hiking'],
-      favorites: { foods: ['steak'], music: ['rock'] },
+      how_we_met: null,
+      school: 'UC Berkeley',
+      work: 'Civil engineer at a transportation design firm',
+      hobbies: ['woodworking', 'hiking', 'grilling', 'fixing things', 'classic car restoration'],
+      sports: ['hiking', 'golf', 'used to play softball'],
+      favorites: {
+        foods: ['steak', 'bbq ribs', 'his own grilled burgers', 'craft beer'],
+        music: ['classic rock', 'Eagles', 'Fleetwood Mac', 'Bruce Springsteen'],
+      },
     },
     history: {
-      memories_together: ['Camping trip in Yosemite', 'Building a treehouse together'],
+      memories_together: [
+        'Camping trip in Yosemite when I was 12',
+        'Building a treehouse together in the backyard',
+        'Teaching me to drive in the empty mall parking lot',
+        'Working on his old Mustang together on weekends',
+        'Annual father-son fishing trips',
+      ],
+      important_events: [
+        "Parents' 30th anniversary coming up",
+        'Recently promoted to senior engineer',
+        'Finished restoring his 1967 Mustang',
+      ],
+      things_to_look_forward_to: [
+        'Wants to take me on a road trip in the restored Mustang',
+        'Planning a hiking trip to Sequoia',
+      ],
     },
   },
   {
-    id: '8', name: 'Kevin', initials: 'KV',
+    id: '8', name: 'Kevin', initials: 'KV', birthday: '1992-03-14',
     lastContactAt: '2025-11-20T15:00:00Z',
     relationship: { type: 'professional', strength: 35 },
-    context: { work: 'Recruiter at Anthropic' },
+    context: {
+      how_we_met: 'Reached out to me on LinkedIn about internship opportunities',
+      school: 'Carnegie Mellon',
+      work: 'Technical recruiter at Anthropic',
+      hobbies: ['networking events', 'reading tech news', 'running', 'coffee enthusiast'],
+      sports: ['half marathons', 'cycling'],
+      favorites: {
+        foods: ['salads', 'protein shakes', 'specialty coffee'],
+        music: ['podcasts', 'EDM for workouts'],
+      },
+    },
+    history: {
+      memories_together: [
+        'Initial coffee chat about Anthropic\'s culture',
+        'He gave me interview prep advice',
+        'Forwarded my resume to the engineering team',
+      ],
+      important_events: [
+        'Helped me prepare for technical interviews',
+        'Mentioned potential return offer discussions',
+      ],
+      things_to_look_forward_to: [
+        'Should follow up about summer 2027 opportunities',
+      ],
+    },
   },
   {
     id: '9', name: 'Lily', initials: 'LI', birthday: '2004-08-21',
     lastContactAt: '2026-04-25T09:00:00Z',
     relationship: { type: 'romantic', strength: 88 },
     context: {
-      how_we_met: 'Met at a coffee shop near campus', school: 'UCLA',
-      work: 'Part-time at the campus bookstore',
-      hobbies: ['painting', 'yoga', 'film photography'], sports: [],
-      favorites: { foods: ['sushi', 'matcha'], music: ['indie rock', 'R&B'] },
+      how_we_met: 'Met at a coffee shop near campus, she was reading my favorite book',
+      school: 'UCLA',
+      work: 'Part-time at the campus bookstore, considering grad school in art history',
+      hobbies: ['painting', 'yoga', 'film photography', 'ceramics', 'reading', 'vintage fashion'],
+      sports: ['yoga', 'pilates', 'beach volleyball'],
+      favorites: {
+        foods: ['sushi', 'matcha lattes', 'farmers market strawberries', 'homemade pasta'],
+        music: ['indie rock', 'R&B', 'Mitski', 'Frank Ocean', 'Mac DeMarco'],
+      },
     },
     history: {
       memories_together: [
-        'First date at Griffith Observatory',
-        'Painting together at her apartment',
-        'Surprise birthday picnic',
+        'First date at Griffith Observatory, talked until the stars came out',
+        'Painting together at her apartment every Sunday afternoon',
+        'Surprise birthday picnic at the Botanical Gardens',
+        'Late night drives to the beach',
+        'She taught me to develop film in her darkroom',
+        'Weekend trips to thrift stores and art galleries',
       ],
-      important_events: ['One year anniversary in September'],
-      things_to_look_forward_to: ['Trip to San Francisco next month', 'Meeting her parents'],
+      important_events: [
+        'One year anniversary coming up in September',
+        'Just got accepted to her top choice grad program',
+        'Her senior art exhibition is next month',
+      ],
+      things_to_look_forward_to: [
+        'Trip to San Francisco next month for gallery hopping',
+        'Meeting her parents over summer break',
+        'Moving in together next year',
+      ],
     },
   },
   {
-    id: '10', name: 'Ryan', initials: 'RY',
+    id: '10', name: 'Ryan', initials: 'RY', birthday: '2003-12-10',
     lastContactAt: '2026-03-30T10:00:00Z',
     relationship: { type: 'classmate', strength: 50 },
-    context: { school: 'UCLA' },
+    context: {
+      how_we_met: 'Group project partner in data structures class',
+      school: 'UCLA',
+      work: 'Internship at a startup in Santa Monica',
+      hobbies: ['entrepreneurship', 'reading business books', 'podcasts', 'surfing', 'networking'],
+      sports: ['surfing', 'ultimate frisbee'],
+      favorites: {
+        foods: ['acai bowls', 'cold brew', 'poke bowls', 'anything from Erewhon'],
+        music: ['business podcasts', 'rap', 'house music'],
+      },
+    },
+    history: {
+      memories_together: [
+        'Late nights working on the group project together',
+        'He pitched his startup idea to me multiple times',
+        'Grabbed coffee to discuss potential collaboration',
+      ],
+      important_events: [
+        'Recently launched his side project',
+        'Raising pre-seed funding',
+        'Trying to recruit a technical co-founder',
+      ],
+      things_to_look_forward_to: [
+        'He wants me to advise on the technical architecture',
+        'Invited me to demo day',
+      ],
+    },
   },
   {
     id: '11', name: 'Grandma', initials: 'GM', birthday: '1948-02-14',
     lastContactAt: '2026-04-05T13:00:00Z',
     relationship: { type: 'family', strength: 72 },
-    history: { memories_together: ['Sunday dinners at her place', 'Learning to knit'] },
+    context: {
+      how_we_met: null,
+      school: null,
+      work: 'Retired nurse, volunteered at local hospital for 20 years',
+      hobbies: ['knitting', 'gardening', 'baking', 'crossword puzzles', 'church choir'],
+      sports: ['walking group', 'gentle yoga'],
+      favorites: {
+        foods: ['her famous apple pie', 'tea and biscuits', 'Sunday roast'],
+        music: ['gospel', 'Nat King Cole', 'hymns'],
+      },
+    },
+    history: {
+      memories_together: [
+        'Sunday dinners at her place every month, she makes the best pot roast',
+        'Learning to knit scarves together',
+        'Her stories about growing up during the 60s',
+        'She taught me to bake her signature apple pie',
+        'Reading her old letters from grandpa',
+      ],
+      important_events: [
+        'Her birthday was on Valentine\'s Day',
+        'Recently moved to assisted living',
+        'Celebrated 50 years since grandpa passed',
+      ],
+      things_to_look_forward_to: [
+        'Planning to visit her more often',
+        'She wants to teach me her pot roast recipe',
+      ],
+    },
   },
   {
-    id: '12', name: 'Tina', initials: 'TI',
+    id: '12', name: 'Tina', initials: 'TI', birthday: '2002-11-18',
     lastContactAt: '2026-03-20T17:00:00Z',
     relationship: { type: 'coworker', strength: 45 },
-    context: { work: 'Same team at the campus dining hall' },
+    context: {
+      how_we_met: 'Started working together at the campus dining hall last year',
+      school: 'UCLA',
+      work: 'Works same shifts at the campus dining hall, studying public health',
+      hobbies: ['cooking', 'trying new restaurants', 'dancing', 'true crime podcasts', 'plants'],
+      sports: ['zumba', 'dance classes'],
+      favorites: {
+        foods: ['mexican food', 'anything spicy', 'her homemade tamales', 'boba'],
+        music: ['latin pop', 'reggaeton', 'Bad Bunny', 'Rosalía'],
+      },
+    },
+    history: {
+      memories_together: [
+        'Surviving the lunch rush together',
+        'She brought me homemade tamales when I was sick',
+        'Funny mishaps in the kitchen',
+        'Late-night shift talks about our dreams',
+      ],
+      important_events: [
+        'Applying to grad school for public health',
+        'Recently became shift supervisor',
+        'Organizing a fundraiser for her community',
+      ],
+      things_to_look_forward_to: [
+        'She invited me to her family\'s restaurant',
+        'Wants to teach me to make tamales',
+      ],
+    },
   },
 ];
 
