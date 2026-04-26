@@ -80,6 +80,7 @@
   font-family: var(--font-display, 'Inter', sans-serif);
   font-size: 22px;
   font-weight: 700;
+  -webkit-text-stroke: 0.6px currentColor;
   color: white;
   letter-spacing: -0.4px;
   line-height: 1.2;

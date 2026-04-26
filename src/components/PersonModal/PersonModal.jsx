@@ -551,7 +551,7 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
                             onClose();
                           }}
                         >
-                          Not yet, but will do
+                          Not yet, but I will
                         </button>
                         <button 
                           className="pm-nudge-btn confirm"

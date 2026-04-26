@@ -2,8 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { User, FlaskConical, LogOut } from 'lucide-react';
 import './AvatarMenu.css';
 
-export default function AvatarMenu({ email, demoOn, onToggleDemo, onSignOut }) {
-  const [open, setOpen] = useState(false);
+export default function AvatarMenu({ email, demoOn, onToggleDemo, onSignOut, onOpenChange }) {
+  const [open, _setOpen] = useState(false);
+  const setOpen = (next) => {
+    _setOpen((prev) => {
+      const value = typeof next === 'function' ? next(prev) : next;
+      onOpenChange?.(value);
+      return value;
+    });
+  };
   const triggerRef = useRef(null);
   const popoverRef = useRef(null);
 

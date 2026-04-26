@@ -23,6 +23,7 @@ import { scorePerson } from './services/scoring';
 import ChatModal from './components/Chat/ChatModal';
 import ChatHistory from './components/Chat/ChatHistory';
 import { useChatHistory } from './hooks/useChatHistory';
+import { useCategories } from './hooks/useCategories';
 import ConfirmDialogHost, { confirmDialog } from './components/ConfirmDialog/ConfirmDialog';
 import { History } from 'lucide-react';
 import './App.css';
@@ -115,7 +116,7 @@ function App() {
   const [deletingIds, setDeletingIds] = useState([]); // ids being animated out
   const [deletedHistory, setDeletedHistory] = useState([]); // undo stack: [{type:'person'|'category', ids:[]}]
   const [searchQuery, setSearchQuery] = useState('');
-  const [explorerOpen, setExplorerOpen] = useState(false);
+  const [explorerOpen, setExplorerOpen] = useState(true);
   const [pastChatsOpen, setPastChatsOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showDemo, setShowDemo] = useState(false); // testing: show demo people without persisting
@@ -145,6 +146,7 @@ function App() {
   const historyButtonRef = useRef(null);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const { recentIds, recordOpen } = useRecentPeople();
 
   const openPalette = useCallback(() => {
@@ -162,9 +164,39 @@ function App() {
     else if (payload?.kind === 'calendar') setActiveEvent(payload);
   }, []);
 
-  const displayPeople = useMemo(() => (
-    showDemo ? [...people, ...demoPeople] : people
-  ), [people, demoPeople, showDemo]);
+  const { categories, addCategory, removeCategory, canAdd: canAddCategory, nextColor } = useCategories();
+
+  // Sort within each category by `order` (manual drag) then name. Sorting at
+  // this layer means both the Explorer and the constellation graph see the
+  // same ordering — the graph already lays out by array index, so reordering
+  // here is what produces the on-canvas reposition animation.
+  const displayPeople = useMemo(() => {
+    const merged = showDemo ? [...people, ...demoPeople] : people;
+    const buckets = new Map();
+    merged.forEach((p) => {
+      const k = p.relationship?.type || 'other';
+      if (!buckets.has(k)) buckets.set(k, []);
+      buckets.get(k).push(p);
+    });
+    buckets.forEach((list) => {
+      list.sort((a, b) => {
+        const oa = a.order ?? Number.POSITIVE_INFINITY;
+        const ob = b.order ?? Number.POSITIVE_INFINITY;
+        if (oa !== ob) return oa - ob;
+        return (a.name || '').localeCompare(b.name || '');
+      });
+    });
+    // Preserve the original category sweep order (categories array drives
+    // graph hue assignment — keep deterministic).
+    const out = [];
+    categories.forEach((c) => { if (buckets.has(c.key)) out.push(...buckets.get(c.key)); });
+    // Anything in an unknown category (e.g., after a category delete) gets
+    // appended at the end so it doesn't vanish.
+    buckets.forEach((list, k) => {
+      if (!categories.some((c) => c.key === k)) out.push(...list);
+    });
+    return out;
+  }, [people, demoPeople, showDemo, categories]);
 
   const NEW_MODE_OPTIONS = useMemo(() => ([
     { id: '__new_audio', name: 'audio', mode: 'voice', desc: 'Voice interview' },
@@ -271,6 +303,86 @@ function App() {
       return next;
     });
   }, []);
+
+  // Move a person to (targetCat, targetIndex) — used by the Explorer's
+  // drag/reorder. Reassigns relationship.type if the category changed and
+  // rewrites `order` for every person in the affected categories so that
+  // the new layout is stable. The graph reads `displayPeople` which we
+  // sort by `order`, so the canvas re-springs to the new positions.
+  const movePerson = useCallback(async (personId, targetCat, targetIndex) => {
+    if (!targetCat) return;
+    const realMoving = people.find((p) => p.id === personId);
+    const demoMoving = demoPeople.find((p) => p.id === personId);
+    const moving = realMoving || demoMoving;
+    if (!moving) return;
+    const isDemo = !realMoving;
+    const pool = isDemo ? demoPeople : people;
+    const fromCat = moving.relationship?.type || 'other';
+
+    const inCat = (k) => pool
+      .filter((p) => (p.relationship?.type || 'other') === k && p.id !== personId)
+      .sort((a, b) => {
+        const oa = a.order ?? Number.POSITIVE_INFINITY;
+        const ob = b.order ?? Number.POSITIVE_INFINITY;
+        if (oa !== ob) return oa - ob;
+        return (a.name || '').localeCompare(b.name || '');
+      });
+
+    const targetList = inCat(targetCat);
+    const clamped = Math.max(0, Math.min(targetIndex, targetList.length));
+    const movedPerson = { ...moving, relationship: { ...(moving.relationship || {}), type: targetCat } };
+    const newTargetOrder = [
+      ...targetList.slice(0, clamped),
+      movedPerson,
+      ...targetList.slice(clamped),
+    ];
+
+    // Build a map: id -> new partial { order, relationship? }
+    const updates = new Map();
+    newTargetOrder.forEach((p, i) => {
+      updates.set(p.id, { order: i, relationship: p.relationship });
+    });
+    if (fromCat !== targetCat) {
+      const sourceList = inCat(fromCat);
+      sourceList.forEach((p, i) => {
+        if (!updates.has(p.id)) updates.set(p.id, { order: i, relationship: p.relationship });
+      });
+    }
+
+    if (isDemo) {
+      setDemoPeople((prev) => prev.map((p) => {
+        const u = updates.get(p.id);
+        return u ? { ...p, order: u.order, relationship: u.relationship } : p;
+      }));
+    } else {
+      const writes = [];
+      updates.forEach((u, id) => {
+        const cur = pool.find((p) => p.id === id);
+        if (!cur) return;
+        const orderChanged = (cur.order ?? -1) !== u.order;
+        const typeChanged = (cur.relationship?.type || 'other') !== (u.relationship?.type || 'other');
+        if (orderChanged || typeChanged) writes.push({ id, order: u.order, relationship: u.relationship });
+      });
+      await Promise.all(writes.map((w) => updatePerson(w)));
+    }
+  }, [people, demoPeople, updatePerson]);
+
+  // Delete a category. Built-ins can't be removed (scoring/onboarding ref
+  // them by key). For custom categories: reassign all members to 'other'
+  // before dropping the category itself so no person is orphaned.
+  const handleDeleteCategory = useCallback(async (key) => {
+    const orphans = people.filter((p) => (p.relationship?.type || 'other') === key);
+    await Promise.all(orphans.map((p) =>
+      updatePerson({ id: p.id, relationship: { ...(p.relationship || {}), type: 'other' } })
+    ));
+    removeCategory(key);
+    setActiveFilters((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+  }, [people, updatePerson, removeCategory]);
 
   const closeModal = useCallback(() => {
     clearTimeout(modalTimerRef.current);
@@ -680,8 +792,19 @@ function App() {
   // Pull the latest copy from `people` so async scoring updates flow into an
   // already-open modal. Falls back to the snapshot for the zooming-out frame.
   const livePerson = selectedPerson
-    ? people.find((p) => p.id === selectedPerson.id) ?? selectedPerson
+    ? (selectedPerson.isDemo ? demoPeople : people).find((p) => p.id === selectedPerson.id)
+      ?? displayPeople.find((p) => p.id === selectedPerson.id)
+      ?? selectedPerson
     : null;
+
+  // Keep `selectedPerson` in sync with the live entry. Without this, the modal
+  // can latch onto a click-time snapshot whose `scoring` field never updates
+  // (e.g., after pressing Rescore), forcing the user to close+reopen the card
+  // to see new pending/result state.
+  useEffect(() => {
+    if (!selectedPerson || !livePerson) return;
+    if (livePerson !== selectedPerson) setSelectedPerson(livePerson);
+  }, [livePerson, selectedPerson]);
 
   if (authLoading) return <div className="app" style={{ background: '#0a0a0f' }} />;
 
@@ -707,6 +830,8 @@ function App() {
             onSnip={handleSnip}
             deletingIds={deletingIds}
             people={displayPeople}
+            categories={categories}
+            leftInset={!isFirstExperience && explorerOpen ? 232 : 0}
             isFirstExperience={isFirstExperience}
             userName={(user?.displayName || user?.email?.split('@')[0] || '').split(' ')[0]}
             onCenterClick={() => setAddPersonOpen(true)}
@@ -716,7 +841,7 @@ function App() {
       </div>
 
       {!showModal && !addPersonOpen && viewMode === 'graph' && (
-        <NodeCard hovered={hoveredNode} people={displayPeople} />
+        <NodeCard hovered={hoveredNode} people={displayPeople} categories={categories} />
       )}
 
       {viewMode === 'gallery' && (
@@ -737,16 +862,38 @@ function App() {
 
       {!isFirstExperience && <header className="header">
         <div className="header-slot header-slot-left">
-          <SearchPill 
-            onClick={openPalette} 
-            onToggleExplorer={() => setExplorerOpen(s => !s)}
-            explorerOpen={explorerOpen}
-            disabled={!!selectedPerson} 
+          <SearchPill
+            onClick={openPalette}
+            disabled={!!selectedPerson}
           />
         </div>
 
-        {/* Center Toolbar */}
-        <div className="toolbar">
+        {/* Center Title + Icon */}
+        <div className="app-title">
+          <svg className="app-title-icon" width="22" height="22" viewBox="0 0 14 14" fill="none">
+            <circle cx="7" cy="7" r="6"   stroke="currentColor" strokeWidth="0.9" opacity="0.85" />
+            <circle cx="7" cy="7" r="3.5" stroke="currentColor" strokeWidth="0.7" opacity="0.6" />
+            <line x1="0.8" y1="7" x2="13.2" y2="7" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
+            <line x1="7" y1="0.8" x2="7" y2="13.2" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
+            <circle cx="7" cy="7" r="1" fill="currentColor" />
+          </svg>
+          <span className="app-title-text">Inner Circle</span>
+        </div>
+
+        <div className="header-slot header-slot-right">
+          <AvatarMenu
+            email={user?.email}
+            demoOn={showDemo}
+            onToggleDemo={() => setShowDemo((v) => !v)}
+            onSignOut={async () => { await signOut(); window.location.reload(); }}
+            onOpenChange={setAvatarMenuOpen}
+          />
+        </div>
+      </header>}
+
+      {/* Vertical Toolbar (below profile) */}
+      {!isFirstExperience && (
+        <div className={`toolbar toolbar-vertical ${avatarMenuOpen ? 'avatar-menu-open' : ''}`}>
           <button
             className={`tool-btn ${viewMode === 'gallery' ? 'active' : ''}`}
             onClick={() => setViewMode(v => v === 'gallery' ? 'graph' : 'gallery')}
@@ -762,7 +909,7 @@ function App() {
             className={`tool-btn ${activeTool === 'snip' ? 'active' : ''}`}
             onClick={() => {
               setActiveTool(t => t === 'snip' ? null : 'snip');
-              setViewMode('graph'); // exit gallery if entering snip tool
+              setViewMode('graph');
             }}
             title="Snip tool — cut a connection to delete a node"
           >
@@ -783,26 +930,24 @@ function App() {
             ↩
           </button>
         </div>
+      )}
 
-        <div className="header-slot header-slot-right">
-          <AvatarMenu
-            email={user?.email}
-            demoOn={showDemo}
-            onToggleDemo={() => setShowDemo((v) => !v)}
-            onSignOut={async () => { await signOut(); window.location.reload(); }}
-          />
-        </div>
-      </header>}
-
-      <Explorer 
-        isOpen={explorerOpen} 
-        onClose={() => setExplorerOpen(false)}
-        people={displayPeople}
-        onSelectPerson={(p) => {
-          setSelectedPerson(p);
-          setZoomTarget(null);
-        }}
-      />
+      {!isFirstExperience && viewMode === 'graph' && (
+        <Explorer
+          open={explorerOpen}
+          onToggleOpen={() => setExplorerOpen((v) => !v)}
+          people={displayPeople}
+          categories={categories}
+          activeFilters={activeFilters}
+          onToggleCategory={toggleBranchHighlight}
+          onSelectPerson={(p) => handleNodeClick(p, null)}
+          onCreateCategory={addCategory}
+          onDeleteCategory={handleDeleteCategory}
+          onMovePerson={movePerson}
+          canAdd={canAddCategory}
+          nextColor={nextColor}
+        />
+      )}
 
       {!isFirstExperience && viewMode === 'graph' && (
         <>
@@ -810,11 +955,8 @@ function App() {
             open={paletteOpen}
             onClose={closePalette}
             people={displayPeople}
+            categories={categories}
             recentIds={recentIds}
-            countsByCategory={countsByCategory}
-            activeCategories={activeFilters}
-            onToggleCategory={toggleBranchHighlight}
-            onClearCategories={() => setActiveFilters(new Set())}
             onSelect={handlePaletteSelect}
             transitioning={!!selectedPerson}
           />
@@ -960,7 +1102,9 @@ function App() {
                     {isNewMode ? (
                       <span className="mention-meta">{p.desc}</span>
                     ) : p.relationship?.type && (
-                      <span className="mention-meta">{p.relationship.type}</span>
+                      <span className="mention-meta">
+                        {categories?.find((c) => c.key === p.relationship.type)?.label || p.relationship.type}
+                      </span>
                     )}
                   </button>
                   );
