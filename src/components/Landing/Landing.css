@@ -1,0 +1,117 @@
+.landing {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #020108;
+  z-index: 1000;
+}
+
+.landing.zooming {
+  background: transparent;
+}
+
+.landing-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.landing-foreground {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+  z-index: 2;
+  object-fit: cover;
+  object-position: bottom center;
+}
+
+@keyframes signin-appear {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -46%) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.landing .signin-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  animation: signin-appear 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.landing-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 25%, rgba(255, 245, 200, 1) 0%, rgba(255, 220, 130, 0) 55%);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* Trees rush forward past camera; sky zooms toward NorthStar at (50%, 25%). */
+.landing-canvas {
+  transform-origin: 50% 25%;
+  will-change: transform, opacity, filter;
+}
+.landing-foreground {
+  transform-origin: 50% 100%;
+  will-change: transform, opacity;
+}
+
+.landing.zooming .landing-canvas {
+  animation: sky-zoom 1.8s cubic-bezier(0.55, 0, 0.78, 0.4) forwards;
+}
+.landing.zooming .landing-foreground {
+  animation: trees-rush 1.4s cubic-bezier(0.6, 0, 0.85, 0.2) forwards;
+}
+.landing.zooming .signin-panel,
+.landing.zooming .landing-hint {
+  animation: fade-out 0.3s ease-out forwards;
+}
+
+@keyframes sky-zoom {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes trees-rush {
+  from { transform: scale(1)  translateY(0); }
+  to   { transform: scale(10) translateY(100%); }
+}
+
+@keyframes flash-bloom {
+  0%   { opacity: 0; }
+  55%  { opacity: 0.4; }
+  78%  { opacity: 0.92; }
+  90%  { opacity: 0.6; }
+  100% { opacity: 0; }
+}
+
+@keyframes fade-out {
+  to { opacity: 0; }
+}
+
+.landing-hint {
+  position: absolute;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  z-index: 3;
+  color: rgba(255, 220, 180, 0.55);
+  font-family: var(--font-display, ui-serif, Georgia, serif);
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  pointer-events: none;
+}

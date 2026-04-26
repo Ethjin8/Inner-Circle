@@ -456,7 +456,6 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
         {mode === 'voice' && (
           <>
             <div className="apm-header">
-              <div className="apm-eyebrow">Voice onboarding</div>
               <h2 className="apm-title">Tell me about someone</h2>
               <p className="apm-subtitle">
                 Just talk — who they are, how you know them, anything you want to remember. I'll add them to your graph.

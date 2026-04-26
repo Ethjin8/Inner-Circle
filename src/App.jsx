@@ -1,18 +1,19 @@
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import StarField from './components/Graph/StarField';
 import ConstellationGraph, { DEMO_PEOPLE } from './components/Graph/ConstellationGraph';
 import PersonModal from './components/PersonModal/PersonModal';
 import AddPersonModal from './components/AddPersonModal/AddPersonModal';
 import MemoryCarousel from './components/MemoryCarousel/MemoryCarousel';
+import Landing from './components/Landing/Landing';
 import SignIn from './components/SignIn/SignIn';
+import GmailDraftEditor from './components/GmailDraftEditor/GmailDraftEditor';
+import CalendarEventCard from './components/CalendarEventCard/CalendarEventCard';
 import { useAuth } from './contexts/AuthContext';
 import { usePeople } from './hooks/usePeople';
 import { usePhotos } from './hooks/usePhotos';
 import { scorePerson } from './services/scoring';
 import ChatModal from './components/Chat/ChatModal';
 import ChatHistory from './components/Chat/ChatHistory';
-import GmailDraftEditor from './components/GmailDraftEditor/GmailDraftEditor';
-import CalendarEventCard from './components/CalendarEventCard/CalendarEventCard';
 import { useChatHistory } from './hooks/useChatHistory';
 import './App.css';
 import './components/Chat/Chat.css';
@@ -39,9 +40,21 @@ const CATEGORY_COLORS = {
 };
 
 function App() {
+  const [view, setView] = useState('landing');
+  const [landingExiting, setLandingExiting] = useState(false);
+  const landingExitTimerRef = useRef(null);
+  const panRef = useRef({ x: 0, y: 0 });
+
+  const handleEnterFromLanding = useCallback(() => {
+    setView('app');
+    setLandingExiting(true);
+    clearTimeout(landingExitTimerRef.current);
+    landingExitTimerRef.current = setTimeout(() => setLandingExiting(false), 1800);
+  }, []);
   const { user, loading: authLoading, signOut } = useAuth();
   const { people, setPeople, addPerson, updatePerson, removePeople, restorePeople } = usePeople();
   const { photosByPerson, setPhotosForPerson } = usePhotos();
+
 
   const [activeFilters, setActiveFilters] = useState(() => new Set());
   const [attachedNodes, setAttachedNodes] = useState([]);
@@ -56,13 +69,26 @@ function App() {
   const [deletingIds, setDeletingIds] = useState([]); // ids being animated out
   const [deletedHistory, setDeletedHistory] = useState([]); // undo stack: [{type:'person'|'category', ids:[]}]
   const [searchQuery, setSearchQuery] = useState('');
+  const [explorerOpen, setExplorerOpen] = useState(true);
+  const [pastChatsOpen, setPastChatsOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showDemo, setShowDemo] = useState(false); // testing: show demo people without persisting
+  const promptInputRef = useRef(null);
+  const [autoExpanded, setAutoExpanded] = useState(false);
+  const [interactionTick, setInteractionTick] = useState(0);
+  const [autoCycles, setAutoCycles] = useState(0);
+  const bumpInteraction = useCallback(() => {
+    setInteractionTick((t) => t + 1);
+    setAutoExpanded(false);
+  }, []);
+  const isPromptExpanded = promptText.length > 0 || attachedNodes.length > 0 || autoExpanded;
+
   const [chatModalOpen, setChatModalOpen] = useState(false);
   const [chatInitialThread, setChatInitialThread] = useState(null);
   const [chatInitialPrompt, setChatInitialPrompt] = useState('');
   const [chatInitialAttachedIds, setChatInitialAttachedIds] = useState([]);
-  const [activeDraft, setActiveDraft] = useState(null);     // {to, subject, body, summary} | null
-  const [activeEvent, setActiveEvent] = useState(null);     // calendar event | null
+  const [activeDraft, setActiveDraft] = useState(null);
+  const [activeEvent, setActiveEvent] = useState(null);
   const { threads: chatThreads, addThread: addChatThread, deleteThread: deleteChatThread } = useChatHistory();
 
   const handleChatAction = useCallback((payload) => {
@@ -123,6 +149,7 @@ function App() {
   };
 
   const handleNodeClick = useCallback((node, screenPos) => {
+    bumpInteraction();
     if (node.isCategory) {
       setFocusedCategory(node.category);
       return;
@@ -132,15 +159,16 @@ function App() {
     setSelectedPerson(node);
     setModalPhase('zooming-in');
     modalTimerRef.current = setTimeout(() => setModalPhase('open'), 380);
-  }, []);
+  }, [bumpInteraction]);
 
   const handleNodeDoubleClick = useCallback((node) => {
+    bumpInteraction();
     if (node.isCategory) return;
     setAttachedNodes((prev) => {
       if (prev.some((n) => n.id === node.id)) return prev;
       return [...prev, node];
     });
-  }, []);
+  }, [bumpInteraction]);
 
   const toggleBranchHighlight = useCallback((catKey) => {
     setActiveFilters((prev) => {
@@ -241,7 +269,7 @@ function App() {
       });
   }, []);
 
-  const handleSubmit = useCallback((e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     if (!promptText.trim() && attachedNodes.length === 0) return;
     setChatInitialThread(null);
@@ -263,6 +291,48 @@ function App() {
     ? { transformOrigin: `${zoomTarget.x}px ${zoomTarget.y}px` }
     : undefined;
 
+  const isFirstExperience = people.length === 0 && !showDemo;
+
+  useEffect(() => {
+    if (isPromptExpanded) {
+      promptInputRef.current?.focus();
+    }
+  }, [isPromptExpanded]);
+
+  // Auto-expand the typing bar after 6.7s of no node interaction — first cycle only.
+  useEffect(() => {
+    if (isFirstExperience || autoCycles > 0) return;
+    if (promptText.length > 0 || attachedNodes.length > 0 || autoExpanded) return;
+    const t = setTimeout(() => setAutoExpanded(true), 6700);
+    return () => clearTimeout(t);
+  }, [interactionTick, promptText, attachedNodes, autoExpanded, isFirstExperience, autoCycles]);
+
+  // Auto-collapse 6.7s after auto-expanding if no typing happened.
+  useEffect(() => {
+    if (!autoExpanded) return;
+    if (promptText.length > 0 || attachedNodes.length > 0) return;
+    const t = setTimeout(() => {
+      setAutoExpanded(false);
+      setAutoCycles((c) => c + 1);
+    }, 6700);
+    return () => clearTimeout(t);
+  }, [autoExpanded, promptText, attachedNodes]);
+
+  useEffect(() => {
+    if (isFirstExperience || isPromptExpanded) return;
+    const onKeyDown = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key.length !== 1) return;
+      const t = e.target;
+      const tag = (t?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || t?.isContentEditable) return;
+      e.preventDefault();
+      setPromptText(e.key);
+      requestAnimationFrame(() => promptInputRef.current?.focus());
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isFirstExperience, isPromptExpanded]);
   const showModal = !!selectedPerson || modalPhase === 'zooming-out';
   // Pull the latest copy from `people` so async scoring updates flow into an
   // already-open modal. Falls back to the snapshot for the zooming-out frame.
@@ -271,23 +341,32 @@ function App() {
     : null;
 
   if (authLoading) return <div className="app" style={{ background: '#0a0a0f' }} />;
-  if (!user) return <SignIn />;
 
   return (
+    <>
+    {(view === 'landing' || landingExiting) && (
+      <Landing user={user} onEnter={handleEnterFromLanding} />
+    )}
+    {view === 'app' && (
     <div className="app">
       <div className={`cosmos-stage ${showModal ? 'modal-open' : ''} ${viewMode === 'gallery' ? 'hidden-behind-gallery' : ''}`} style={stageStyle}>
-        <StarField />
+        <StarField panRef={panRef} />
         <div className="graph-container">
           <ConstellationGraph
+            panRef={panRef}
             activeFilters={activeFilters}
             focusedCategory={focusedCategory}
             onZoomOut={() => setFocusedCategory(null)}
+            onZoomIn={(cat) => setFocusedCategory(cat)}
             onNodeClick={handleNodeClick}
             onNodeDoubleClick={handleNodeDoubleClick}
             activeTool={activeTool}
             onSnip={handleSnip}
             deletingIds={deletingIds}
             people={displayPeople}
+            isFirstExperience={isFirstExperience}
+            userName={(user?.displayName || user?.email?.split('@')[0] || '').split(' ')[0]}
+            onCenterClick={() => setAddPersonOpen(true)}
           />
         </div>
       </div>
@@ -299,17 +378,8 @@ function App() {
         />
       )}
 
-      <header className="header">
-        <div className="logo">
-          <svg className="logo-glyph" width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="0.9" opacity="0.85" />
-            <circle cx="7" cy="7" r="3.5" stroke="currentColor" strokeWidth="0.7" opacity="0.6" />
-            <line x1="0.8" y1="7" x2="13.2" y2="7" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
-            <line x1="7" y1="0.8" x2="7" y2="13.2" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
-            <circle cx="7" cy="7" r="1" fill="currentColor" />
-          </svg>
-          <span className="logo-text">Inner Circle</span>
-        </div>
+      {!isFirstExperience && <header className="header">
+        <div />
 
         {/* Center Toolbar */}
         <div className="toolbar">
@@ -350,20 +420,50 @@ function App() {
           </button>
         </div>
 
-        <div className="header-actions">
-          <button className="btn-primary" onClick={() => setAddPersonOpen(true)}>+ Add Person</button>
-          <button className="btn-ghost" onClick={signOut} title={user.email || 'Sign out'}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
+        <div />
+      </header>}
+
+      {!isFirstExperience && <aside className={`sidebar ${viewMode === 'gallery' ? 'hidden' : ''} ${sidebarCollapsed ? 'collapsed' : ''}`}>
+        <div className="sidebar-top">
+          <div className="sidebar-logo">
+            <svg className="logo-glyph" width="20" height="20" viewBox="0 0 14 14" fill="none">
+              <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="0.9" opacity="0.85" />
+              <circle cx="7" cy="7" r="3.5" stroke="currentColor" strokeWidth="0.7" opacity="0.6" />
+              <line x1="0.8" y1="7" x2="13.2" y2="7" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
+              <line x1="7" y1="0.8" x2="7" y2="13.2" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
+              <circle cx="7" cy="7" r="1" fill="currentColor" />
+            </svg>
+            <span className="logo-text collapsible-label">Inner Circle</span>
+          </div>
+          <button
+            type="button"
+            className="sidebar-collapse-btn"
+            onClick={() => setSidebarCollapsed(c => !c)}
+            title={sidebarCollapsed ? 'Open sidebar' : 'Collapse sidebar'}
+            aria-label={sidebarCollapsed ? 'Open sidebar' : 'Collapse sidebar'}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <line x1="9" y1="4" x2="9" y2="20" />
             </svg>
           </button>
         </div>
-      </header>
 
-      <aside className={`sidebar ${viewMode === 'gallery' ? 'hidden' : ''}`}>
-        <div className="sidebar-label">EXPLORER</div>
+        <div className="sidebar-body">
+        <button
+          type="button"
+          className="sidebar-section-header"
+          onClick={() => { if (sidebarCollapsed) setSidebarCollapsed(false); setExplorerOpen(o => sidebarCollapsed ? true : !o); }}
+          aria-expanded={explorerOpen}
+          title="Explorer"
+        >
+          <svg className="sidebar-section-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+          </svg>
+          <span className={`chevron collapsible-label ${explorerOpen ? 'expanded' : ''}`}>›</span>
+          <span className="collapsible-label">EXPLORER</span>
+        </button>
+        {!sidebarCollapsed && explorerOpen && (<>
         <div className="sidebar-search">
           <svg className="sidebar-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <circle cx="11" cy="11" r="7" />
@@ -389,18 +489,6 @@ function App() {
           )}
         </div>
         <div className="sidebar-tree">
-          {!isSearching && (
-            <div className="tree-group">
-              <div
-                className="tree-item node-cat level-1"
-                style={{ background: 'rgba(232, 232, 240, 0.12)', marginBottom: '2px' }}
-                onClick={() => setFocusedCategory(null)}
-              >
-                <span className="filter-dot" style={{ background: '#e8e8f0', marginLeft: '12px' }} />
-                You
-              </div>
-            </div>
-          )}
           {isSearching && Object.values(peopleByCategory).every((d) => d.people.length === 0) && (
             <div className="sidebar-empty">No matches for "{searchQuery}"</div>
           )}
@@ -412,7 +500,7 @@ function App() {
               <div key={catKey} className="tree-group cat-group">
                 <div
                   className="tree-item node-cat level-1"
-                  style={{ background: `${data.color}22` }}
+                  style={{ background: 'rgba(255, 255, 255, 0.05)' }}
                   onClick={() => toggleCat(catKey)}
                 >
                   <div className={`chevron ${isExpanded ? 'expanded' : ''}`}>›</div>
@@ -441,7 +529,7 @@ function App() {
                         <div key={person.id} className="tree-group person-group">
                           <div
                             className="tree-item node-person level-2"
-                            style={{ background: `${data.color}15` }}
+                            style={{ background: 'rgba(255, 255, 255, 0.03)' }}
                             onClick={() => togglePerson(person.id)}
                           >
                             <div className={`chevron ${isPersonExpanded ? 'expanded' : ''}`}>›</div>
@@ -493,22 +581,69 @@ function App() {
             );
           })}
         </div>
-      </aside>
+        </>)}
+        <button
+          type="button"
+          className="sidebar-section-header"
+          onClick={() => { if (sidebarCollapsed) setSidebarCollapsed(false); setPastChatsOpen(o => sidebarCollapsed ? true : !o); }}
+          aria-expanded={pastChatsOpen}
+          title="Past chats"
+        >
+          <svg className="sidebar-section-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          <span className={`chevron collapsible-label ${pastChatsOpen ? 'expanded' : ''}`}>›</span>
+          <span className="collapsible-label">PAST CHATS</span>
+          {chatThreads.length > 0 && <span className="sidebar-section-count collapsible-label">{chatThreads.length}</span>}
+        </button>
+        {!sidebarCollapsed && pastChatsOpen && (
+          <ChatHistory
+            threads={chatThreads}
+            onOpenThread={handleOpenThread}
+            onDeleteThread={deleteChatThread}
+          />
+        )}
+        </div>
 
-      {focusedCategory && (
-        <button className="back-to-galaxy-btn" onClick={() => setFocusedCategory(null)}>
-          ← Back to Galaxy
+        <div className="sidebar-footer">
+          <button
+            type="button"
+            className={`sidebar-signout demo-row ${showDemo ? 'active' : ''}`}
+            onClick={() => setShowDemo(s => !s)}
+            title={showDemo ? 'Hide demo people' : 'Show demo people (not saved)'}
+            aria-pressed={showDemo}
+          >
+            <span className="demo-toggle-dot" />
+            <span className="collapsible-label">{showDemo ? 'Demo on' : 'Demo'}</span>
+          </button>
+          <button
+            type="button"
+            className="sidebar-signout"
+            onClick={signOut}
+            title={user?.email || 'Sign out'}
+            aria-label="Sign out"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            <span className="collapsible-label">Sign out</span>
+          </button>
+        </div>
+      </aside>}
+
+      {isFirstExperience && (
+        <button
+          className={`demo-toggle ${showDemo ? 'active' : ''}`}
+          onClick={() => setShowDemo(s => !s)}
+          title={showDemo ? 'Hide demo people' : 'Show demo people (not saved)'}
+        >
+          <span className="demo-toggle-dot" />
+          {showDemo ? 'Demo on' : 'Demo'}
         </button>
       )}
 
-      <button
-        className={`demo-toggle ${showDemo ? 'active' : ''}`}
-        onClick={() => setShowDemo(s => !s)}
-        title={showDemo ? 'Hide demo people' : 'Show demo people (not saved)'}
-      >
-        <span className="demo-toggle-dot" />
-        {showDemo ? 'Demo on' : 'Demo'}
-      </button>
 
       {showModal && (
         <PersonModal
@@ -524,7 +659,7 @@ function App() {
         />
       )}
 
-      <div className="prompt-area">
+      {!isFirstExperience && <div className={`prompt-area ${isPromptExpanded ? 'is-expanded' : ''}`}>
         {attachedNodes.length > 0 && (
           <div className="attached-nodes">
             {attachedNodes.map((node) => (
@@ -548,32 +683,43 @@ function App() {
             ))}
           </div>
         )}
-        <form className="prompt-form" onSubmit={handleSubmit}>
-          <input
-            className="prompt-input"
-            type="text"
-            placeholder="Ask about your connections..."
-            value={promptText}
-            onChange={(e) => setPromptText(e.target.value)}
-          />
+        <div className="prompt-switcher">
           <button
-            className="prompt-submit"
-            type="submit"
-            disabled={!promptText.trim() && attachedNodes.length === 0}
+            className="prompt-add-button"
+            onClick={() => setAddPersonOpen(true)}
+            aria-label="Add person"
+            tabIndex={isPromptExpanded ? -1 : 0}
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+              <path d="M10 4v12M4 10h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
+            <span>Add Person</span>
           </button>
-        </form>
+          <form className="prompt-form" onSubmit={handleSubmit}>
+            <input
+              ref={promptInputRef}
+              className="prompt-input"
+              type="text"
+              placeholder="Ask about your connections..."
+              value={promptText}
+              onChange={(e) => setPromptText(e.target.value)}
+              tabIndex={isPromptExpanded ? 0 : -1}
+            />
+            <button
+              className="prompt-submit"
+              type="submit"
+              disabled={!promptText.trim() && attachedNodes.length === 0}
+              tabIndex={isPromptExpanded ? 0 : -1}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </form>
+        </div>
         <div className="prompt-hint">Click a node to view details — double-click to attach as context</div>
-      </div>
+      </div>}
 
-      <ChatHistory
-        threads={chatThreads}
-        onOpenThread={handleOpenThread}
-        onDeleteThread={deleteChatThread}
-      />
       <ChatModal
         open={chatModalOpen}
         onClose={() => setChatModalOpen(false)}
@@ -611,6 +757,8 @@ function App() {
         }}
       />
     </div>
+    )}
+    </>
   );
 }
 

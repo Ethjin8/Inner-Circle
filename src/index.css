@@ -8,19 +8,19 @@
 
 :root {
   /* ---------- Background ---------- */
-  --bg-deep: #050510;
-  --bg-base: #0a0a1a;
-  --bg-elevated: #0f0f24;
+  --bg-deep: #0e0e0e;
+  --bg-base: #0e0e0e;
+  --bg-elevated: #0e0e0e;
 
   /* ---------- Surface tiers ----------
      1 = chrome (sidebar, toolbar, legend, back-btn)
      2 = interactive surfaces (prompt bar, chips, tooltips)
      3 = modals (highest elevation)
      backdrop = full-screen scrim behind modals/overlays */
-  --surface-1: rgba(10, 10, 30, 0.5);
-  --surface-2: rgba(10, 10, 30, 0.7);
-  --surface-3: rgba(10, 10, 30, 0.95);
-  --backdrop:  rgba(5, 5, 16, 0.6);
+  --surface-1: #0e0e0e;
+  --surface-2: #0e0e0e;
+  --surface-3: #0e0e0e;
+  --backdrop:  #0e0e0e;
 
   /* legacy aliases — kept so existing micro-surfaces continue to work */
   --surface: rgba(255, 255, 255, 0.03);
