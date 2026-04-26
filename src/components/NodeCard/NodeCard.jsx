@@ -46,7 +46,7 @@ function isBirthdayToday(iso) {
   return d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
 }
 
-export default function NodeCard({ hovered, people }) {
+export default function NodeCard({ hovered, people, categories }) {
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [visible, setVisible] = useState(false);
   const wasShownRef = useRef(false);
@@ -87,12 +87,14 @@ export default function NodeCard({ hovered, people }) {
       const avg = scored.length
         ? Math.round(scored.reduce((s, p) => s + p.relationship.strength, 0) / scored.length)
         : null;
-      return { kind: 'category', category: hovered.category, count: peeps.length, avg };
+      const cat = categories?.find((c) => c.key === hovered.category);
+      const label = cat?.label || hovered.category;
+      return { kind: 'category', category: hovered.category, label, count: peeps.length, avg };
     }
     const person = people.find((p) => p.id === hovered.id);
     if (!person) return null;
     return { kind: 'person', person };
-  }, [hovered, people]);
+  }, [hovered, people, categories]);
 
   if (!hovered || !visible || !content) return null;
 
@@ -135,8 +137,8 @@ export default function NodeCard({ hovered, people }) {
         <div style={wrapStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flex: '0 0 8px' }} />
-            <span style={{ fontWeight: 600, textTransform: 'capitalize', fontSize: 13.5 }}>
-              {content.category}
+            <span style={{ fontWeight: 600, fontSize: 13.5 }}>
+              {content.label}
             </span>
           </div>
           <div style={{ marginTop: 8, color: 'rgba(255, 255, 255, 0.65)', fontSize: 12 }}>
@@ -154,7 +156,9 @@ export default function NodeCard({ hovered, people }) {
 
   const person = content.person;
   const cat = person.relationship?.type || 'other';
-  const color = CATEGORY_COLORS[cat] || CATEGORY_COLORS.other;
+  const catEntry = categories?.find((c) => c.key === cat);
+  const catLabel = catEntry?.label || cat;
+  const color = catEntry?.color || CATEGORY_COLORS[cat] || CATEGORY_COLORS.other;
   const strength = person.relationship?.strength;
   const photo = person.profilePic?.secure_url;
   const last = formatLastContact(person.lastContactAt);
@@ -198,8 +202,8 @@ export default function NodeCard({ hovered, people }) {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: color }} />
-              <span style={{ fontSize: 11.5, color: 'rgba(255, 255, 255, 0.6)', textTransform: 'capitalize' }}>
-                {cat}
+              <span style={{ fontSize: 11.5, color: 'rgba(255, 255, 255, 0.6)' }}>
+                {catLabel}
               </span>
             </div>
           </div>

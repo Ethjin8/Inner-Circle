@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Command } from 'cmdk';
-import { Search, X } from 'lucide-react';
+import { Search } from 'lucide-react';
 import './CommandPalette.css';
 
 const CATEGORIES = [
@@ -21,11 +21,12 @@ function categoryToken(cat) {
   return `var(--celestial-${cat})`;
 }
 
-function PersonRow({ person, onSelect }) {
+function PersonRow({ person, onSelect, categoryLabelMap }) {
   const cat = person.relationship?.type;
   const strength = person.relationship?.strength;
   const isPending = person.scoring?.status === 'pending';
-  const meta = `${CATEGORY_LABEL[cat] ?? 'Other'} · ${
+  const label = (cat && categoryLabelMap?.[cat]) || CATEGORY_LABEL[cat] || 'Other';
+  const meta = `${label} · ${
     isPending ? '…' : strength != null ? `${strength}/100` : '—'
   }`;
   return (
@@ -58,14 +59,15 @@ export default function CommandPalette({
   open,
   onClose,
   people,
+  categories,
   recentIds,
-  countsByCategory,
-  activeCategories,
-  onToggleCategory,
-  onClearCategories,
   onSelect,
   transitioning = false,
 }) {
+  const categoryLabelMap = useMemo(
+    () => Object.fromEntries((categories || []).map((c) => [c.key, c.label])),
+    [categories]
+  );
   const [query, setQuery] = useState('');
 
   useEffect(() => {
@@ -87,40 +89,25 @@ export default function CommandPalette({
     return map;
   }, [people]);
 
-  // Apply category filter at the data layer. cmdk handles text filtering on top.
-  const peopleAfterCategoryFilter = useMemo(() => {
-    if (!activeCategories || activeCategories.size === 0) return people;
-    return people.filter((p) => {
-      const cat = p.relationship?.type ?? 'other';
-      return activeCategories.has(cat);
-    });
-  }, [people, activeCategories]);
-
   const isEmptyQuery = query.trim().length === 0;
-  const noFilters = !activeCategories || activeCategories.size === 0;
 
-  // Recents only show when query is empty AND no category filters are active.
-  // Otherwise the user is intentionally narrowing — recents would be noise.
   const recentItems = useMemo(() => {
-    if (!isEmptyQuery || !noFilters) return [];
+    if (!isEmptyQuery) return [];
     return recentIds
       .map((id) => peopleById.get(id))
       .filter(Boolean)
       .slice(0, 6);
-  }, [isEmptyQuery, noFilters, recentIds, peopleById]);
+  }, [isEmptyQuery, recentIds, peopleById]);
 
-  // Main list — exclude recents from this group when recents are shown,
-  // to avoid showing the same person twice (and double cmdk values).
   const mainListItems = useMemo(() => {
-    if (recentItems.length === 0) return peopleAfterCategoryFilter;
+    if (recentItems.length === 0) return people;
     const recentIdSet = new Set(recentItems.map((p) => p.id));
-    return peopleAfterCategoryFilter.filter((p) => !recentIdSet.has(p.id));
-  }, [peopleAfterCategoryFilter, recentItems]);
+    return people.filter((p) => !recentIdSet.has(p.id));
+  }, [people, recentItems]);
 
   if (!open) return null;
 
   const showRecentsHeading = recentItems.length > 0;
-  const showMainHeading = isEmptyQuery && mainListItems.length > 0;
 
   return (
     <div
@@ -144,61 +131,27 @@ export default function CommandPalette({
             />
           </div>
 
-          <div className="cmdp-categories" role="group" aria-label="Filter by category">
-            {CATEGORIES.map((c) => {
-              const count = countsByCategory?.[c.key] ?? 0;
-              if (count === 0) return null;
-              const active = activeCategories?.has(c.key) ?? false;
-              return (
-                <button
-                  key={c.key}
-                  type="button"
-                  className={`cmdp-cat-chip ${active ? 'is-active' : ''}`}
-                  style={{ '--chip-color': c.token }}
-                  onClick={() => onToggleCategory(c.key)}
-                  aria-pressed={active}
-                  aria-label={`${c.label}, ${count} ${count === 1 ? 'person' : 'people'}, ${active ? 'on' : 'off'}`}
-                >
-                  <span className="cmdp-cat-dot" aria-hidden />
-                  <span className="cmdp-cat-name">{c.label}</span>
-                  <span className="cmdp-cat-count">{count}</span>
-                </button>
-              );
-            })}
-            {!noFilters && (
-              <button
-                type="button"
-                className="cmdp-cat-clear"
-                onClick={onClearCategories}
-                aria-label="Clear category filters"
-                title="Clear"
-              >
-                <X size={12} aria-hidden />
-              </button>
-            )}
-          </div>
-
           <Command.List className="cmdp-list">
             <Command.Empty className="cmdp-empty">
               {isEmptyQuery
-                ? 'No people in this category yet'
+                ? 'No people yet'
                 : `No people match "${query}"`}
             </Command.Empty>
 
             {showRecentsHeading && (
               <Command.Group heading="RECENT" className="cmdp-group">
                 {recentItems.map((p) => (
-                  <PersonRow key={p.id} person={p} onSelect={onSelect} />
+                  <PersonRow key={p.id} person={p} onSelect={onSelect} categoryLabelMap={categoryLabelMap} />
                 ))}
               </Command.Group>
             )}
 
             <Command.Group
-              heading={showMainHeading ? 'ALL' : undefined}
+              heading={isEmptyQuery && mainListItems.length > 0 ? 'ALL' : undefined}
               className="cmdp-group"
             >
               {mainListItems.map((p) => (
-                <PersonRow key={p.id} person={p} onSelect={onSelect} />
+                <PersonRow key={p.id} person={p} onSelect={onSelect} categoryLabelMap={categoryLabelMap} />
               ))}
             </Command.Group>
           </Command.List>
