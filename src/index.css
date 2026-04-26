@@ -51,15 +51,17 @@
   --accent-cream: #e8e8f0;
   --accent: #7df9ff; /* primary action / active-tab cyan */
 
-  /* ---------- Celestial palette (graph) ---------- */
-  --celestial-family: #e8b06b;
-  --celestial-romantic: #ffc8d6;
-  --celestial-friend: #ffce5c;
-  --celestial-classmate: #b9d0ff;
-  --celestial-coworker: #9be6c4;
-  --celestial-professional: #ff9c5a;
-  --celestial-mentor: #7df9ff;
-  --celestial-other: #cdc9c0;
+  /* ---------- Celestial palette (graph) ----------
+     Hues spaced ~50° apart around the wheel so adjacent categories
+     never read as the same color. */
+  --celestial-family: #f5a25b;        /* amber */
+  --celestial-friend: #f3d24d;        /* yellow */
+  --celestial-coworker: #5fd496;      /* green */
+  --celestial-classmate: #7ea8ff;     /* blue */
+  --celestial-mentor: #a884ff;        /* violet */
+  --celestial-romantic: #f9a3c0;      /* pink */
+  --celestial-professional: #f06d6d;  /* coral red */
+  --celestial-other: #bdc1c6;         /* neutral */
 
   --strength-strong: 120, 220, 170;
   --strength-mid: 240, 210, 110;

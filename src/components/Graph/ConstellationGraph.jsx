@@ -4,15 +4,17 @@ import { useRef, useEffect, useCallback } from 'react';
 const PAN_INERTIA_DECAY = 0.92;
 const PAN_INERTIA_MIN_VELOCITY = 0.1;
 
+// Spread evenly around the hue wheel (~50° apart) so adjacent categories never
+// look alike: red, orange, yellow, green, blue, violet, pink, plus neutral.
 const CATEGORIES = {
-  family: { color: '#e8b06b' },
-  romantic: { color: '#ffc8d6' },
-  friend: { color: '#ffce5c' },
-  classmate: { color: '#b9d0ff' },
-  coworker: { color: '#9be6c4' },
-  professional: { color: '#ff9c5a' },
-  mentor: { color: '#7df9ff' },
-  other: { color: '#cdc9c0' },
+  family:       { color: '#f5a25b' }, // amber       (hue ~28°)
+  friend:       { color: '#f3d24d' }, // yellow      (hue ~50°)
+  coworker:     { color: '#5fd496' }, // green       (hue ~145°)
+  classmate:    { color: '#7ea8ff' }, // blue        (hue ~218°)
+  mentor:       { color: '#a884ff' }, // violet      (hue ~258°)
+  romantic:     { color: '#f9a3c0' }, // pink        (hue ~335°)
+  professional: { color: '#f06d6d' }, // coral red   (hue ~0°)
+  other:        { color: '#bdc1c6' }, // neutral
 };
 
 function strengthToEdgeColor(strength) {
@@ -45,30 +47,135 @@ function hexWithAlpha(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
-function drawMinimalNode(ctx, node, r, color, alpha, isHovered) {
-  const haloR = r * 1.6;
-  const halo = ctx.createRadialGradient(node.x, node.y, r * 0.5, node.x, node.y, haloR);
-  halo.addColorStop(0, hexWithAlpha(color, 0.4 * alpha));
-  halo.addColorStop(1, hexWithAlpha(color, 0));
-  ctx.fillStyle = halo;
+// Render a node as a luminous star: layered bloom, bright core, white-hot center.
+// Hit area still uses node.radius; the visible core is intentionally smaller so the
+// canvas reads as a star chart and labels can live outside the node.
+// Bloom radius scales with relationship strength — stronger people glow visibly wider.
+function drawStarNode(ctx, node, r, color, alpha, isHovered, strength = 50) {
+  const coreR = Math.max(3, r * 0.38);
+  const s = Math.max(0, Math.min(100, strength));
+  const bloomR = r * (1.5 + (s / 100) * 0.9);
+
+  const bloom = ctx.createRadialGradient(node.x, node.y, coreR * 0.3, node.x, node.y, bloomR);
+  bloom.addColorStop(0, hexWithAlpha(color, 0.40 * alpha));
+  bloom.addColorStop(0.45, hexWithAlpha(color, 0.12 * alpha));
+  bloom.addColorStop(1, hexWithAlpha(color, 0));
+  ctx.fillStyle = bloom;
   ctx.beginPath();
-  ctx.arc(node.x, node.y, haloR, 0, Math.PI * 2);
+  ctx.arc(node.x, node.y, bloomR, 0, Math.PI * 2);
+  ctx.fill();
+
+  const mid = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, coreR * 2.2);
+  mid.addColorStop(0, hexWithAlpha(color, 0.75 * alpha));
+  mid.addColorStop(1, hexWithAlpha(color, 0));
+  ctx.fillStyle = mid;
+  ctx.beginPath();
+  ctx.arc(node.x, node.y, coreR * 2.2, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.beginPath();
-  ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-  ctx.fillStyle = hexWithAlpha(color, 1.0 * alpha);
+  ctx.arc(node.x, node.y, coreR, 0, Math.PI * 2);
+  ctx.fillStyle = hexWithAlpha(color, 1 * alpha);
   ctx.fill();
-  ctx.strokeStyle = `rgba(255, 255, 255, ${(isHovered ? 1.0 : 0.6) * alpha})`;
-  ctx.lineWidth = isHovered ? 2 : 1.5;
-  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(node.x, node.y, coreR * 0.45, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(255, 255, 255, ${0.62 * alpha})`;
+  ctx.fill();
+
+  if (isHovered) {
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, coreR + 7, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.55 * alpha})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
 }
 
-function truncateLabel(label, maxChars) {
-  if (!label) return '';
-  if (label.length <= maxChars) return label;
-  if (maxChars <= 1) return '…';
-  return `${label.slice(0, maxChars - 1)}…`;
+// Category nodes use a shadcn-style hollow ring + wider/softer bloom so they read
+// as "regions" rather than additional stars; the ring + locator dot signal anchor.
+function drawCategoryStar(ctx, node, r, color, alpha, isHovered) {
+  const coreR = Math.max(5, r * 0.42);
+  const bloomR = r * 2.4;
+
+  const bloom = ctx.createRadialGradient(node.x, node.y, coreR * 0.4, node.x, node.y, bloomR);
+  bloom.addColorStop(0, hexWithAlpha(color, 0.28 * alpha));
+  bloom.addColorStop(0.45, hexWithAlpha(color, 0.10 * alpha));
+  bloom.addColorStop(1, hexWithAlpha(color, 0));
+  ctx.fillStyle = bloom;
+  ctx.beginPath();
+  ctx.arc(node.x, node.y, bloomR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(node.x, node.y, coreR, 0, Math.PI * 2);
+  ctx.strokeStyle = hexWithAlpha(color, 0.95 * alpha);
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(node.x, node.y, Math.max(1.5, coreR * 0.18), 0, Math.PI * 2);
+  ctx.fillStyle = hexWithAlpha(color, 0.85 * alpha);
+  ctx.fill();
+
+  if (isHovered) {
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, coreR + 6, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.45 * alpha})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+}
+
+// Walk a multi-segment pulse path (e.g. [YOU, cat, person]) and return (x,y)
+// at parameter t in [0,1] proportional to total path length.
+function pulsePathPosition(path, t, lookupNode, youX, youY) {
+  const points = path.map(id => {
+    if (id === 'you') return { x: youX, y: youY };
+    const n = lookupNode(id);
+    return n ? { x: n.x, y: n.y } : null;
+  });
+  if (points.some(p => !p)) return null;
+
+  const segs = [];
+  let total = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    const dx = points[i + 1].x - points[i].x;
+    const dy = points[i + 1].y - points[i].y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    segs.push({ from: points[i], to: points[i + 1], len });
+    total += len;
+  }
+  if (total < 0.01) return points[0];
+
+  let dist = Math.max(0, Math.min(t, 1)) * total;
+  for (const s of segs) {
+    if (dist <= s.len) {
+      const r = dist / s.len;
+      return { x: s.from.x + (s.to.x - s.from.x) * r, y: s.from.y + (s.to.y - s.from.y) * r };
+    }
+    dist -= s.len;
+  }
+  return segs[segs.length - 1].to;
+}
+
+// Spotlight: returns set of ids ('you' + node ids) that should stay bright when
+// something is hovered. Null means nothing is hovered = everyone bright.
+function computeNeighborSet(hovered, nodes) {
+  if (!hovered) return null;
+  const set = new Set();
+  set.add('you');
+  if (hovered.isCenter) {
+    for (const n of nodes) if (n.isCategory) set.add(n.id);
+    return set;
+  }
+  set.add(hovered.id);
+  if (hovered.isCategory) {
+    for (const n of nodes) if (!n.isCategory && n.category === hovered.category) set.add(n.id);
+  } else if (hovered.parentCat) {
+    set.add(hovered.parentCat.id);
+  }
+  return set;
 }
 
 export const DEMO_PEOPLE = [
@@ -254,10 +361,12 @@ const internalPanRef = useRef({ x: 0, y: 0 });
   const panMomentumRef = useRef({ vx: 0, vy: 0, raf: null });
   const particlesRef = useRef([]); // [{x,y,vx,vy,r,alpha,color,life,maxLife}]
   const prevDeletingRef = useRef([]); // track when ids newly enter deleting
-  const youHoverTRef = useRef(0); // 0..1 fade between YOU and +
   const lastActivityRef = useRef(performance.now());
   const recenteredRef = useRef(false);
   const wheelLockUntilRef = useRef(0);
+  const pulsesRef = useRef([]); // [{path,t,speed,color}] light packets along YOU→cat→person
+  const leanRef = useRef({ x: 0, y: 0 }); // smoothed magnetic lean of hovered node toward cursor
+  const prevHoveredIdRef = useRef(null); // hover transitions trigger one chain pulse
 
   const initNodes = useCallback((width, height) => {
     const cx = width / 2;
@@ -280,8 +389,9 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       const sum = g.reduce((acc, p) => acc + (p.relationship?.strength ?? 50), 0);
       const avgStrength = sum / Math.max(1, g.length);
 
-      const mappedOffset = 0.45 - (avgStrength / 100) * 0.30;
-      const catRadiusOffset = baseWinSize * mappedOffset;
+      // Categories all orbit YOU at the same distance — only individual people
+      // get pulled in or pushed out by their personal relationship strength.
+      const catRadiusOffset = baseWinSize * 0.36;
       const theta = (i * (Math.PI * 2)) / Math.max(1, numCats) - Math.PI / 2;
 
       const baseCatX = cx + Math.cos(theta) * catRadiusOffset * 1.35;
@@ -308,7 +418,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         manualOffY,
         theta,
         catRadiusOffset,
-        radius: 16,
+        radius: 32,
       };
       nodes.push(catNode);
 
@@ -318,13 +428,15 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       let startAngle = theta - spreadAngle / 2;
       if (numPeople === 1) startAngle = theta;
       const angleStep = numPeople > 1 ? spreadAngle / (numPeople - 1) : 0;
-      const basePersonDist = catRadiusOffset * 0.38;
 
       peopleList.forEach((person, j) => {
         const infoFields = countInfoFields(person);
-        const personR = 5 + (Math.min(infoFields, 8) / 8) * 8;
+        const personR = 14 + (Math.min(infoFields, 8) / 8) * 12;
         const pTheta = startAngle + j * angleStep;
-        const pDist = basePersonDist + (j % 2 === 0 ? 0 : personR * 1.2);
+        // Proximity = strength: strong relationships sit close to the category
+        // anchor, weak ones drift outward into a looser ring of acquaintances.
+        const pStrength = Math.max(0, Math.min(100, person.relationship?.strength ?? 50));
+        const pDist = catRadiusOffset * (0.60 - (pStrength / 100) * 0.35);
         const basePx = baseCatX + Math.cos(pTheta) * pDist * 1.35;
         const basePy = baseCatY + Math.sin(pTheta) * pDist * 0.8;
 
@@ -778,6 +890,44 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         a.y += ((a.targetY + yoy + swayY) - a.y) * 0.1;
       }
 
+      // Pulses signal "you reaching out" along the chain YOU → cat → person.
+      // Two spawn paths: rare ambient on the top-3 strongest, and one chain pulse
+      // on every hover transition (so the meaning is learned by interaction).
+      {
+        const scoredPeople = nodesRef.current
+          .filter(n => !n.isCategory && n.isScored && !deletingIds.includes(n.id) && !isDimmed(n.category))
+          .sort((a, b) => b.strength - a.strength);
+        for (const n of scoredPeople.slice(0, 3)) {
+          if (Math.random() < 1 / 720) {
+            const path = ['you', n.parentCat?.id, n.id].filter(Boolean);
+            if (path.length >= 2) {
+              pulsesRef.current.push({
+                path, t: 0, speed: 1 / 100,
+                color: CATEGORIES[n.category]?.color || '#cdc9c0',
+              });
+            }
+          }
+        }
+        const hovId = hoveredRef.current?.id || null;
+        if (hovId !== prevHoveredIdRef.current) {
+          prevHoveredIdRef.current = hovId;
+          const target = hoveredRef.current;
+          if (target && !target.isCenter && !deletingIds.includes(target.id) && !isDimmed(target.category)) {
+            const path = target.isCategory
+              ? ['you', target.id]
+              : ['you', target.parentCat?.id, target.id].filter(Boolean);
+            if (path.length >= 2) {
+              pulsesRef.current.push({
+                path, t: 0, speed: 1 / 80,
+                color: CATEGORIES[target.category]?.color || '#cdc9c0',
+              });
+            }
+          }
+        }
+        pulsesRef.current = pulsesRef.current.filter(p => p.t < 1);
+        for (const p of pulsesRef.current) p.t += p.speed;
+      }
+
       // Spawn particles for newly-deleting nodes
       const newIds = deletingIds.filter(id => !prevDeletingRef.current.includes(id));
       if (newIds.length > 0) {
@@ -818,15 +968,40 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       const youWorldX = cx + youPosRef.current.x;
       const youWorldY = cy + youPosRef.current.y;
 
-      // YOU → cat trunk edges (world space)
+      // Spotlight + magnetic lean. neighborSet=null means nothing is hovered = full bright.
+      // edgeAlphaMul folds the zoom-fade dim from gogobop into the hover-spotlight dim.
+      const neighborSet = computeNeighborSet(hoveredRef.current, nodesRef.current);
+      const edgeAlphaMul = (fromId, toId, cat) => {
+        let m = 1;
+        const dimT = dimAmount(cat, camRef.current.scale);
+        if (dimT > 0) m *= (1 - dimT * (1 - 0.12));
+        if (neighborSet && (!neighborSet.has(fromId) || !neighborSet.has(toId))) m *= 0.20;
+        return m;
+      };
+      {
+        let tlx = 0, tly = 0;
+        const hv = hoveredRef.current;
+        if (hv && !hv.isCenter && typeof hv.x === 'number') {
+          const { wx, wy } = screenToWorld(mouseRef.current.x, mouseRef.current.y);
+          const dx = wx - hv.x, dy = wy - hv.y;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          if (len > 0.5) {
+            const mag = Math.min(6, len * 0.18);
+            tlx = (dx / len) * mag; tly = (dy / len) * mag;
+          }
+        }
+        leanRef.current.x += (tlx - leanRef.current.x) * 0.18;
+        leanRef.current.y += (tly - leanRef.current.y) * 0.18;
+      }
+
+      // YOU → cat trunk edges (world space) — uniform 2.0px, white
       for (const node of nodesRef.current) {
         if (deletingIds.includes(node.id)) continue;
         if (!node.isCategory) continue;
         const isHovEdge = hoveredEdgeRef.current?.id === node.id;
-        const dimT = dimAmount(node.category, camRef.current.scale);
-        const dimMul = 1 - dimT * (1 - 0.12);
+        const dimMul = edgeAlphaMul('you', node.id, node.category);
         const ea = isHovEdge ? 0.95 : (0.1 + (node.avgStrength / 100) * 0.3) * dimMul;
-        const ew = 2.25;
+        const ew = 2.0;
         ctx.beginPath(); ctx.moveTo(youWorldX, youWorldY); ctx.lineTo(node.x, node.y);
         ctx.lineWidth = ew;
         if (isHovEdge && activeTool === 'snip') {
@@ -836,67 +1011,107 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         ctx.stroke(); ctx.setLineDash([]); ctx.shadowBlur = 0;
       }
 
-      // Cat→Person edges (world space)
+      // Cat→Person edges — uniform 1.0px, color tier still encodes strength
       for (const node of nodesRef.current) {
         if (deletingIds.includes(node.id)) continue;
         if (node.isCategory) continue;
         const isHovEdge = hoveredEdgeRef.current?.id === node.id;
-        const dimT = dimAmount(node.category, camRef.current.scale);
         {
           const p = node.parentCat;
           if (!p || deletingIds.includes(p.id)) continue;
           const isHovPEdge = hoveredEdgeRef.current?.id === node.id;
           const rgb = node.isScored ? strengthToEdgeColor(node.strength) : '160,160,170';
-          const ew = 2.25;
+          const ew = 1.0;
+          const eMul = edgeAlphaMul(p.id, node.id, node.category);
           ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(node.x, node.y);
           ctx.lineWidth = ew;
           if (isHovPEdge && activeTool === 'snip') {
             ctx.setLineDash([6, 4]); ctx.strokeStyle = 'rgba(255,80,80,0.95)';
             ctx.shadowColor = 'rgba(255,80,80,0.8)'; ctx.shadowBlur = 12;
-          } else {
-            const baseA = node.isScored ? 0.55 : 0.32;
-            const a = baseA * (1 - dimT) + 0.18 * dimT;
-            const r = parseInt(rgb.split(',')[0]) * (1 - dimT) + 140 * dimT;
-            const g = parseInt(rgb.split(',')[1]) * (1 - dimT) + 140 * dimT;
-            const b = parseInt(rgb.split(',')[2]) * (1 - dimT) + 150 * dimT;
-            ctx.strokeStyle = `rgba(${r|0},${g|0},${b|0},${a})`;
-          }
+          } else { ctx.strokeStyle = `rgba(${rgb}, ${(node.isScored ? 0.55 : 0.32) * eMul})`; }
           ctx.stroke(); ctx.setLineDash([]); ctx.shadowBlur = 0;
         }
       }
 
-      // Nodes
+      // Light packets along the chain — drawn after edges, before nodes.
+      // 3-dot fading trail makes the direction (from YOU outward) unambiguous.
+      const lookupNode = (id) => nodesRef.current.find(n => n.id === id);
+      for (const pp of pulsesRef.current) {
+        if (pp.t < 0) continue;
+        const lastId = pp.path[pp.path.length - 1];
+        const termNode = lookupNode(lastId);
+        if (!termNode || deletingIds.includes(termNode.id)) continue;
+        let dimM = 1;
+        if (isDimmed(termNode.category)) dimM *= 0.12;
+        const ease = Math.sin(Math.max(0, Math.min(1, pp.t)) * Math.PI);
+        for (let i = 3; i >= 0; i--) {
+          const tt = pp.t - i * 0.022;
+          if (tt < 0) continue;
+          const pos = pulsePathPosition(pp.path, tt, lookupNode, youWorldX, youWorldY);
+          if (!pos) continue;
+          const fade = 1 - i * 0.22;
+          const a = ease * fade * 0.95 * dimM;
+          if (i === 0) {
+            ctx.beginPath(); ctx.arc(pos.x, pos.y, 7, 0, Math.PI * 2);
+            ctx.fillStyle = hexWithAlpha(pp.color, a * 0.22); ctx.fill();
+            ctx.beginPath(); ctx.arc(pos.x, pos.y, 2.4, 0, Math.PI * 2);
+            ctx.fillStyle = hexWithAlpha(pp.color, a); ctx.fill();
+            ctx.beginPath(); ctx.arc(pos.x, pos.y, 1.0, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255,255,255,${a * 0.85})`; ctx.fill();
+          } else {
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, Math.max(0.6, 1.8 - i * 0.3), 0, Math.PI * 2);
+            ctx.fillStyle = hexWithAlpha(pp.color, a * 0.6); ctx.fill();
+          }
+        }
+      }
+
+      // Nodes — luminous stars (people) + hollow rings (categories), labels below.
       for (const node of nodesRef.current) {
         if (deletingIds.includes(node.id)) continue;
         const cat = CATEGORIES[node.category] || CATEGORIES.other;
         const dimT = dimAmount(node.category, camRef.current.scale);
         const isHov = hoveredRef.current?.id === node.id;
-        const nodeAlpha = 1 - dimT * (1 - 0.18);
-        const r = node.radius * (isHov ? 1.12 : 1);
+        const filterDimVal = 1 - dimT * (1 - 0.20);
+        const hoverDimVal = (neighborSet && !neighborSet.has(node.id)) ? 0.28 : 1;
+        const nodeAlpha = filterDimVal * hoverDimVal;
+        const r = node.radius * (isHov ? 1.18 : 1);
         const renderColor = dimT > 0.5 ? '#6a6f7a' : cat.color;
 
-        if (node.isCategory) {
-          ctx.beginPath(); ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-          ctx.fillStyle = hexWithAlpha(renderColor, nodeAlpha); ctx.fill();
-          ctx.strokeStyle = hexWithAlpha(renderColor, nodeAlpha); ctx.lineWidth = 1.5; ctx.stroke();
-          ctx.fillStyle = `rgba(232,232,240,${0.9 * nodeAlpha})`;
-          ctx.font = `300 12px 'Inter',sans-serif`;
-          ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-          ctx.fillText(node.name, node.x, node.y + r + 6);
-        } else {
-          drawMinimalNode(ctx, node, r, renderColor, nodeAlpha, isHov);
-          ctx.fillStyle = `rgba(232,232,240,${0.9 * nodeAlpha})`;
-          ctx.font = `300 11px 'Inter',sans-serif`;
-          ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-          ctx.fillText(node.name, node.x, node.y + r + 5);
+        const lx = isHov ? leanRef.current.x : 0;
+        const ly = isHov ? leanRef.current.y : 0;
+        const pos = { x: node.x + lx, y: node.y + ly };
 
-          // Scoring state overlay: dashed pulse for pending, warning glyph for failed.
+        if (node.isCategory) {
+          drawCategoryStar(ctx, pos, r, renderColor, nodeAlpha, isHov);
+        } else {
+          drawStarNode(ctx, pos, r, renderColor, nodeAlpha, isHov, node.strength);
+        }
+
+        const labelY = pos.y + r * (node.isCategory ? 0.5 : 0.48) + 14;
+        ctx.fillStyle = node.isCategory
+          ? hexWithAlpha(renderColor, 0.92 * nodeAlpha)
+          : `rgba(232, 232, 240, ${0.95 * nodeAlpha})`;
+        if (node.isCategory) {
+          ctx.font = `600 11px 'Space Grotesk','Inter',sans-serif`;
+          if ('letterSpacing' in ctx) ctx.letterSpacing = '0.22em';
+        } else {
+          ctx.font = `500 12px 'Space Grotesk','Inter',sans-serif`;
+          if ('letterSpacing' in ctx) ctx.letterSpacing = '0.02em';
+        }
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(node.name, pos.x, labelY);
+        if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+
+        if (!node.isCategory) {
           if (node.scoringStatus === 'pending') {
-            const pulse = 1 + Math.sin(timeRef.current * 0.08) * 0.04;
-            const ringR = r * 1.35 * pulse;
+            const coreR = Math.max(3, r * 0.38);
+            const pulseS = 1 + Math.sin(timeRef.current * 0.08) * 0.04;
+            const ringR = (coreR * 1.7 + 6) * pulseS;
             const phase = (timeRef.current * 0.6) % 24;
             ctx.save();
-            ctx.beginPath(); ctx.arc(node.x, node.y, ringR, 0, Math.PI * 2);
+            ctx.beginPath(); ctx.arc(pos.x, pos.y, ringR, 0, Math.PI * 2);
             ctx.setLineDash([4, 4]); ctx.lineDashOffset = -phase;
             ctx.strokeStyle = `rgba(232,232,240,${0.55 * nodeAlpha})`;
             ctx.lineWidth = 1.1;
@@ -904,12 +1119,13 @@ const internalPanRef = useRef({ x: 0, y: 0 });
             ctx.setLineDash([]);
             ctx.restore();
           } else if (node.scoringStatus === 'failed') {
-            const gx = node.x + r * 0.78, gy = node.y - r * 0.78;
+            const coreR = Math.max(3, r * 0.38);
+            const gx = pos.x + coreR * 1.4, gy = pos.y - coreR * 1.4;
             ctx.save();
-            ctx.beginPath(); ctx.arc(gx, gy, r * 0.28, 0, Math.PI * 2);
+            ctx.beginPath(); ctx.arc(gx, gy, coreR * 0.6, 0, Math.PI * 2);
             ctx.fillStyle = `rgba(255,140,120,${0.95 * nodeAlpha})`; ctx.fill();
             ctx.fillStyle = `rgba(11,15,25,${0.95 * nodeAlpha})`;
-            ctx.font = `700 ${Math.max(8, r * 0.34)}px 'Inter',sans-serif`;
+            ctx.font = `700 ${Math.max(8, coreR * 0.7)}px 'Inter',sans-serif`;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText('!', gx, gy + 0.5);
             ctx.restore();
@@ -917,33 +1133,33 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         }
       }
 
-      // YOU drawn in world space, last so it stays on top
-      const bpm = 30;
-      const pulse = (Math.sin(timeRef.current * (bpm / 60) * 0.05) + 1) / 2; // 0–1
-      const youHovered = hoveredRef.current?.isCenter ? 1 : 0;
-      youHoverTRef.current += (youHovered - youHoverTRef.current) * 0.12;
-      const t = youHoverTRef.current;
-      const youRadius = isFirstExperience ? 44 * (1 + 0.12 * pulse) : 44;
-      ctx.beginPath(); ctx.arc(youWorldX, youWorldY, youRadius, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(232,232,240,1)'; ctx.fill();
-      ctx.strokeStyle = 'rgba(232,232,240,0.95)'; ctx.lineWidth = 2; ctx.stroke();
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      // YOU drawn in world space, last so it stays on top.
+      // First-experience preserves the pulsing "+" disc; otherwise we render
+      // YOU as the brightest star at the heart of the constellation.
       if (isFirstExperience) {
+        const bpm = 30;
+        const pulse = (Math.sin(timeRef.current * (bpm / 60) * 0.05) + 1) / 2;
+        const youRadius = 44 * (1 + 0.12 * pulse);
+        ctx.beginPath(); ctx.arc(youWorldX, youWorldY, youRadius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(232,232,240,1)'; ctx.fill();
+        ctx.strokeStyle = 'rgba(232,232,240,0.95)'; ctx.lineWidth = 2; ctx.stroke();
         const plusAlpha = 0.3 + 0.7 * pulse;
         ctx.fillStyle = `rgba(11,15,25,${plusAlpha})`;
         ctx.font = "300 64px 'Inter',sans-serif";
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText('+', youWorldX, youWorldY);
       } else {
-        if (t < 0.999) {
-          ctx.fillStyle = `rgba(11,15,25,${0.95 * (1 - t)})`;
-          ctx.font = "600 16px 'Inter',sans-serif";
-          ctx.fillText('YOU', youWorldX, youWorldY);
-        }
-        if (t > 0.001) {
-          ctx.fillStyle = `rgba(11,15,25,${0.95 * t})`;
-          ctx.font = "300 64px 'Inter',sans-serif";
-          ctx.fillText('+', youWorldX, youWorldY);
-        }
+        const youHov = !!hoveredRef.current?.isCenter;
+        const youDim = (neighborSet && !neighborSet.has('you')) ? 0.40 : 1;
+        const youDrawR = 44;
+        drawStarNode(ctx, { x: youWorldX, y: youWorldY }, youDrawR, '#ffffff', youDim, youHov);
+        ctx.fillStyle = `rgba(232,232,240,${0.95 * youDim})`;
+        ctx.font = "600 11px 'Space Grotesk','Inter',sans-serif";
+        if ('letterSpacing' in ctx) ctx.letterSpacing = '0.22em';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('YOU', youWorldX, youWorldY + youDrawR * 0.48 + 14);
+        if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
       }
 
       if (isFirstExperience) {
