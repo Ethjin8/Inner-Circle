@@ -1,9 +1,19 @@
+import {
+  TENURE_KEYS,
+  FREQUENCY_KEYS,
+  LAST_INTERACTION_KEYS,
+  CHANNEL_KEYS,
+  SUPPORT_KEYS,
+  KNOWS_KEYS,
+  RELATIONSHIP_TYPE_KEYS,
+} from '../constants/personSchema.js';
+
 const LIVE_MODEL = 'models/gemini-3.1-flash-live-preview';
 const EXTRACT_MODEL = 'models/gemini-2.5-flash';
 
 // ─── Person extraction (REST fallback) ───────────────────────────────────────
 
-const EXTRACT_SCHEMA = '{"name":null,"birthday":null,"notes":null,"relationship":{"type":"friend"},"context":{"how_we_met":null,"school":null,"work":null,"hobbies":[],"sports":[],"favorites":{"foods":[],"music":[]}},"history":{"memories_together":[],"important_events":[],"things_to_look_forward_to":[]}}';
+const EXTRACT_SCHEMA = '{"name":null,"birthday":null,"notes":null,"relationship":{"type":"friend","tenure":null,"frequency":null,"last_interaction":null,"channels":[],"they_show_up_for_me":null,"i_show_up_for_them":null,"knows_about_me":null},"context":{"how_we_met":null,"school":null,"work":null,"hobbies":[],"sports":[],"favorites":{"foods":[],"music":[]}},"history":{"memories_together":[],"important_events":[],"things_to_look_forward_to":[]}}';
 
 const EXTRACT_PROMPT = `You are extracting contact information from a voice onboarding conversation.
 
@@ -14,6 +24,13 @@ Fill in the JSON below using only details explicitly mentioned. Rules:
 - null for text fields that were not mentioned
 - [] for array fields that were not mentioned
 - relationship.type: one of family | friend | classmate | coworker | professional | romantic | mentor | other
+- relationship.tenure: one of just_met | months | one_year | few_years | five_plus | lifetime, else null
+- relationship.frequency: one of daily | weekly | monthly | few_times_a_year | rarely, else null
+- relationship.last_interaction: one of today | this_week | this_month | this_season | this_year | over_a_year, else null
+- relationship.channels: array (subset) of in_person | text | call | video_call | dm | email | other; [] if unmentioned
+- relationship.they_show_up_for_me / i_show_up_for_them: one of yes | sometimes | not_really | not_sure, else null
+- relationship.knows_about_me: one of most_of_it | some_of_it | not_really | not_sure, else null
+- Map free-form phrasings to the closest enum (e.g. "every week" → weekly, "since high school" → few_years, "yeah definitely" → yes, "kind of" → sometimes).
 - birthday: YYYY-MM-DD if a date was mentioned, otherwise null
 - notes: a 1-3 sentence prose summary of the relationship in the user's own framing (closeness, cadence, emotional tone). null if there's nothing to summarize.
 
@@ -62,21 +79,31 @@ const DEFAULT_SYSTEM_PROMPT = `You are Inner Circle's onboarding voice agent.
 Collect enough context to add a person to the user's relationship graph.
 
 Flow:
-1) Ask for name + relationship category.
-2) Ask optional birthday + category-relevant facts.
-3) Ask shared history (memories, milestones, future plans).
-4) If signal is thin, end early and summarize clearly.
+1) Ask for the person's name and the user's relationship category (family / friend / classmate / coworker / professional / romantic / mentor / other).
+2) Ask the seven Connection questions in order — these are the load-bearing signals. Ask them naturally, one at a time, in plain language. Do NOT list options to the user; map their answer internally to the closest enum.
+   a) How long have you known them? (just_met / months / one_year / few_years / five_plus / lifetime)
+   b) How often do you interact? (daily / weekly / monthly / few_times_a_year / rarely)
+   c) When did you last talk or hang out? (today / this_week / this_month / this_season / this_year / over_a_year)
+   d) How do you usually connect? (in_person / text / call / video_call / dm / email / other — multi-OK)
+   e) When you're going through something, do they show up for you? (yes / sometimes / not_really / not_sure)
+   f) When they're going through something, do you show up for them? (yes / sometimes / not_really / not_sure)
+   g) Do they know your big stuff — family, fears, goals? (most_of_it / some_of_it / not_really / not_sure)
+3) If the user is engaged, ask optional context: birthday, how you met, school/work, hobbies, memories. If the signal is thin or the user wants to wrap up, end early and summarize.
 
 Style:
 - Warm, concise, one question at a time.
+- Map free-form answers to the closest enum value internally — don't list options to the user unless they ask. ("every week" → weekly; "yeah, definitely" → yes; "since high school" → few_years or five_plus.)
 - Never ask for sensitive private data.
 - Keep turns short for spoken conversation.
 
-When the user sends the text "EXTRACT_JSON", respond ONLY with these labeled sentences — no extra commentary, say "unknown" for anything not mentioned:
-"Name is [full name]. Relationship type is [family|friend|classmate|coworker|professional|romantic|mentor|other]. Birthday is [YYYY-MM-DD or unknown]. Notes are [a 1-3 sentence prose summary of the relationship in the user's own framing — closeness, cadence, emotional tone — or unknown]. How we met is [value or unknown]. School is [value or unknown]. Work is [value or unknown]. Hobbies are [comma list or unknown]. Sports are [comma list or unknown]. Favorite foods are [comma list or unknown]. Favorite music is [comma list or unknown]. Memories are [comma list or unknown]. Important events are [comma list or unknown]. Future plans are [comma list or unknown]."`;
+When you have collected the seven Connection answers (a–g) — or the user clearly wants to wrap up — call the finish_intake tool exactly once. Say a brief warm closing line ("Got it, adding them now.") in the same turn. Do not call finish_intake earlier; do not call it more than once.
 
-// Parse the labeled-sentence response spoken by the model (ASR-friendly, no JSON needed)
-function parseLabeledSpeech(raw) {
+When the user sends the text "EXTRACT_JSON", respond ONLY with these labeled sentences — no extra commentary, say "unknown" for anything not mentioned, and ALWAYS use exactly these labels in this exact order:
+"Name is [full name]. Relationship type is [family|friend|classmate|coworker|professional|romantic|mentor|other]. Tenure is [just_met|months|one_year|few_years|five_plus|lifetime|unknown]. Frequency is [daily|weekly|monthly|few_times_a_year|rarely|unknown]. Last interaction is [today|this_week|this_month|this_season|this_year|over_a_year|unknown]. Channels are [comma list of in_person|text|call|video_call|dm|email|other, or unknown]. They show up for me is [yes|sometimes|not_really|not_sure|unknown]. I show up for them is [yes|sometimes|not_really|not_sure|unknown]. Knows about me is [most_of_it|some_of_it|not_really|not_sure|unknown]. Birthday is [YYYY-MM-DD or unknown]. Notes are [a 1-3 sentence prose summary of the relationship in the user's own framing — closeness, cadence, emotional tone — or unknown]. How we met is [value or unknown]. School is [value or unknown]. Work is [value or unknown]. Hobbies are [comma list or unknown]. Sports are [comma list or unknown]. Favorite foods are [comma list or unknown]. Favorite music is [comma list or unknown]. Memories are [comma list or unknown]. Important events are [comma list or unknown]. Future plans are [comma list or unknown]."`;
+
+// Parse the labeled-sentence response spoken by the model (ASR-friendly,
+// no JSON needed). Exported for unit tests.
+export function parseLabeledSpeech(raw) {
   const t = raw.toLowerCase().replace(/["""]/g, '');
 
   const field = (pattern) => {
@@ -94,11 +121,27 @@ function parseLabeledSpeech(raw) {
     return v.split(',').map((s) => s.trim()).filter(Boolean);
   };
 
+  const enumField = (pattern, allowed) => {
+    const v = field(pattern);
+    return v && allowed.includes(v) ? v : null;
+  };
+
   const name = field(/name is ([^.]+)/);
-  const relType = field(/relationship type is ([^.]+)/);
+  const relTypeRaw = field(/relationship type is ([^.]+)/);
+  const relType = RELATIONSHIP_TYPE_KEYS.find((r) => relTypeRaw?.includes(r)) ?? 'friend';
+
+  const tenure           = enumField(/tenure is ([^.]+)/,           TENURE_KEYS);
+  const frequency        = enumField(/frequency is ([^.]+)/,        FREQUENCY_KEYS);
+  const lastInteraction  = enumField(/last interaction is ([^.]+)/, LAST_INTERACTION_KEYS);
+  const channels         = list(/channels are ([^.]+)/).filter((c) => CHANNEL_KEYS.includes(c));
+  const theyShowUp       = enumField(/they show up for me is ([^.]+)/, SUPPORT_KEYS);
+  const iShowUp          = enumField(/i show up for them is ([^.]+)/,  SUPPORT_KEYS);
+  const knowsAboutMe     = enumField(/knows about me is ([^.]+)/,      KNOWS_KEYS);
+
   const birthday = field(/birthday is ([\d-]+)/);
-  // Notes can span multiple sentences (and contain periods), so terminate on
-  // the next labeled field instead of on the first period.
+
+  // Notes can span multiple sentences (and contain periods), so terminate
+  // on the next labeled field instead of on the first period.
   const notesMatch = t.match(/notes are (.+?)\s+how we met is /);
   const notesRaw = notesMatch?.[1]?.trim().replace(/\.$/, '') ?? null;
   const notes = (notesRaw === 'unknown' || !notesRaw) ? null : notesRaw;
@@ -108,8 +151,14 @@ function parseLabeledSpeech(raw) {
     birthday: birthday || null,
     ...(notes ? { notes } : {}),
     relationship: {
-      type: ['family','friend','classmate','coworker','professional','romantic','mentor','other']
-        .find((r) => relType?.includes(r)) ?? 'friend',
+      type: relType,
+      tenure,
+      frequency,
+      last_interaction: lastInteraction,
+      channels,
+      they_show_up_for_me: theyShowUp,
+      i_show_up_for_them: iShowUp,
+      knows_about_me: knowsAboutMe,
     },
     context: {
       how_we_met: field(/how we met is ([^.]+)/),
@@ -137,6 +186,7 @@ export class GeminiLiveSession {
     onUserTranscript,
     onStatus,
     onError,
+    onFinishIntake,
     systemPrompt = DEFAULT_SYSTEM_PROMPT,
   }) {
     this.apiKey = apiKey;
@@ -144,6 +194,8 @@ export class GeminiLiveSession {
     this.onUserTranscript = onUserTranscript;
     this.onStatus = onStatus;
     this.onError = onError;
+    this.onFinishIntake = onFinishIntake;
+    this.finishCalled = false;
     this.systemPrompt = systemPrompt;
     this.socket = null;
     this.setupComplete = false;
@@ -183,6 +235,14 @@ export class GeminiLiveSession {
           inputAudioTranscription: {},
           outputAudioTranscription: {},
           systemInstruction: { parts: [{ text: this.systemPrompt }] },
+          tools: [{
+            functionDeclarations: [{
+              name: 'finish_intake',
+              description:
+                'Signal that the voice intake conversation is complete and the client should extract and save the person. Call exactly once after collecting the seven Connection answers, or when the user clearly wants to wrap up.',
+              parameters: { type: 'OBJECT', properties: {} },
+            }],
+          }],
         },
       });
     });
@@ -198,6 +258,24 @@ export class GeminiLiveSession {
         if (payload?.setupComplete) {
           this.setupComplete = true;
           this.onStatus?.('connected');
+          return;
+        }
+
+        const toolCall = payload?.toolCall;
+        if (toolCall?.functionCalls?.length) {
+          const responses = [];
+          for (const call of toolCall.functionCalls) {
+            responses.push({
+              id: call.id,
+              name: call.name,
+              response: { result: 'ok' },
+            });
+            if (call.name === 'finish_intake' && !this.finishCalled) {
+              this.finishCalled = true;
+              this.onFinishIntake?.();
+            }
+          }
+          this.send({ toolResponse: { functionResponses: responses } });
           return;
         }
 
