@@ -831,7 +831,7 @@ function App() {
             deletingIds={deletingIds}
             people={displayPeople}
             categories={categories}
-            leftInset={!isFirstExperience && explorerOpen ? 232 : 0}
+            leftInset={0}
             isFirstExperience={isFirstExperience}
             userName={(user?.displayName || user?.email?.split('@')[0] || '').split(' ')[0]}
             onCenterClick={() => setAddPersonOpen(true)}

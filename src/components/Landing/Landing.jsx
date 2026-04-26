@@ -92,7 +92,7 @@ const drawBackgroundStars = (ctx, stars, t) => {
   }
 };
 
-const drawNorthStar = (ctx, w, h, t, yRatio = 0.45) => {
+const drawNorthStar = (ctx, w, h, t, yRatio = 0.35) => {
   const x = w / 2;
   const y = h * yRatio;
   const pulse = 0.75 + 0.25 * Math.sin(t * 0.0008);
@@ -284,7 +284,7 @@ export default function Landing({ onEnter, user, people = [] }) {
           drawConstellation(ctx, c);
         }
       }
-      drawNorthStar(ctx, w, h, t, 0.45);
+      drawNorthStar(ctx, w, h, t, 0.44);
 
       raf = requestAnimationFrame(render);
     };
