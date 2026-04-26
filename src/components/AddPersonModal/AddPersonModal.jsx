@@ -457,9 +457,9 @@ export default function AddPersonModal({ open, onClose, onAdd, initialMode = 'vo
         {mode === 'voice' && (
           <>
             <div className="apm-header">
-              <h2 className="apm-title">Tell me about someone</h2>
+              <h2 className="apm-title">Tell Me About Someone</h2>
               <p className="apm-subtitle">
-                Just talk — who they are, how you know them, anything you want to remember. I'll add them to your graph.
+                Speak naturally — who they are, how you know them, what's worth remembering.
               </p>
             </div>
 
@@ -547,11 +547,11 @@ export default function AddPersonModal({ open, onClose, onAdd, initialMode = 'vo
             <div className="apm-header">
               <div className="apm-eyebrow">Manual entry</div>
               <h2 className="apm-title">
-                {STEPS[step].id === 'identity'   && 'Who are they?'}
-                {STEPS[step].id === 'connection' && 'How connected are you?'}
-                {STEPS[step].id === 'context'    && 'How do you know them?'}
-                {STEPS[step].id === 'interests'  && "What are they into?"}
-                {STEPS[step].id === 'memories'   && 'What do you remember?'}
+                {STEPS[step].id === 'identity'   && 'The Basics'}
+                {STEPS[step].id === 'connection' && 'How Close?'}
+                {STEPS[step].id === 'context'    && 'The Backstory'}
+                {STEPS[step].id === 'interests'  && 'Their Interests'}
+                {STEPS[step].id === 'memories'   && 'Worth Remembering'}
               </h2>
             </div>
 

@@ -93,7 +93,7 @@
 
 .apm-title {
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 400;
   font-size: 28px;
   background: linear-gradient(135deg, var(--text-primary) 0%, rgba(232, 232, 240, 0.9) 100%);
   -webkit-background-clip: text;

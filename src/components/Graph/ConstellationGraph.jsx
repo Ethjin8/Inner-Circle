@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useMemo } from 'react';
 
 // Pan momentum after release. Higher = longer glide. Range ~0.85–0.97.
 const PAN_INERTIA_DECAY = 0.92;
@@ -47,7 +47,7 @@ function isBirthdayToday(iso) {
 // (cx, cy) as a fraction of baseWinSize, given the radial layout in
 // initNodes (cat at 0.36*1.35 horiz / 0.36*0.8 vert, plus a person
 // pushed out by another ~0.292 horiz / 0.173 vert at min strength).
-function computeLayout(width, height) {
+function computeLayout(width, height, leftInset = 0) {
   const TOP_INSET = 76;     // header (~64px) + a few px of breathing room
   const BOTTOM_INSET = 116; // prompt input + hint + bottom offset
   const SIDE_INSET = 24;
@@ -62,8 +62,10 @@ function computeLayout(width, height) {
   const H_REACH = 0.76;
   const V_REACH = 0.45;
   const safeH = Math.max(280, height - TOP_INSET - BOTTOM_INSET - NODE_PAD * 2);
-  const safeW = Math.max(280, width - SIDE_INSET * 2 - NODE_PAD * 2);
-  const cx = width / 2;
+  const safeW = Math.max(280, width - leftInset - SIDE_INSET * 2 - NODE_PAD * 2);
+  // Bias center to the right of any always-visible left chrome (e.g. the
+  // Explorer panel). leftInset = 0 keeps the legacy centered behavior.
+  const cx = leftInset + (width - leftInset) / 2;
   const cy = TOP_INSET + NODE_PAD + safeH / 2 - Math.min(safeW, safeH) * 0.05;
   // Reach extends *both* directions from (cx, cy), so each axis only has
   // safe/2 to work with. Clamp to the original min(w,h) so we never
@@ -402,7 +404,29 @@ function clampToBounds(node, width, height) {
   node.baseY = Math.max(PADDING_TOP + r, Math.min(height - PADDING_BOTTOM - r, node.baseY));
 }
 
-export default function ConstellationGraph({ activeFilters, focusedCategory, onZoomOut, onZoomIn, people = DEMO_PEOPLE, onNodeClick, onNodeDoubleClick, activeTool, onSnip, deletingIds = [], panRef: externalPanRef, isFirstExperience = false, userName = '', onCenterClick, onHoverChange }) {
+export default function ConstellationGraph({ activeFilters, focusedCategory, onZoomOut, onZoomIn, people = DEMO_PEOPLE, categories: dynamicCategories, leftInset = 0, onNodeClick, onNodeDoubleClick, activeTool, onSnip, deletingIds = [], panRef: externalPanRef, isFirstExperience = false, userName = '', onCenterClick, onHoverChange }) {
+  const leftInsetRef = useRef(leftInset);
+  useEffect(() => {
+    leftInsetRef.current = leftInset;
+    // Trigger a relayout when the inset changes so target positions update.
+    const c = canvasRef.current;
+    if (c?.parentElement) {
+      const w = c.parentElement.clientWidth;
+      const h = c.parentElement.clientHeight;
+      // initNodes is defined below — call indirectly via the next-tick path:
+      // dispatching a resize event makes the existing resize handler re-run.
+      window.dispatchEvent(new Event('resize'));
+      void w; void h;
+    }
+  }, [leftInset]);
+  // Merge: built-in CATEGORIES (for stable defaults) + user-created entries
+  // by key. Re-evaluated on render so newly-added categories light up
+  // immediately on the canvas.
+  const CAT_LOOKUP = useMemo(() => {
+    const m = { ...CATEGORIES };
+    (dynamicCategories || []).forEach((c) => { m[c.key] = { color: c.color }; });
+    return m;
+  }, [dynamicCategories]);
   // Keep latest onHoverChange in a ref so the canvas effect (which only runs once) can call it.
   const onHoverChangeRef = useRef(onHoverChange);
   useEffect(() => { onHoverChangeRef.current = onHoverChange; }, [onHoverChange]);
@@ -451,8 +475,21 @@ const internalPanRef = useRef({ x: 0, y: 0 });
   const leanRef = useRef({ x: 0, y: 0 }); // smoothed magnetic lean of hovered node toward cursor
   const prevHoveredIdRef = useRef(null); // hover transitions trigger one chain pulse
 
+  const catLabelByKey = useMemo(() => {
+    const m = {};
+    (dynamicCategories || []).forEach((c) => { m[c.key] = c.label; });
+    return m;
+  }, [dynamicCategories]);
+  const catLabelByKeyRef = useRef(catLabelByKey);
+  useEffect(() => {
+    catLabelByKeyRef.current = catLabelByKey;
+    // Relayout so freshly-renamed/created categories show their friendly
+    // label on the canvas instead of stale text.
+    window.dispatchEvent(new Event('resize'));
+  }, [catLabelByKey]);
+
   const initNodes = useCallback((width, height) => {
-    const { cx, cy, baseWinSize } = computeLayout(width, height);
+    const { cx, cy, baseWinSize } = computeLayout(width, height, leftInsetRef.current);
 
     const grouped = {};
     for (const p of people) {
@@ -482,10 +519,12 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       const manualOffX = oldCat ? (oldCat.manualOffX ?? 0) : 0;
       const manualOffY = oldCat ? (oldCat.manualOffY ?? 0) : 0;
 
+      const friendlyLabel = catLabelByKeyRef.current[catKey];
+      const displayName = (friendlyLabel || catKey).toUpperCase();
       const catNode = {
         isCategory: true,
         id: `cat_${catKey}`,
-        name: catKey.toUpperCase(),
+        name: displayName,
         initials: '',
         category: catKey,
         avgStrength,
@@ -595,7 +634,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
     resize();
 
     const getCenter = () => {
-      const { cx, cy } = computeLayout(width, height);
+      const { cx, cy } = computeLayout(width, height, leftInsetRef.current);
       return { cx, cy };
     };
 
@@ -656,7 +695,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         const catNode = nodesRef.current.find(n => n.isCategory && n.category === fc);
         if (catNode) {
           const s = camRef.current.scale;
-          const { cx: lcx, cy: lcy } = computeLayout(width, height);
+          const { cx: lcx, cy: lcy } = computeLayout(width, height, leftInsetRef.current);
           camRef.current.x = (lcx - catNode.x) * s + userPanRef.current.x;
           camRef.current.y = (lcy - catNode.y) * s + userPanRef.current.y;
         }
@@ -753,7 +792,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
             const catNode = nodesRef.current.find(n => n.isCategory && n.category === focusedCategoryRef.current);
             if (catNode) {
               const s = camRef.current.scale;
-              const { cx: lcx, cy: lcy } = computeLayout(width, height);
+              const { cx: lcx, cy: lcy } = computeLayout(width, height, leftInsetRef.current);
               camRef.current.x = (lcx - catNode.x) * s + userPanRef.current.x;
               camRef.current.y = (lcy - catNode.y) * s + userPanRef.current.y;
             }
@@ -1005,24 +1044,9 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         a.y += ((a.targetY + yoy + swayY) - a.y) * 0.1;
       }
 
-      // Pulses signal "you reaching out" along the chain YOU → cat → person.
-      // Two spawn paths: rare ambient on the top-3 strongest, and one chain pulse
-      // on every hover transition (so the meaning is learned by interaction).
+      // Pulses fire on hover transitions only. Travel speed encodes relationship
+      // strength: stronger ties pulse faster, weaker ties drift slowly.
       {
-        const scoredPeople = nodesRef.current
-          .filter(n => !n.isCategory && n.isScored && !deletingIds.includes(n.id) && !isDimmed(n.category))
-          .sort((a, b) => b.strength - a.strength);
-        for (const n of scoredPeople.slice(0, 3)) {
-          if (Math.random() < 1 / 720) {
-            const path = ['you', n.parentCat?.id, n.id].filter(Boolean);
-            if (path.length >= 2) {
-              pulsesRef.current.push({
-                path, t: 0, speed: 1 / 100,
-                color: CATEGORIES[n.category]?.color || '#cdc9c0',
-              });
-            }
-          }
-        }
         const hovId = hoveredRef.current?.id || null;
         if (hovId !== prevHoveredIdRef.current) {
           prevHoveredIdRef.current = hovId;
@@ -1032,9 +1056,11 @@ const internalPanRef = useRef({ x: 0, y: 0 });
               ? ['you', target.id]
               : ['you', target.parentCat?.id, target.id].filter(Boolean);
             if (path.length >= 2) {
+              const s = Math.max(0, Math.min(100, target.isCategory ? 60 : (target.strength ?? 50)));
+              const speed = 1 / (140 - s * 0.9); // s=0 → 1/140, s=100 → 1/50
               pulsesRef.current.push({
-                path, t: 0, speed: 1 / 80,
-                color: CATEGORIES[target.category]?.color || '#cdc9c0',
+                path, t: 0, speed,
+                color: CAT_LOOKUP[target.category]?.color || '#cdc9c0',
               });
             }
           }
@@ -1049,7 +1075,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         for (const id of newIds) {
           const node = nodesRef.current.find(n => n.id === id);
           if (!node) continue;
-          const cat = CATEGORIES[node.category] || CATEGORIES.other;
+          const cat = CAT_LOOKUP[node.category] || CAT_LOOKUP.other;
           // convert node world pos to screen pos
           const sx = (node.x - cx) * camRef.current.scale + cx + camRef.current.x;
           const sy = (node.y - cy) * camRef.current.scale + cy + camRef.current.y;
@@ -1196,7 +1222,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       // Nodes — luminous stars (people) + hollow rings (categories), labels below.
       for (const node of nodesRef.current) {
         if (deletingIds.includes(node.id)) continue;
-        const cat = CATEGORIES[node.category] || CATEGORIES.other;
+        const cat = CAT_LOOKUP[node.category] || CAT_LOOKUP.other;
         const dimT = dimAmount(node.category, camRef.current.scale);
         const isHov = hoveredRef.current?.id === node.id;
         const filterDimVal = 1 - dimT * (1 - 0.20);
