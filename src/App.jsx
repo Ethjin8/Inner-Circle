@@ -10,6 +10,7 @@ import { usePeople } from './hooks/usePeople';
 import { usePhotos } from './hooks/usePhotos';
 import { scorePerson } from './services/scoring';
 import './App.css';
+import './components/Chat/Chat.css';
 
 const FILTERS = [
   { key: null, label: 'All' },
