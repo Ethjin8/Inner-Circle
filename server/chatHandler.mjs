@@ -172,14 +172,15 @@ async function runAgentLoop({ client, system, messages, tools, ctx, res }) {
             const lastChar = last.text[last.text.length - 1];
             const firstChar = fixedText[0];
 
-            // If previous chunk ended with punctuation and current chunk starts with a letter (no space)
-            if (/[.!?:;,]/.test(lastChar) && firstChar && /[a-zA-Z]/.test(firstChar) && firstChar !== ' ') {
+            // If previous chunk ended with punctuation and current chunk starts with any non-space character
+            // (except for additional punctuation which may be intentional like "!?" or "...")
+            if (/[.!?:;,]/.test(lastChar) && firstChar && !/[\s.!?:;,]/.test(firstChar)) {
               fixedText = ' ' + fixedText;
             }
           }
 
-          // Also fix spacing within the current chunk
-          fixedText = fixedText.replace(/([.!?:;,])([A-Za-z])/g, '$1 $2');
+          // Also fix spacing within the current chunk - add space after punctuation before any non-space, non-punctuation character
+          fixedText = fixedText.replace(/([.!?:;,])([^\s.!?:;,])/g, '$1 $2');
 
           if (last?.type === 'text') last.text += fixedText;
           sseWrite(res, 'text-delta', { delta: fixedText });
