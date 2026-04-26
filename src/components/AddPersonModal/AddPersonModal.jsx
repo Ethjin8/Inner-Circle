@@ -177,7 +177,7 @@ function ChipMultiGroup({ label, options, values, onChange }) {
 }
 
 // ─── main component ───────────────────────────────────────────────────────────
-export default function AddPersonModal({ open, onClose, onAdd, isSelf = false }) {
+export default function AddPersonModal({ open, onClose, onAdd }) {
   const [mode, setMode] = useState('voice');
   const [step, setStep] = useState(0);
   const [form, setForm] = useState(BLANK_PERSON());
@@ -403,8 +403,7 @@ export default function AddPersonModal({ open, onClose, onAdd, isSelf = false })
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleFormSubmit = () => {
-    const formForBuild = isSelf ? { ...form, name: 'You' } : form;
-    const person = buildPersonFromForm(formForBuild);
+    const person = buildPersonFromForm(form);
     if (!person) return;
     onAdd?.(person);
     resetAll();
@@ -571,20 +570,18 @@ export default function AddPersonModal({ open, onClose, onAdd, isSelf = false })
               {/* ── Step 0: Identity ── */}
               {STEPS[step].id === 'identity' && (
                 <>
-                  {!isSelf && (
-                    <div className="apm-field">
-                      <label className="apm-label" htmlFor="apm-name">Name <span className="apm-required">*</span></label>
-                      <input
-                        id="apm-name"
-                        className="apm-text-input"
-                        type="text"
-                        value={form.name}
-                        onChange={(e) => set('name', e.target.value)}
-                        placeholder="e.g. Lily Chen"
-                        autoFocus
-                      />
-                    </div>
-                  )}
+                  <div className="apm-field">
+                    <label className="apm-label" htmlFor="apm-name">Name <span className="apm-required">*</span></label>
+                    <input
+                      id="apm-name"
+                      className="apm-text-input"
+                      type="text"
+                      value={form.name}
+                      onChange={(e) => set('name', e.target.value)}
+                      placeholder="e.g. Lily Chen"
+                      autoFocus
+                    />
+                  </div>
 
                   <div className="apm-field">
                     <div className="apm-label">Relationship</div>

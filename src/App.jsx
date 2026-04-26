@@ -61,7 +61,6 @@ function App() {
   const [promptText, setPromptText] = useState('');
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [addPersonOpen, setAddPersonOpen] = useState(false);
-  const [addPersonIsSelf, setAddPersonIsSelf] = useState(false);
   const [zoomTarget, setZoomTarget] = useState(null);
   const [focusedCategory, setFocusedCategory] = useState(null);
   const [expandedCats, setExpandedCats] = useState(new Set());
@@ -367,7 +366,7 @@ function App() {
             people={displayPeople}
             isFirstExperience={isFirstExperience}
             userName={(user?.displayName || user?.email?.split('@')[0] || '').split(' ')[0]}
-            onCenterClick={() => { setAddPersonIsSelf(isFirstExperience); setAddPersonOpen(true); }}
+            onCenterClick={() => setAddPersonOpen(true)}
           />
         </div>
       </div>
@@ -434,7 +433,7 @@ function App() {
               <line x1="7" y1="0.8" x2="7" y2="13.2" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
               <circle cx="7" cy="7" r="1" fill="currentColor" />
             </svg>
-            {!sidebarCollapsed && <span className="logo-text">Inner Circle</span>}
+            <span className="logo-text collapsible-label">Inner Circle</span>
           </div>
           <button
             type="button"
@@ -461,10 +460,8 @@ function App() {
           <svg className="sidebar-section-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
           </svg>
-          {!sidebarCollapsed && <>
-            <span className={`chevron ${explorerOpen ? 'expanded' : ''}`}>›</span>
-            <span>EXPLORER</span>
-          </>}
+          <span className={`chevron collapsible-label ${explorerOpen ? 'expanded' : ''}`}>›</span>
+          <span className="collapsible-label">EXPLORER</span>
         </button>
         {!sidebarCollapsed && explorerOpen && (<>
         <div className="sidebar-search">
@@ -595,11 +592,9 @@ function App() {
           <svg className="sidebar-section-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
-          {!sidebarCollapsed && <>
-            <span className={`chevron ${pastChatsOpen ? 'expanded' : ''}`}>›</span>
-            <span>PAST CHATS</span>
-            {chatThreads.length > 0 && <span className="sidebar-section-count">{chatThreads.length}</span>}
-          </>}
+          <span className={`chevron collapsible-label ${pastChatsOpen ? 'expanded' : ''}`}>›</span>
+          <span className="collapsible-label">PAST CHATS</span>
+          {chatThreads.length > 0 && <span className="sidebar-section-count collapsible-label">{chatThreads.length}</span>}
         </button>
         {!sidebarCollapsed && pastChatsOpen && (
           <ChatHistory
@@ -619,7 +614,7 @@ function App() {
             aria-pressed={showDemo}
           >
             <span className="demo-toggle-dot" />
-            {!sidebarCollapsed && <span>{showDemo ? 'Demo on' : 'Demo'}</span>}
+            <span className="collapsible-label">{showDemo ? 'Demo on' : 'Demo'}</span>
           </button>
           <button
             type="button"
@@ -633,7 +628,7 @@ function App() {
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
-            {!sidebarCollapsed && <span>Sign out</span>}
+            <span className="collapsible-label">Sign out</span>
           </button>
         </div>
       </aside>}
@@ -696,7 +691,7 @@ function App() {
         <div className="prompt-switcher">
           <button
             className="prompt-add-button"
-            onClick={() => { setAddPersonIsSelf(false); setAddPersonOpen(true); }}
+            onClick={() => setAddPersonOpen(true)}
             aria-label="Add person"
             tabIndex={isPromptExpanded ? -1 : 0}
           >
@@ -754,8 +749,7 @@ function App() {
       )}
       <AddPersonModal
         open={addPersonOpen}
-        isSelf={addPersonIsSelf}
-        onClose={() => { setAddPersonOpen(false); setAddPersonIsSelf(false); }}
+        onClose={() => setAddPersonOpen(false)}
         onAdd={(person) => {
           // Optimistic local insert (renderer treats unscored nodes as
           // neutral grey) + Firestore persist. The AI pipeline runs async

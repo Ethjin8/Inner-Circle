@@ -195,7 +195,23 @@
   pointer-events: auto;
   width: 240px;
   box-sizing: border-box;
-  transition: width 0.25s ease;
+  transition: width 0.32s cubic-bezier(0.4, 0, 0.2, 1), padding 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.collapsible-label {
+  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: 1;
+  max-width: 200px;
+  transition: opacity 0.18s ease 0.08s, max-width 0.32s cubic-bezier(0.4, 0, 0.2, 1), margin 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sidebar.collapsed .collapsible-label {
+  opacity: 0;
+  max-width: 0;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  transition: opacity 0.12s ease, max-width 0.32s cubic-bezier(0.4, 0, 0.2, 1), margin 0.32s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar.collapsed { width: 56px; padding: 12px 6px; }
@@ -207,6 +223,8 @@
   justify-content: space-between;
   gap: 6px;
   padding: 4px 6px 12px;
+  min-height: 44px;
+  box-sizing: content-box;
 }
 
 .sidebar-logo {
@@ -216,7 +234,10 @@
   color: var(--text-primary, #e8e8f0);
   padding: 6px;
   min-width: 0;
+  line-height: 20px;
 }
+
+.logo-text { line-height: 20px; }
 
 .sidebar-collapse-btn {
   display: flex;
@@ -278,11 +299,10 @@
   cursor: pointer;
   font-family: var(--font-body);
   font-size: 12px;
+  line-height: 16px;
 }
 .sidebar-signout:hover { background: rgba(232, 232, 240, 0.06); color: var(--text-primary, #e8e8f0); }
 
-.sidebar.collapsed .sidebar-signout { justify-content: center; }
-.sidebar.collapsed .sidebar-section-header { justify-content: center; padding: 8px 0; }
 
 .sidebar-section-icon { flex-shrink: 0; }
 
@@ -305,6 +325,8 @@
   border: none;
   padding: 8px;
   margin: 4px 0 8px;
+  line-height: 14px;
+  min-height: 14px;
   font-family: var(--font-body);
   font-size: 10px;
   font-weight: 600;
