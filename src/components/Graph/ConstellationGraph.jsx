@@ -257,6 +257,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
   const youHoverTRef = useRef(0); // 0..1 fade between YOU and +
   const lastActivityRef = useRef(performance.now());
   const recenteredRef = useRef(false);
+  const wheelLockUntilRef = useRef(0);
 
   const initNodes = useCallback((width, height) => {
     const cx = width / 2;
@@ -627,12 +628,11 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       }
     };
 
-    let wheelLockUntil = 0;
     const onKeyDown = (e) => {
       if (e.key === 'Escape' || e.key === '-') {
         stopMomentum();
         markActivity();
-        wheelLockUntil = performance.now() + 500;
+        wheelLockUntilRef.current = performance.now() + 500;
         userPanRef.current.x = 0;
         userPanRef.current.y = 0;
         youPosRef.current.x = 0;
@@ -646,7 +646,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
     };
     const onWheel = (e) => {
       e.preventDefault();
-      if (performance.now() < wheelLockUntil) return;
+      if (performance.now() < wheelLockUntilRef.current) return;
       markActivity();
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;

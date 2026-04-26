@@ -620,7 +620,7 @@ function App() {
             type="button"
             className="sidebar-signout"
             onClick={signOut}
-            title={user.email || 'Sign out'}
+            title={user?.email || 'Sign out'}
             aria-label="Sign out"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
