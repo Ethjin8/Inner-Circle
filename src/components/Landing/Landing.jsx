@@ -210,12 +210,6 @@ export default function Landing({ onEnter, user }) {
     window.addEventListener('mouseleave', onLeave);
     window.addEventListener('click', onClick);
 
-    // const shootingTimer = setInterval(() => {
-    //   stateRef.current.shooting.push(
-    //     spawnShootingStar(window.innerWidth, window.innerHeight)
-    //   );
-    // }, SHOOTING_INTERVAL_MS);
-
     let raf;
     const render = (t) => {
       const w = window.innerWidth;
@@ -227,90 +221,6 @@ export default function Landing({ onEnter, user }) {
 
       drawNorthStar(ctx, w, h, t, 0.45);
 
-      // // Ambient stars
-      // ambient.forEach((s) => {
-      //   const prox = proximity(s.x, s.y, mouse.x, mouse.y, HOVER_RADIUS);
-      //   const twinkle = 0.6 + 0.4 * Math.sin(t * 0.001 * s.speed + s.phase);
-      //   const r = s.r * (1 + prox * 1.4);
-      //   if (prox > 0.08) drawStarGlow(ctx, s.x, s.y, r * 5, prox * 0.55);
-      //   drawStar(ctx, s.x, s.y, r, prox, twinkle);
-      // });
-
-      // // Constellations: ease toward hovered state with slow reverse-burst-fade.
-      // const hovered = findHoveredConstellation(constellations, mouse.x, mouse.y);
-      // constellations.forEach((c) => {
-      //   const target = c.index === hovered ? 1 : 0;
-      //   c.litT += (target - c.litT) * FADE_SPEED;
-      // });
-
-      // // Lines: opacity follows litT.
-      // constellations.forEach((c) => {
-      //   const e = easeInOutCubic(Math.max(0, Math.min(1, c.litT)));
-      //   if (e < 0.02) return;
-      //   ctx.strokeStyle = `rgba(255, 220, 130, ${0.75 * e})`;
-      //   ctx.lineWidth = 1.2;
-      //   ctx.shadowColor = `rgba(255, 220, 130, ${0.55 * e})`;
-      //   ctx.shadowBlur = 10 * e;
-      //   ctx.beginPath();
-      //   c.edges.forEach(([a, b]) => {
-      //     ctx.moveTo(c.stars[a].x, c.stars[a].y);
-      //     ctx.lineTo(c.stars[b].x, c.stars[b].y);
-      //   });
-      //   ctx.stroke();
-      //   ctx.shadowBlur = 0;
-      // });
-
-      // // Stars + reverse-burst ring during transition.
-      // constellations.forEach((c) => {
-      //   const e = easeInOutCubic(Math.max(0, Math.min(1, c.litT)));
-      //   c.stars.forEach((s) => {
-      //     const localProx = proximity(s.x, s.y, mouse.x, mouse.y, HOVER_RADIUS);
-      //     const lit = Math.max(localProx, e);
-      //     const baseR = 1.8;
-      //     const r = baseR * (1 + lit * 1.6);
-
-      //     // Reverse burst: a ring contracts inward as the constellation lights up.
-      //     const burstAlpha = Math.sin(Math.PI * e) * 0.55;
-      //     if (burstAlpha > 0.02) {
-      //       const burstR = (1 - e) * 32 + 6;
-      //       const ring = ctx.createRadialGradient(s.x, s.y, burstR * 0.4, s.x, s.y, burstR);
-      //       ring.addColorStop(0, 'rgba(255, 220, 130, 0)');
-      //       ring.addColorStop(0.7, `rgba(255, 220, 130, ${burstAlpha})`);
-      //       ring.addColorStop(1, 'rgba(255, 220, 130, 0)');
-      //       ctx.fillStyle = ring;
-      //       ctx.fillRect(s.x - burstR, s.y - burstR, burstR * 2, burstR * 2);
-      //     }
-
-      //     if (lit > 0.05) drawStarGlow(ctx, s.x, s.y, r * 5, lit * 0.55);
-      //     drawStar(ctx, s.x, s.y, r, lit);
-      //   });
-      // });
-
-      // canvas.style.cursor = hovered !== null ? 'pointer' : 'default';
-
-      // // Shooting stars
-      // const next = [];
-      // for (const ss of stateRef.current.shooting) {
-      //   const x = ss.x + ss.vx;
-      //   const y = ss.y + ss.vy;
-      //   const life = ss.life - 0.005;
-      //   if (life > 0 && x > -200 && x < w + 200) next.push({ ...ss, x, y, life });
-      // }
-      // stateRef.current.shooting = next;
-
-      // stateRef.current.shooting.forEach((ss) => {
-      //   const tailX = ss.x - ss.vx * 10;
-      //   const tailY = ss.y - ss.vy * 10;
-      //   const grad = ctx.createLinearGradient(ss.x, ss.y, tailX, tailY);
-      //   grad.addColorStop(0, `rgba(255, 245, 220, ${ss.life})`);
-      //   grad.addColorStop(1, 'rgba(255, 245, 220, 0)');
-      //   ctx.strokeStyle = grad;
-      //   ctx.lineWidth = 1.8;
-      //   ctx.beginPath();
-      //   ctx.moveTo(ss.x, ss.y);
-      //   ctx.lineTo(tailX, tailY);
-      //   ctx.stroke();
-      // });
 
       raf = requestAnimationFrame(render);
     };
@@ -318,7 +228,6 @@ export default function Landing({ onEnter, user }) {
 
     return () => {
       cancelAnimationFrame(raf);
-      // clearInterval(shootingTimer);
       window.removeEventListener('resize', resize);
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseleave', onLeave);
