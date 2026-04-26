@@ -761,6 +761,7 @@
 }
 
 .prompt-form {
+  position: relative;
   display: flex;
   align-items: center;
   width: 100%;
@@ -775,18 +776,106 @@
   transition: border-color var(--duration-base);
 }
 
+.mention-picker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  background: var(--surface-2);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(232, 232, 240, 0.14);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elevation-md);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 70;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.mention-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms;
+  min-height: 36px;
+}
+
+.mention-item.is-active,
+.mention-item:hover {
+  background: rgba(232, 232, 240, 0.08);
+}
+
+.mention-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mention-name {
+  flex: 1;
+}
+
+.mention-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
 .prompt-form:focus-within {
   border-color: rgba(232, 232, 240, 0.28);
 }
 
-.prompt-input {
+.prompt-input-wrap {
+  position: relative;
   flex: 1;
+  height: 22px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.prompt-highlight {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  white-space: pre;
+  overflow: hidden;
+  color: var(--text-primary);
+  font: inherit;
+  line-height: inherit;
+}
+
+.prompt-input {
+  position: relative;
+  width: 100%;
+  height: 100%;
   background: none;
   border: none;
   outline: none;
+  padding: 0;
   font-family: var(--font-body);
   font-size: 14px;
-  color: var(--text-primary);
+  line-height: 22px;
+  color: transparent;
+  caret-color: var(--text-primary);
+}
+
+.prompt-input::placeholder {
+  color: var(--text-muted);
 }
 
 .prompt-input::placeholder {
