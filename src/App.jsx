@@ -55,6 +55,7 @@ function App() {
   const [promptText, setPromptText] = useState('');
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [addPersonOpen, setAddPersonOpen] = useState(false);
+  const [addPersonIsSelf, setAddPersonIsSelf] = useState(false);
   const [zoomTarget, setZoomTarget] = useState(null);
   const [focusedCategory, setFocusedCategory] = useState(null);
   const [expandedCats, setExpandedCats] = useState(new Set());
@@ -283,6 +284,8 @@ function App() {
             deletingIds={deletingIds}
             people={displayPeople}
             isFirstExperience={isFirstExperience}
+            userName={(user?.displayName || user?.email?.split('@')[0] || '').split(' ')[0]}
+            onCenterClick={() => { setAddPersonIsSelf(true); setAddPersonOpen(true); }}
           />
         </div>
       </div>
@@ -566,7 +569,8 @@ function App() {
 
       <AddPersonModal
         open={addPersonOpen}
-        onClose={() => setAddPersonOpen(false)}
+        isSelf={addPersonIsSelf}
+        onClose={() => { setAddPersonOpen(false); setAddPersonIsSelf(false); }}
         onAdd={(person) => {
           // Insert with no strength yet — the renderer treats unscored nodes
           // as neutral grey so they don't fake a connection level. The AI

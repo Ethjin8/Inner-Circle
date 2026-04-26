@@ -218,7 +218,7 @@ function clampToBounds(node, width, height) {
   node.baseY = Math.max(PADDING_TOP + r, Math.min(height - PADDING_BOTTOM - r, node.baseY));
 }
 
-export default function ConstellationGraph({ activeFilters, focusedCategory, onZoomOut, people = DEMO_PEOPLE, onNodeClick, onNodeDoubleClick, activeTool, onSnip, deletingIds = [], panRef: externalPanRef, isFirstExperience = false }) {
+export default function ConstellationGraph({ activeFilters, focusedCategory, onZoomOut, people = DEMO_PEOPLE, onNodeClick, onNodeDoubleClick, activeTool, onSnip, deletingIds = [], panRef: externalPanRef, isFirstExperience = false, userName = '', onCenterClick }) {
   const filterSet = activeFilters instanceof Set ? activeFilters : new Set();
   const hasFilter = filterSet.size > 0;
   const isDimmed = (cat) => {
@@ -476,6 +476,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         dragState.startNx = userPanRef.current.x;
         dragState.startNy = userPanRef.current.y;
       } else if (node.isCenter) {
+        if (isFirstExperience) { dragState.active = false; return; }
         dragState.nodeId = 'you';
         dragState.startNx = youPosRef.current.x;
         dragState.startNy = youPosRef.current.y;
@@ -583,7 +584,8 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       const mx = e.clientX - rect.left; const my = e.clientY - rect.top;
       if (activeTool === 'snip') { const edge = hitTestEdge(mx, my); if (edge) onSnip?.(edge); return; }
       const node = hitTest(mx, my);
-      if (!node || node.isCenter) return;
+      if (!node) return;
+      if (node.isCenter) { if (isFirstExperience) onCenterClick?.(); return; }
       if (e.shiftKey && !node.isCategory) {
         onNodeDoubleClick?.(node);
         return;
@@ -817,19 +819,32 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       }
 
       // YOU drawn in world space, last so it stays on top
-      const bpm = 5;
-      const cycleFrames = (20 / bpm) * 60;
-      const phase = (timeRef.current % cycleFrames) / cycleFrames;
-      const d1 = (phase - 0.1) * 28; const b1 = Math.exp(-(d1 * d1)) * 0.18;
-      const d2 = (phase - 0.22) * 36; const b2 = Math.exp(-(d2 * d2)) * 0.10;
-      const youRadius = isFirstExperience ? 44 * (1 + b1 + b2) : 44;
+      const bpm = 30;
+      const pulse = (Math.sin(timeRef.current * (bpm / 60) * 0.05) + 1) / 2; // 0–1
+      const youRadius = isFirstExperience ? 44 * (1 + 0.12 * pulse) : 44;
       ctx.beginPath(); ctx.arc(youWorldX, youWorldY, youRadius, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(232,232,240,1)'; ctx.fill();
       ctx.strokeStyle = 'rgba(232,232,240,0.95)'; ctx.lineWidth = 2; ctx.stroke();
-      ctx.fillStyle = 'rgba(11,15,25,0.95)';
-      ctx.font = "600 16px 'Inter',sans-serif";
+      const plusAlpha = isFirstExperience ? 0.3 + 0.7 * pulse : 0.95;
+      ctx.fillStyle = `rgba(11,15,25,${plusAlpha})`;
+      ctx.font = isFirstExperience ? "300 64px 'Inter',sans-serif" : "600 16px 'Inter',sans-serif";
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('YOU', youWorldX, youWorldY);
+      ctx.fillText(isFirstExperience ? '+' : 'YOU', youWorldX, youWorldY);
+
+      if (isFirstExperience) {
+        const FADE_START = 300; // ~1.8s transition + 1s delay
+        const FADE_DURATION = 160;
+        const textAlpha = Math.min(1, Math.max(0, (timeRef.current - FADE_START) / FADE_DURATION)) * 0.85;
+
+        ctx.font = "400 35px 'Inter',sans-serif";
+        ctx.fillStyle = `rgba(200,200,210,${textAlpha})`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        const greetingOffset = 40;
+        const lineHeight = 50;
+        const baseY = youWorldY + 44 + greetingOffset;
+        ctx.fillText(`Hi ${userName}, talk to me about someone.`, youWorldX, baseY);
+        // ctx.fillText(`Lets start you?`, youWorldX, baseY + lineHeight);
+      }
 
       ctx.restore();
 

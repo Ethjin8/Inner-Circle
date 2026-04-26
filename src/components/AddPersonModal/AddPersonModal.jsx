@@ -135,7 +135,7 @@ function ListInput({ label, items, onChange, placeholder }) {
 }
 
 // ─── main component ───────────────────────────────────────────────────────────
-export default function AddPersonModal({ open, onClose, onAdd }) {
+export default function AddPersonModal({ open, onClose, onAdd, isSelf = false }) {
   const [mode, setMode] = useState('voice');
   const [step, setStep] = useState(0);
   const [form, setForm] = useState(BLANK);
@@ -361,8 +361,8 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleFormSubmit = () => {
-    if (!form.name.trim()) return;
-    const rawName = form.name.trim();
+    if (!isSelf && !form.name.trim()) return;
+    const rawName = isSelf ? 'You' : form.name.trim();
     const initials = rawName.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
     const person = {
       id: String(Date.now()),
@@ -436,7 +436,6 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
         {mode === 'voice' && (
           <>
             <div className="apm-header">
-              <div className="apm-eyebrow">Voice onboarding</div>
               <h2 className="apm-title">Tell me about someone</h2>
               <p className="apm-subtitle">
                 Just talk — who they are, how you know them, anything you want to remember. I'll add them to your graph.
@@ -550,18 +549,20 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
               {/* ── Step 0: Identity ── */}
               {step === 0 && (
                 <>
-                  <div className="apm-field">
-                    <label className="apm-label" htmlFor="apm-name">Name <span className="apm-required">*</span></label>
-                    <input
-                      id="apm-name"
-                      className="apm-text-input"
-                      type="text"
-                      value={form.name}
-                      onChange={(e) => set('name', e.target.value)}
-                      placeholder="e.g. Lily Chen"
-                      autoFocus
-                    />
-                  </div>
+                  {!isSelf && (
+                    <div className="apm-field">
+                      <label className="apm-label" htmlFor="apm-name">Name <span className="apm-required">*</span></label>
+                      <input
+                        id="apm-name"
+                        className="apm-text-input"
+                        type="text"
+                        value={form.name}
+                        onChange={(e) => set('name', e.target.value)}
+                        placeholder="e.g. Lily Chen"
+                        autoFocus
+                      />
+                    </div>
+                  )}
 
                   <div className="apm-field">
                     <div className="apm-label">Relationship</div>
