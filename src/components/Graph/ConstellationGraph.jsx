@@ -242,6 +242,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
   const panMomentumRef = useRef({ vx: 0, vy: 0, raf: null });
   const particlesRef = useRef([]); // [{x,y,vx,vy,r,alpha,color,life,maxLife}]
   const prevDeletingRef = useRef([]); // track when ids newly enter deleting
+  const youHoverTRef = useRef(0); // 0..1 fade between YOU and +
 
   const initNodes = useCallback((width, height) => {
     const cx = width / 2;
@@ -573,7 +574,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
           hoverStartRef.current = found && !found.isCategory && !found.isCenter ? performance.now() : 0;
         }
         hoveredRef.current = found;
-        canvas.style.cursor = found ? (found.isCenter ? 'grab' : 'pointer') : 'grab';
+        canvas.style.cursor = found ? 'pointer' : 'grab';
       }
     };
 
@@ -585,7 +586,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       if (activeTool === 'snip') { const edge = hitTestEdge(mx, my); if (edge) onSnip?.(edge); return; }
       const node = hitTest(mx, my);
       if (!node) return;
-      if (node.isCenter) { if (isFirstExperience) onCenterClick?.(); return; }
+      if (node.isCenter) { onCenterClick?.(); return; }
       if (e.shiftKey && !node.isCategory) {
         onNodeDoubleClick?.(node);
         return;
@@ -821,15 +822,31 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       // YOU drawn in world space, last so it stays on top
       const bpm = 30;
       const pulse = (Math.sin(timeRef.current * (bpm / 60) * 0.05) + 1) / 2; // 0–1
+      const youHovered = hoveredRef.current?.isCenter ? 1 : 0;
+      youHoverTRef.current += (youHovered - youHoverTRef.current) * 0.12;
+      const t = youHoverTRef.current;
       const youRadius = isFirstExperience ? 44 * (1 + 0.12 * pulse) : 44;
       ctx.beginPath(); ctx.arc(youWorldX, youWorldY, youRadius, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(232,232,240,1)'; ctx.fill();
       ctx.strokeStyle = 'rgba(232,232,240,0.95)'; ctx.lineWidth = 2; ctx.stroke();
-      const plusAlpha = isFirstExperience ? 0.3 + 0.7 * pulse : 0.95;
-      ctx.fillStyle = `rgba(11,15,25,${plusAlpha})`;
-      ctx.font = isFirstExperience ? "300 64px 'Inter',sans-serif" : "600 16px 'Inter',sans-serif";
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(isFirstExperience ? '+' : 'YOU', youWorldX, youWorldY);
+      if (isFirstExperience) {
+        const plusAlpha = 0.3 + 0.7 * pulse;
+        ctx.fillStyle = `rgba(11,15,25,${plusAlpha})`;
+        ctx.font = "300 64px 'Inter',sans-serif";
+        ctx.fillText('+', youWorldX, youWorldY);
+      } else {
+        if (t < 0.999) {
+          ctx.fillStyle = `rgba(11,15,25,${0.95 * (1 - t)})`;
+          ctx.font = "600 16px 'Inter',sans-serif";
+          ctx.fillText('YOU', youWorldX, youWorldY);
+        }
+        if (t > 0.001) {
+          ctx.fillStyle = `rgba(11,15,25,${0.95 * t})`;
+          ctx.font = "300 64px 'Inter',sans-serif";
+          ctx.fillText('+', youWorldX, youWorldY);
+        }
+      }
 
       if (isFirstExperience) {
         const FADE_START = 300; // ~1.8s transition + 1s delay

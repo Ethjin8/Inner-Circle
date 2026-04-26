@@ -278,7 +278,7 @@ function App() {
     ? { transformOrigin: `${zoomTarget.x}px ${zoomTarget.y}px` }
     : undefined;
 
-  const isFirstExperience = people.length === 0;
+  const isFirstExperience = people.length === 0 && !showDemo;
   const showModal = !!selectedPerson || modalPhase === 'zooming-out';
   // Pull the latest copy from `people` so async scoring updates flow into an
   // already-open modal. Falls back to the snapshot for the zooming-out frame.
@@ -311,7 +311,7 @@ function App() {
             people={displayPeople}
             isFirstExperience={isFirstExperience}
             userName={(user?.displayName || user?.email?.split('@')[0] || '').split(' ')[0]}
-            onCenterClick={() => { setAddPersonIsSelf(true); setAddPersonOpen(true); }}
+            onCenterClick={() => { setAddPersonIsSelf(isFirstExperience); setAddPersonOpen(true); }}
           />
         </div>
       </div>
