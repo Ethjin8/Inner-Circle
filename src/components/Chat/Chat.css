@@ -2,10 +2,11 @@
 
 /* Modal overlay */
 .chat-modal-overlay {
-  position: fixed; inset: 0; z-index: 100;
+  position: fixed; inset: 0; z-index: 200;
   background: rgba(10, 10, 15, 0.78);
   display: flex; align-items: center; justify-content: center;
   backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 .chat-modal {
   width: min(720px, 92vw); height: min(80vh, 800px);
@@ -106,17 +107,20 @@
   background: rgba(14, 16, 24, 0.92); color: #e8e8f0;
   border: 1px solid rgba(232, 232, 240, 0.18);
   border-radius: 999px; padding: 8px 12px;
-  font-size: 13px; cursor: pointer; z-index: 50;
+  font-size: 13px; cursor: pointer; z-index: 55;
   display: flex; align-items: center; gap: 6px;
 }
 .chat-history-pill:hover { background: rgba(232, 232, 240, 0.08); }
 
-/* History drawer (expanded) */
+/* History drawer (expanded) — sits below the header so it doesn't fight
+   the Add Person / Sign Out buttons in the top-right. */
 .chat-history-drawer {
-  position: fixed; right: 0; top: 0; bottom: 0;
-  width: 280px; z-index: 50;
+  position: fixed; right: 0; top: 64px; bottom: 0;
+  width: 280px; z-index: 55;
   background: rgba(14, 16, 24, 0.96);
   border-left: 1px solid rgba(232, 232, 240, 0.1);
+  border-top: 1px solid rgba(232, 232, 240, 0.06);
+  border-top-left-radius: 10px;
   display: flex; flex-direction: column;
 }
 .chat-history-header {

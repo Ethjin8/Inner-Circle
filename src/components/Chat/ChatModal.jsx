@@ -24,32 +24,10 @@ export default function ChatModal({
   const [streaming, setStreaming] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const scrollerRef = useRef(null);
-  const autoSentRef = useRef(false);
   const abortRef = useRef(null);
-
-  // Initialize / reset when modal opens.
-  useEffect(() => {
-    if (!open) {
-      abortRef.current?.abort();
-      abortRef.current = null;
-      return;
-    }
-    autoSentRef.current = false;
-    if (initialThread) {
-      setThreadId(initialThread.id ?? null);
-      setMessages(initialThread.messages ?? []);
-      setAttachedNodeIds(initialThread.attachedNodeIds ?? []);
-      setInput('');
-    } else {
-      setThreadId(null);
-      setMessages([]);
-      setAttachedNodeIds(initialAttachedNodeIds);
-      setInput(initialPrompt);
-    }
-    setErrorMsg(null);
-  // We intentionally only reset on `open` flipping true.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  // Ref-backed streaming guard so send() can decide whether to early-return
+  // without depending on a stale `streaming` closure.
+  const streamingRef = useRef(false);
 
   // Auto-scroll to bottom on new content.
   useEffect(() => {
@@ -57,9 +35,14 @@ export default function ChatModal({
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, streaming]);
 
-  const send = useCallback(async (text, attachedIdsOverride) => {
+  // `priorMessagesOverride` and `threadIdOverride` let callers (notably the
+  // auto-send effect right after a state reset) pass an explicit base instead
+  // of inheriting the closure's stale state.
+  const send = useCallback(async (text, attachedIdsOverride, priorMessagesOverride, threadIdOverride) => {
     const trimmed = text.trim();
-    if (!trimmed || streaming) return;
+    if (!trimmed) return;
+    if (streamingRef.current) return;
+    streamingRef.current = true;
     setErrorMsg(null);
 
     // Abort any prior in-flight stream (defensive — should already be done).
@@ -67,13 +50,27 @@ export default function ChatModal({
     const controller = new AbortController();
     abortRef.current = controller;
 
+    const priorMessages = priorMessagesOverride ?? messages;
     const userMsg = { role: 'user', text: trimmed, content: trimmed };
     const assistantMsg = { role: 'assistant', text: '', toolEvents: [], streaming: true, content: '' };
-    const baseMessages = [...messages, userMsg];
+    const baseMessages = [...priorMessages, userMsg];
     const draftMessages = [...baseMessages, assistantMsg];
     setMessages(draftMessages);
     setInput('');
     setStreaming(true);
+
+    // Persist immediately so the thread shows up in history with a real title
+    // even if the network fails or the user closes the modal mid-stream.
+    let activeThreadId = threadIdOverride !== undefined ? threadIdOverride : threadId;
+    if (!activeThreadId) {
+      const seed = makeThread({
+        messages: baseMessages.map((m) => ({ role: m.role, content: m.content ?? m.text ?? '' })),
+        attachedNodeIds: attachedIdsOverride ?? attachedNodeIds,
+      });
+      activeThreadId = seed.id;
+      setThreadId(activeThreadId);
+      try { await addThread(seed); } catch (err) { console.error('Save thread (seed) failed:', err); }
+    }
 
     // Build the wire shape for the server: only role + content for prior turns.
     const wireMessages = baseMessages.map((m) => ({
@@ -82,6 +79,7 @@ export default function ChatModal({
     }));
 
     let buffered = '';
+    let localToolEvents = [];
     const idsForRequest = attachedIdsOverride ?? attachedNodeIds;
     await streamChat(
       { messages: wireMessages, people, attachedNodeIds: idsForRequest, signal: controller.signal },
@@ -99,22 +97,25 @@ export default function ChatModal({
             return next;
           });
         } else if (ev.type === 'tool-use') {
+          localToolEvents = [...localToolEvents, { name: ev.name, status: 'running' }];
           setMessages((prev) => {
             const next = [...prev];
             const last = { ...next[next.length - 1] };
-            last.toolEvents = [...(last.toolEvents || []), { name: ev.name, status: 'running' }];
+            last.toolEvents = localToolEvents;
             next[next.length - 1] = last;
             return next;
           });
         } else if (ev.type === 'tool-result') {
+          const idx = localToolEvents.findLastIndex((e) => e.name === ev.name && e.status === 'running');
+          const summary = summarizeToolOutput(ev.output);
+          if (idx >= 0) {
+            localToolEvents = [...localToolEvents];
+            localToolEvents[idx] = { name: ev.name, status: 'done', summary };
+          }
           setMessages((prev) => {
             const next = [...prev];
             const last = { ...next[next.length - 1] };
-            const events = [...(last.toolEvents || [])];
-            const idx = events.findLastIndex((e) => e.name === ev.name && e.status === 'running');
-            const summary = summarizeToolOutput(ev.output);
-            if (idx >= 0) events[idx] = { name: ev.name, status: 'done', summary };
-            last.toolEvents = events;
+            last.toolEvents = localToolEvents;
             next[next.length - 1] = last;
             return next;
           });
@@ -139,15 +140,63 @@ export default function ChatModal({
       },
     );
     setStreaming(false);
-  }, [messages, attachedNodeIds, people, streaming]);
+    streamingRef.current = false;
 
-  // Auto-send the seed prompt once when modal opens with initial input.
-  useEffect(() => {
-    if (!open || autoSentRef.current) return;
-    if (!initialThread && initialPrompt && initialPrompt.trim()) {
-      autoSentRef.current = true;
-      send(initialPrompt, initialAttachedNodeIds);
+    // After the stream settles (success or error), persist the final transcript
+    // so reload / history shows the assistant's response too. Skip the
+    // assistant turn entirely if it produced nothing (no text and no tools) —
+    // otherwise we'd save a ghost empty bubble.
+    if (!controller.signal.aborted) {
+      try {
+        const wireBase = baseMessages.map((m) => ({
+          role: m.role,
+          content: m.content ?? m.text ?? '',
+        }));
+        const finalMessages = [...wireBase];
+        if (buffered || localToolEvents.length) {
+          const assistantEntry = { role: 'assistant', content: buffered };
+          if (localToolEvents.length) assistantEntry.toolEvents = localToolEvents;
+          finalMessages.push(assistantEntry);
+        }
+        const thread = makeThread({ messages: finalMessages, attachedNodeIds: idsForRequest });
+        thread.id = activeThreadId;
+        await addThread(thread);
+      } catch (err) {
+        console.error('Save thread (final) failed:', err);
+      }
     }
+  }, [messages, attachedNodeIds, people, threadId, addThread]);
+
+  // Reset state on modal open, then auto-send if there's a seed prompt.
+  // Crucially we pass an explicit empty base + null threadId into send() so
+  // it can't inherit the previous chat's queued-but-unflushed state.
+  useEffect(() => {
+    if (!open) {
+      abortRef.current?.abort();
+      abortRef.current = null;
+      streamingRef.current = false;
+      setStreaming(false);
+      return;
+    }
+    streamingRef.current = false;
+    setStreaming(false);
+    setErrorMsg(null);
+    if (initialThread) {
+      setThreadId(initialThread.id ?? null);
+      setMessages(initialThread.messages ?? []);
+      setAttachedNodeIds(initialThread.attachedNodeIds ?? []);
+      setInput('');
+      return;
+    }
+    setThreadId(null);
+    setMessages([]);
+    setAttachedNodeIds(initialAttachedNodeIds);
+    setInput('');
+    if (initialPrompt && initialPrompt.trim()) {
+      send(initialPrompt, initialAttachedNodeIds, [], null);
+    }
+  // Only on open transition. Caller is responsible for changing initialThread
+  // / initialPrompt / initialAttachedNodeIds before flipping `open` to true.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -156,19 +205,27 @@ export default function ChatModal({
     send(input);
   };
 
-  const handleClose = useCallback(async () => {
+  const handleClose = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
-    // Persist if we have at least one user message.
-    const hasUser = messages.some((m) => m.role === 'user');
-    if (hasUser) {
-      const wireMessages = messages.map((m) => ({
-        role: m.role,
-        content: m.content ?? m.text ?? '',
-      }));
+    streamingRef.current = false;
+    // send() already upserts on first message and on stream completion. Fire
+    // a final flush in the background — never block the close on Firestore.
+    const hasUser = messages.some((m) => (m.role === 'user') && (m.content || m.text));
+    if (hasUser && threadId) {
+      const wireMessages = messages
+        .map((m) => {
+          const content = m.content ?? m.text ?? '';
+          if (m.role === 'user') return content ? { role: 'user', content } : null;
+          if (!content && !(m.toolEvents && m.toolEvents.length)) return null;
+          const out = { role: 'assistant', content };
+          if (m.toolEvents && m.toolEvents.length) out.toolEvents = m.toolEvents;
+          return out;
+        })
+        .filter(Boolean);
       const thread = makeThread({ messages: wireMessages, attachedNodeIds });
-      if (threadId) thread.id = threadId;
-      try { await addThread(thread); } catch (err) { console.error('Save thread failed:', err); }
+      thread.id = threadId;
+      addThread(thread).catch((err) => console.error('Save thread failed:', err));
     }
     onClose?.();
   }, [messages, attachedNodeIds, threadId, addThread, onClose]);
@@ -176,12 +233,13 @@ export default function ChatModal({
   const handleNewChat = () => {
     abortRef.current?.abort();
     abortRef.current = null;
+    streamingRef.current = false;
+    setStreaming(false);
     setThreadId(null);
     setMessages([]);
     setAttachedNodeIds([]);
     setInput('');
     setErrorMsg(null);
-    autoSentRef.current = true; // don't auto-send the initial prompt again
   };
 
   if (!open) return null;
