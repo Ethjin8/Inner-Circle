@@ -24,6 +24,16 @@
   overflow: hidden;
 }
 
+/* cmdk renders <div cmdk-root> as our content wrapper. Make it a flex
+   column so .cmdp-list can flex:1 and scroll. */
+.cmdp-shell > [cmdk-root] {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .cmdp-input-row {
   display: flex;
   align-items: center;
@@ -153,9 +163,23 @@
 }
 
 .cmdp-list {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--space-2) 0;
+}
+
+/* Subtle scrollbar so the user can see there's more content. */
+.cmdp-list::-webkit-scrollbar {
+  width: 8px;
+}
+.cmdp-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.10);
+  border-radius: 9999px;
+}
+.cmdp-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .cmdp-empty {
