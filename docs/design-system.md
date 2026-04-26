@@ -24,28 +24,28 @@ Five non-negotiables, in priority order:
 
 ### Fonts
 
-Three fonts, served via Google Fonts + Vercel CDN. Replace the existing Inter + Space Grotesk imports.
+Two families. Geist scales from 11px tabular to 96px display without changing personality, so we don't need a serif for emphasis — weight and size do the work. **No serif typeface anywhere in the product.** This is a tool, not an editorial magazine.
 
 | Role | Family | Use for |
 |---|---|---|
-| **Display** | `Instrument Serif` | Page titles, person names in modals, section headers, the "Inner Circle" wordmark. |
-| **UI / body** | `Geist` | Everything else: buttons, labels, descriptions, sidebar text, prompts, tooltips. |
+| **Display / UI / body** | `Geist` | Everything text: page titles, the "Inner Circle" wordmark, person names, buttons, labels, descriptions, sidebar text, prompts, tooltips. |
 | **Numeric** | `Geist Mono` | Scores, counts, dates, IDs, timestamps. Anything tabular. |
 
-**HTML head (`index.html` line 10):**
+**HTML head (`index.html`):**
 
 ```html
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 ```
 
 **CSS tokens (`src/index.css`):**
 
 ```css
---font-display: 'Instrument Serif', 'Times New Roman', serif;
+--font-display: 'Geist', system-ui, -apple-system, sans-serif;
 --font-body:    'Geist', system-ui, -apple-system, sans-serif;
 --font-mono:    'Geist Mono', ui-monospace, monospace;
 ```
+
+`--font-display` is kept as a token alias for semantic clarity at call sites, but it points at the same family as `--font-body`. Display moments are differentiated by **size and weight**, not by family.
 
 ### Type scale
 
@@ -59,34 +59,34 @@ Use these tokens. Don't invent new sizes.
 | `--text-md`   | 14px | 1.5 | 0     | Primary actions, dense paragraphs |
 | `--text-lg`   | 16px | 1.5 | 0     | Tagline, modal subheaders |
 | `--text-xl`   | 20px | 1.3 | -0.01em | Section headers (sans) |
-| `--text-2xl`  | 28px | 1.2 | -0.01em | Person name in modal (serif) |
+| `--text-2xl`  | 28px | 1.2 | -0.01em | Person name in modal |
 | `--text-3xl`  | 44px | 1.05 | -0.02em | Modal hero, large display |
 | `--text-4xl`  | 72px | 1.0 | -0.025em | Landing wordmark "Inner Circle" |
 
 ### Weight rules
 
-- **Geist:** 400 default. 500 for emphasized labels. 600 for primary buttons and active nav. **Never use 700+** in UI — use serif display instead for emphasis.
-- **Instrument Serif:** ships only at 400 regular and 400 italic. Use italic sparingly — for pull quotes or person taglines.
+- **Geist:** 300 for the largest display sizes (`--text-3xl`+) where ultra-light feels intentional. 400 default body. 500 for emphasized labels and chip text. 600 for primary buttons and active nav. 700 reserved for the wordmark and rare hero moments.
 - **Geist Mono:** 400 default. 500 for emphasized numerics (e.g., a highlighted score).
 
 ### Hierarchy patterns
 
 ```
-Inner Circle              ← Instrument Serif, --text-4xl (landing only)
+Inner Circle              ← Geist 300, --text-4xl, --text-primary (landing wordmark)
 Stay in touch with…       ← Geist 400, --text-lg, --text-secondary
 
-Friends                   ← Instrument Serif, --text-2xl (memory gallery row)
+Friends                   ← Geist 500, --text-2xl (memory gallery row)
 12 memories               ← Geist Mono 400, --text-sm, --text-muted
 
-Lily Chen                 ← Instrument Serif, --text-2xl (modal)
+Lily Chen                 ← Geist 500, --text-2xl (modal)
 Closest friend · 73/100   ← Geist 400, --text-sm + Geist Mono for "73/100"
 ```
 
+Display moments lean on weight contrast (300 ultra-light against 500 medium) rather than typeface change. Track display sizes slightly tighter (`-0.02em`) to keep them feeling deliberate at scale.
+
 ### Don't
 
-- ❌ Don't use Instrument Serif at sizes below 20px — it loses its character.
-- ❌ Don't use Geist at sizes above 28px — it looks anonymous; reach for the serif.
-- ❌ Don't mix mono and serif on the same line.
+- ❌ Don't introduce a serif typeface anywhere. We're a single-family system.
+- ❌ Don't mix mono and proportional Geist on the same line of running text (numerics inline are fine — it's the eye-jarring shift in width that we avoid for blocks).
 - ❌ Don't justify text. Left-align everything.
 
 ---
@@ -412,7 +412,7 @@ Force-directed with **higher repulsion** than the library default. Aim for: aver
 ### Labels
 
 Person names: Geist 400, 12px, `--text-primary`, offset 12px below node center.
-Category headers: Instrument Serif italic, 13px, `--text-secondary`, offset 16px above cluster centroid.
+Category headers: Geist 500 uppercase, 11px, letterSpacing 0.22em, `--text-secondary`, offset 16px above cluster centroid.
 
 ### The "You" node lockup (cross-screen alignment)
 
@@ -433,7 +433,7 @@ Pixel-equivalence checklist when implementing:
 ```
 [ canvas: full-bleed constellation, dim opacity 0.55 ]
 [ centered overlay group, vertical stack ]:
-   "Inner Circle"           (Instrument Serif, --text-4xl, --text-primary)
+   "Inner Circle"           (Geist 300, --text-4xl, --text-primary, tracking -0.025em)
    "Stay in touch with the  (Geist 400, --text-lg, --text-secondary)
     people that matter most"
    [Sign in →]              (outlined button, Geist 500, --text-md)
@@ -444,12 +444,12 @@ The constellation behind shows the user's actual graph data (read-only, dimmed, 
 ### Memory Gallery (Netflix rows)
 
 ```
-[ sticky top: page header — Instrument Serif "Memories", --text-3xl ]
+[ sticky top: page header — Geist 500 "Memories", --text-3xl, tracking -0.02em ]
 
 [ row per person, vertical gap of --space-12 ]:
   Row layout:
     [ left column, sticky: 200px wide ]
-       Person name           (Instrument Serif, --text-2xl)
+       Person name           (Geist 500, --text-2xl)
        N memories            (Geist Mono, --text-sm, --text-muted)
        [colored dot]         (relationship category color)
     [ right: horizontal scroll of cards ]
@@ -463,7 +463,7 @@ Empty state per person: a single ghost card outlined in `--border-subtle` with t
 ### Person modal
 
 ```
-[ Instrument Serif --text-3xl name ]
+[ Geist 500 --text-3xl name, tracking -0.02em ]
 [ Geist --text-sm secondary line: "Friend · since 2024 · UCLA" ]
 
 [ horizontal rule, 1px --border-subtle ]
