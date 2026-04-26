@@ -9,21 +9,29 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: transparent;
-  border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10));
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.32);
   border-radius: var(--radius-sm, 8px);
-  color: var(--text-secondary);
+  color: var(--text-primary);
   cursor: pointer;
+  /* Subtle white glow — explicit user request for contrast. */
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 0 16px rgba(255, 255, 255, 0.06);
   transition:
     color var(--duration-fast, 120ms) var(--ease-out, ease),
     background var(--duration-fast, 120ms) var(--ease-out, ease),
-    border-color var(--duration-fast, 120ms) var(--ease-out, ease);
+    border-color var(--duration-fast, 120ms) var(--ease-out, ease),
+    box-shadow var(--duration-fast, 120ms) var(--ease-out, ease);
 }
 
 .avatar-trigger:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.04);
-  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 22px rgba(255, 255, 255, 0.10);
 }
 
 .avatar-trigger:focus-visible {

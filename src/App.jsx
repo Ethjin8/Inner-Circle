@@ -140,12 +140,11 @@ function App() {
   }, [bumpInteraction, recordOpen]);
 
   const handlePaletteSelect = useCallback((person) => {
-    // Trigger the zoom-in + modal flow first; keep the palette mounted in
-    // its "transitioning" state (backdrop covers the canvas) until the modal
-    // is fully open, then close. This prevents the brief graph-flash between
-    // palette and modal.
+    // Don't close the palette. While the modal is open `transitioning` is
+    // true (driven by !!selectedPerson), so the palette UI is invisible
+    // behind the modal but stays mounted. When the user closes the modal,
+    // the palette becomes visible again with its query/filters intact.
     handleNodeClick(person, null);
-    setTimeout(() => setPaletteOpen(false), 380);
   }, [handleNodeClick]);
 
   const handleNodeDoubleClick = useCallback((node) => {
