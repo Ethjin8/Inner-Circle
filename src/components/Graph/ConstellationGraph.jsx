@@ -285,7 +285,7 @@ const userPanRef = useRef({ x: 0, y: 0 });
         manualOffY,
         theta,
         catRadiusOffset,
-        radius: 36,
+        radius: 16,
       };
       nodes.push(catNode);
 
@@ -299,7 +299,7 @@ const userPanRef = useRef({ x: 0, y: 0 });
 
       peopleList.forEach((person, j) => {
         const infoFields = countInfoFields(person);
-        const personR = 24 + (Math.min(infoFields, 8) / 8) * 16;
+        const personR = 5 + (Math.min(infoFields, 8) / 8) * 8;
         const pTheta = startAngle + j * angleStep;
         const pDist = basePersonDist + (j % 2 === 0 ? 0 : personR * 1.2);
         const basePx = baseCatX + Math.cos(pTheta) * pDist * 1.35;
@@ -714,23 +714,16 @@ const userPanRef = useRef({ x: 0, y: 0 });
           ctx.beginPath(); ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
           ctx.fillStyle = hexWithAlpha(renderColor, nodeAlpha); ctx.fill();
           ctx.strokeStyle = hexWithAlpha(renderColor, nodeAlpha); ctx.lineWidth = 1.5; ctx.stroke();
-          ctx.fillStyle = `rgba(11,15,25,${0.95 * nodeAlpha})`;
-          const maxTextWidth = r * 1.45;
-          let cfs = Math.max(9, r * 0.46);
-          if (cfs * 0.6 * node.name.length > maxTextWidth) cfs = Math.max(9, maxTextWidth / (node.name.length * 0.6));
-          ctx.font = `600 ${cfs}px 'Inter',sans-serif`;
-          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.fillText(node.name, node.x, node.y);
+          ctx.fillStyle = `rgba(232,232,240,${0.9 * nodeAlpha})`;
+          ctx.font = `300 12px 'Inter',sans-serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+          ctx.fillText(node.name, node.x, node.y + r + 6);
         } else {
           drawMinimalNode(ctx, node, r, renderColor, nodeAlpha, isHov);
-          const maxChars = Math.max(7, Math.floor(r * 0.32));
-          const textInside = truncateLabel(node.name, maxChars);
-          ctx.fillStyle = `rgba(11,15,25,${0.95 * nodeAlpha})`;
-          let fs = Math.max(9, r * 0.55);
-          if (fs * 0.6 * textInside.length > r * 1.75) fs = Math.max(9, (r * 1.75) / (textInside.length * 0.6));
-          ctx.font = `600 ${fs}px 'Inter',sans-serif`;
-          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.fillText(textInside, node.x, node.y);
+          ctx.fillStyle = `rgba(232,232,240,${0.9 * nodeAlpha})`;
+          ctx.font = `300 11px 'Inter',sans-serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+          ctx.fillText(node.name, node.x, node.y + r + 5);
 
           // Scoring state overlay: dashed pulse for pending, warning glyph for failed.
           if (node.scoringStatus === 'pending') {

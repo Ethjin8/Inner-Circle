@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
+import StarField from './components/Graph/StarField';
 import ConstellationGraph, { DEMO_PEOPLE } from './components/Graph/ConstellationGraph';
 import PersonModal from './components/PersonModal/PersonModal';
 import AddPersonModal from './components/AddPersonModal/AddPersonModal';
@@ -266,6 +267,7 @@ function App() {
     {view === 'app' && (
     <div className="app">
       <div className={`cosmos-stage ${showModal ? 'modal-open' : ''} ${viewMode === 'gallery' ? 'hidden-behind-gallery' : ''}`} style={stageStyle}>
+        <StarField />
         <div className="graph-container">
           <ConstellationGraph
             activeFilters={activeFilters}
@@ -382,7 +384,7 @@ function App() {
             <div className="tree-group">
               <div
                 className="tree-item node-cat level-1"
-                style={{ background: 'rgba(232, 232, 240, 0.12)', marginBottom: '2px' }}
+                style={{ background: 'rgba(255, 255, 255, 0.05)', marginBottom: '2px' }}
                 onClick={() => setFocusedCategory(null)}
               >
                 <span className="filter-dot" style={{ background: '#e8e8f0', marginLeft: '12px' }} />
@@ -401,7 +403,7 @@ function App() {
               <div key={catKey} className="tree-group cat-group">
                 <div
                   className="tree-item node-cat level-1"
-                  style={{ background: `${data.color}22` }}
+                  style={{ background: 'rgba(255, 255, 255, 0.05)' }}
                   onClick={() => toggleCat(catKey)}
                 >
                   <div className={`chevron ${isExpanded ? 'expanded' : ''}`}>›</div>
@@ -430,7 +432,7 @@ function App() {
                         <div key={person.id} className="tree-group person-group">
                           <div
                             className="tree-item node-person level-2"
-                            style={{ background: `${data.color}15` }}
+                            style={{ background: 'rgba(255, 255, 255, 0.03)' }}
                             onClick={() => togglePerson(person.id)}
                           >
                             <div className={`chevron ${isPersonExpanded ? 'expanded' : ''}`}>›</div>
