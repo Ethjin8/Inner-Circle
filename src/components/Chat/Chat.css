@@ -288,6 +288,8 @@
 
 .msg-a-body {
   color: var(--text-secondary);
+  /* Ensure proper spacing and prevent word concatenation */
+  word-spacing: normal;
 }
 
 /* ===== COPY ACTION ===== */
@@ -545,6 +547,9 @@
 .md-p {
   margin: 0;
   line-height: 1.75;
+  /* Ensure proper spacing between words and after punctuation */
+  word-spacing: 0.05em;
+  letter-spacing: 0.002em;
 }
 
 .md-h {

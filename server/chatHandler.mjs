@@ -89,7 +89,11 @@ function buildSystemPrompt(people, attachedNodeIds) {
     "- Keep answers concrete and actionable. Cite specific fields ('Mom's gardening hobby suggests...') rather than vague generalities.",
     "- The user's chat is informal. Match that tone; don't over-format.",
     "- NEVER use emoji in your replies (no 😊, 🎉, ✨, 🔥, etc.). The interface is editorial; emoji clash with the typography. Use plain words for emphasis instead.",
-    "- Always include normal spacing between words and after punctuation. Never run words together (e.g. write 'Mom and Dad' not 'MomandDad', 'It's a good idea.' not 'It'sagoodidea.').",
+    "- CRITICAL SPACING RULES:",
+    "  • ALWAYS put exactly ONE space after ALL punctuation marks: periods (. ), exclamation marks (! ), question marks (? ), commas (, ), colons (: ), semicolons (; )",
+    "  • ALWAYS put exactly ONE space between words",
+    "  • NEVER run words together (e.g. write 'Mom and Dad' not 'MomandDad', write 'That's great! Let me help.' not 'That'sgreat!Let me help.')",
+    "  • Double-check every sentence before sending: 'Jake!That's' is WRONG → 'Jake! That's' is CORRECT",
     "- Use paragraph breaks (a literal blank line — two newline characters '\\n\\n') between distinct trains of thought. A single newline is NOT enough — your renderer treats it as the same paragraph. Required transitions that MUST get a blank-line break:",
     "  • after narrating a tool action, before commentary/recommendation",
     "  • after listing what you found, before how you'd interpret or act on it",
@@ -155,8 +159,13 @@ async function runAgentLoop({ client, system, messages, tools, ctx, res }) {
       } else if (event.type === 'content_block_delta') {
         if (event.delta.type === 'text_delta') {
           const last = assistantBlocks[assistantBlocks.length - 1];
-          if (last?.type === 'text') last.text += event.delta.text;
-          sseWrite(res, 'text-delta', { delta: event.delta.text });
+          // Fix common spacing issues: ensure space after punctuation
+          let fixedText = event.delta.text;
+          // Add space after punctuation if missing (but preserve existing double spaces)
+          fixedText = fixedText.replace(/([.!?:;,])([A-Z])/g, '$1 $2');
+          fixedText = fixedText.replace(/([.!?])([a-z])/g, '$1 $2');
+          if (last?.type === 'text') last.text += fixedText;
+          sseWrite(res, 'text-delta', { delta: fixedText });
         } else if (event.delta.type === 'input_json_delta') {
           currentToolJson += event.delta.partial_json;
         }
