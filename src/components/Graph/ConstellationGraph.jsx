@@ -349,8 +349,8 @@ const internalPanRef = useRef({ x: 0, y: 0 });
           manualOffY: pManualOffY,
           radius: personR,
           orbitAngle: oldNode ? oldNode.orbitAngle : Math.random() * Math.PI * 2,
-          orbitRadius: 2 + Math.random() * 3,
-          orbitSpeed: 0.0006 + Math.random() * 0.0008,
+          orbitRadius: oldNode ? oldNode.orbitRadius : 2 + Math.random() * 3,
+          orbitSpeed: oldNode ? oldNode.orbitSpeed : 0.0006 + Math.random() * 0.0008,
           daysSince: daysSince(person.lastContactAt),
           isBirthday: isBirthdayToday(person.birthday),
         });
@@ -803,7 +803,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         const dimT = dimAmount(node.category, camRef.current.scale);
         const dimMul = 1 - dimT * (1 - 0.12);
         const ea = isHovEdge ? 0.95 : (0.1 + (node.avgStrength / 100) * 0.3) * dimMul;
-        const ew = 0.5 + (node.avgStrength / 100) * 4;
+        const ew = 2.25;
         ctx.beginPath(); ctx.moveTo(youWorldX, youWorldY); ctx.lineTo(node.x, node.y);
         ctx.lineWidth = ew;
         if (isHovEdge && activeTool === 'snip') {
@@ -824,7 +824,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
           if (!p || deletingIds.includes(p.id)) continue;
           const isHovPEdge = hoveredEdgeRef.current?.id === node.id;
           const rgb = node.isScored ? strengthToEdgeColor(node.strength) : '160,160,170';
-          const ew = node.isScored ? 0.5 + (node.strength / 100) * 4 : 1;
+          const ew = 2.25;
           ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(node.x, node.y);
           ctx.lineWidth = ew;
           if (isHovPEdge && activeTool === 'snip') {

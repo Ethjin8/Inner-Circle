@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import StarField from './components/Graph/StarField';
 import ConstellationGraph, { DEMO_PEOPLE } from './components/Graph/ConstellationGraph';
 import PersonModal from './components/PersonModal/PersonModal';
@@ -70,6 +70,8 @@ function App() {
   const [gmailDraft, setGmailDraft] = useState(null);
   const [calendarEvent, setCalendarEvent] = useState(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const promptInputRef = useRef(null);
+  const isPromptExpanded = promptText.length > 0 || attachedNodes.length > 0;
 
   const displayPeople = useMemo(() => (
     showDemo ? [...people, ...DEMO_PEOPLE.map(p => ({ ...p, isDemo: true }))] : people
@@ -279,6 +281,28 @@ function App() {
     : undefined;
 
   const isFirstExperience = people.length === 0 && !showDemo;
+
+  useEffect(() => {
+    if (isPromptExpanded) {
+      promptInputRef.current?.focus();
+    }
+  }, [isPromptExpanded]);
+
+  useEffect(() => {
+    if (isFirstExperience || isPromptExpanded) return;
+    const onKeyDown = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key.length !== 1) return;
+      const t = e.target;
+      const tag = (t?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || t?.isContentEditable) return;
+      e.preventDefault();
+      setPromptText(e.key);
+      requestAnimationFrame(() => promptInputRef.current?.focus());
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isFirstExperience, isPromptExpanded]);
   const showModal = !!selectedPerson || modalPhase === 'zooming-out';
   // Pull the latest copy from `people` so async scoring updates flow into an
   // already-open modal. Falls back to the snapshot for the zooming-out frame.
@@ -537,7 +561,7 @@ function App() {
         />
       )}
 
-      {!isFirstExperience && <div className="prompt-area">
+      {!isFirstExperience && <div className={`prompt-area ${isPromptExpanded ? 'is-expanded' : ''}`}>
         {attachedNodes.length > 0 && (
           <div className="attached-nodes">
             {attachedNodes.map((node) => (
@@ -561,29 +585,45 @@ function App() {
             ))}
           </div>
         )}
-        <form className="prompt-form" onSubmit={handleSubmit}>
-          <input
-            className="prompt-input"
-            type="text"
-            placeholder={isAiLoading ? "Thinking..." : "Ask about your connections..."}
-            value={promptText}
-            onChange={(e) => setPromptText(e.target.value)}
-            disabled={isAiLoading}
-          />
+        <div className="prompt-switcher">
           <button
-            className="prompt-submit"
-            type="submit"
-            disabled={isAiLoading || (!promptText.trim() && attachedNodes.length === 0)}
+            className="prompt-add-button"
+            onClick={() => { setAddPersonIsSelf(false); setAddPersonOpen(true); }}
+            aria-label="Add person"
+            tabIndex={isPromptExpanded ? -1 : 0}
           >
-            {isAiLoading ? (
-              <div className="ai-loader" />
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            )}
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+              <path d="M10 4v12M4 10h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <span>Add Person</span>
           </button>
-        </form>
+          <form className="prompt-form" onSubmit={handleSubmit}>
+            <input
+              ref={promptInputRef}
+              className="prompt-input"
+              type="text"
+              placeholder={isAiLoading ? "Thinking..." : "Ask about your connections..."}
+              value={promptText}
+              onChange={(e) => setPromptText(e.target.value)}
+              disabled={isAiLoading}
+              tabIndex={isPromptExpanded ? 0 : -1}
+            />
+            <button
+              className="prompt-submit"
+              type="submit"
+              disabled={isAiLoading || (!promptText.trim() && attachedNodes.length === 0)}
+              tabIndex={isPromptExpanded ? 0 : -1}
+            >
+              {isAiLoading ? (
+                <div className="ai-loader" />
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </button>
+          </form>
+        </div>
         <div className="prompt-hint">Click a node to view details — double-click to attach as context</div>
       </div>}
 
