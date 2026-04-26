@@ -1,0 +1,69 @@
+.zoom-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: zoom-fade-in 0.18s ease-out;
+}
+
+@keyframes zoom-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.zoom-modal-inner {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.zoom-modal-img {
+  max-width: 90vw;
+  max-height: 80vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid var(--border-default, rgba(255, 255, 255, 0.1));
+}
+
+.zoom-modal-close {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-deep, #0e0e0e);
+  border: 1px solid var(--border-strong, rgba(255, 255, 255, 0.2));
+  color: var(--text-primary, #e8e8f0);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.zoom-modal-close:hover {
+  border-color: var(--text-primary, #e8e8f0);
+  color: var(--text-primary, #e8e8f0);
+}
+
+.zoom-modal-caption {
+  font-family: var(--font-body, sans-serif);
+  font-size: 13px;
+  color: var(--text-secondary, #8a8a9a);
+  letter-spacing: 0.02em;
+}

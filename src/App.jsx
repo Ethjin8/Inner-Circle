@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import SearchPill from './components/SearchPill/SearchPill';
 import CommandPalette from './components/CommandPalette/CommandPalette';
 import AvatarMenu from './components/AvatarMenu/AvatarMenu';
@@ -8,6 +9,7 @@ import { useCommandKey } from './hooks/useCommandKey';
 import StarField from './components/Graph/StarField';
 import ConstellationGraph, { DEMO_PEOPLE } from './components/Graph/ConstellationGraph';
 import PersonModal from './components/PersonModal/PersonModal';
+import NodeCard from './components/NodeCard/NodeCard';
 import AddPersonModal from './components/AddPersonModal/AddPersonModal';
 import MemoryCarousel from './components/MemoryCarousel/MemoryCarousel';
 import Landing from './components/Landing/Landing';
@@ -19,7 +21,10 @@ import { usePeople } from './hooks/usePeople';
 import { usePhotos } from './hooks/usePhotos';
 import { scorePerson } from './services/scoring';
 import ChatModal from './components/Chat/ChatModal';
+import ChatHistory from './components/Chat/ChatHistory';
 import { useChatHistory } from './hooks/useChatHistory';
+import ConfirmDialogHost, { confirmDialog } from './components/ConfirmDialog/ConfirmDialog';
+import { History } from 'lucide-react';
 import './App.css';
 import './components/Chat/Chat.css';
 
@@ -102,6 +107,7 @@ function App() {
   const [promptText, setPromptText] = useState('');
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [addPersonOpen, setAddPersonOpen] = useState(false);
+  const [hoveredNode, setHoveredNode] = useState(null);
   const [addPersonInitialMode, setAddPersonInitialMode] = useState('voice');
   const [zoomTarget, setZoomTarget] = useState(null);
   const [focusedCategory, setFocusedCategory] = useState(null);
@@ -134,7 +140,9 @@ function App() {
   const [chatInitialAttachedIds, setChatInitialAttachedIds] = useState([]);
   const [activeDraft, setActiveDraft] = useState(null);
   const [activeEvent, setActiveEvent] = useState(null);
-  const { addThread: addChatThread } = useChatHistory();
+  const { threads: chatThreads, addThread: addChatThread, deleteThread: deleteChatThread } = useChatHistory();
+  const [chatHistoryOpen, setChatHistoryOpen] = useState(false);
+  const historyButtonRef = useRef(null);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const { recentIds, recordOpen } = useRecentPeople();
@@ -204,7 +212,7 @@ function App() {
     Object.entries(photosByPerson).forEach(([personId, pList]) => {
       const person = displayPeople.find(p => p.id === personId);
       if (person) {
-        pList.forEach(photo => photos.push({ ...photo, personName: person.name }));
+        pList.forEach(photo => photos.push({ ...photo, personId, personName: person.name }));
       }
     });
     // Sort by upload date, newest first
@@ -278,7 +286,7 @@ function App() {
     setAttachedNodes((prev) => prev.filter((n) => n.id !== nodeId));
   }, []);
 
-  const handleSnip = useCallback((node) => {
+  const performSnip = useCallback((node) => {
     // Determine which IDs to delete
     let idsToDelete;
     let snippedPeople = [];
@@ -304,6 +312,19 @@ function App() {
       setDeletingIds(prev => prev.filter(id => !idsToDelete.includes(id)));
     }, 600);
   }, [displayPeople, removePeople]);
+
+  const handleSnip = useCallback(async (node) => {
+    const label = node.isCategory
+      ? `the ${node.category} category and everyone in it`
+      : (displayPeople.find(p => p.id === node.id)?.name || 'this node');
+    const ok = await confirmDialog({
+      title: 'Delete?',
+      message: `This will remove ${label}. You can undo from the prompt bar.`,
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
+    performSnip(node);
+  }, [displayPeople, performSnip]);
 
   const handleUndo = useCallback(() => {
     if (deletedHistory.length === 0) return;
@@ -559,7 +580,22 @@ function App() {
         const targets = isEveryone
           ? displayPeople
           : attachedNodes.filter((n) => !n.isCategory);
-        targets.forEach((n) => handleSnip(n));
+        if (targets.length === 0) {
+          setSlashRange(null);
+          return;
+        }
+        const label = isEveryone
+          ? `all ${targets.length} ${targets.length === 1 ? 'person' : 'people'}`
+          : (targets.length === 1
+              ? (targets[0].name || 'this node')
+              : `${targets.length} people`);
+        const ok = await confirmDialog({
+          title: 'Delete?',
+          message: `This will remove ${label}. You can undo from the prompt bar.`,
+          confirmLabel: 'Delete',
+        });
+        if (!ok) return;
+        targets.forEach((n) => performSnip(n));
         setPromptText('');
         setAttachedNodes([]);
         setSlashRange(null);
@@ -573,7 +609,15 @@ function App() {
     setChatModalOpen(true);
     setPromptText('');
     setAttachedNodes([]);
-  }, [promptText, attachedNodes, handleSnip, displayPeople]);
+  }, [promptText, attachedNodes, performSnip, displayPeople]);
+
+  const handleOpenThread = useCallback((thread) => {
+    setChatInitialThread(thread);
+    setChatInitialPrompt('');
+    setChatInitialAttachedIds([]);
+    setChatHistoryOpen(false);
+    setChatModalOpen(true);
+  }, []);
 
   const stageStyle = zoomTarget
     ? { transformOrigin: `${zoomTarget.x}px ${zoomTarget.y}px` }
@@ -666,14 +710,28 @@ function App() {
             isFirstExperience={isFirstExperience}
             userName={(user?.displayName || user?.email?.split('@')[0] || '').split(' ')[0]}
             onCenterClick={() => setAddPersonOpen(true)}
+            onHoverChange={setHoveredNode}
           />
         </div>
       </div>
 
+      {!showModal && !addPersonOpen && viewMode === 'graph' && (
+        <NodeCard hovered={hoveredNode} people={displayPeople} />
+      )}
+
       {viewMode === 'gallery' && (
-        <MemoryCarousel 
-          photos={allPhotos} 
-          onClose={() => setViewMode('graph')} 
+        <MemoryCarousel
+          photos={allPhotos}
+          onClose={() => setViewMode('graph')}
+          photosByPerson={photosByPerson}
+          people={displayPeople}
+          onDeletePhoto={(photo) => {
+            const current = photosByPerson[photo.personId] ?? [];
+            setPhotosForPerson(
+              photo.personId,
+              current.filter((p) => p.public_id !== photo.public_id),
+            );
+          }}
         />
       )}
 
@@ -814,6 +872,41 @@ function App() {
             ))}
           </div>
         )}
+        {chatHistoryOpen && createPortal(
+          (() => {
+            // Both backdrop and popover are portaled to <body> so they escape
+            // .prompt-area's transform-induced stacking context, which clamps
+            // their effective z-index below other UI layers (header z:70,
+            // chat overlay z:80, etc.) and breaks pointer events.
+            const rect = historyButtonRef.current?.getBoundingClientRect();
+            const anchorLeft = rect ? rect.left : 24;
+            const anchorBottom = rect ? window.innerHeight - rect.top + 10 : 80;
+            return (
+              <>
+                <button
+                  type="button"
+                  className="prompt-history-backdrop"
+                  aria-label="Close past chats"
+                  onClick={() => setChatHistoryOpen(false)}
+                />
+                <div
+                  className="prompt-history-popover"
+                  role="dialog"
+                  aria-label="Past chats"
+                  style={{ left: anchorLeft, bottom: anchorBottom }}
+                >
+                  <div className="prompt-history-header">Past chats</div>
+                  <ChatHistory
+                    threads={chatThreads}
+                    onOpenThread={handleOpenThread}
+                    onDeleteThread={deleteChatThread}
+                  />
+                </div>
+              </>
+            );
+          })(),
+          document.body,
+        )}
         <div className="prompt-switcher">
           <button
             className="prompt-add-button"
@@ -824,6 +917,17 @@ function App() {
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
               <path d="M10 4v12M4 10h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
+          </button>
+          <button
+            ref={historyButtonRef}
+            className={`prompt-history-button ${chatHistoryOpen ? 'is-active' : ''}`}
+            onClick={() => setChatHistoryOpen((v) => !v)}
+            aria-label="Past chats"
+            aria-expanded={chatHistoryOpen}
+            title="Past chats"
+            type="button"
+          >
+            <History size={14} aria-hidden />
           </button>
           <form className="prompt-form" onSubmit={handleSubmit}>
             {slashRange && slashMatches.length > 0 && (
@@ -950,6 +1054,7 @@ function App() {
       />
     </div>
     )}
+    <ConfirmDialogHost />
     </>
   );
 }

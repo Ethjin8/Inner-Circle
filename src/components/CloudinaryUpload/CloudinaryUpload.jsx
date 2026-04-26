@@ -3,6 +3,7 @@ import { AdvancedImage } from '@cloudinary/react';
 import { Cloudinary } from "@cloudinary/url-gen";
 import { fill, fit } from "@cloudinary/url-gen/actions/resize";
 import { autoGravity } from "@cloudinary/url-gen/qualifiers/gravity";
+import { confirmDialog } from '../ConfirmDialog/ConfirmDialog';
 import './CloudinaryUpload.css';
 
 export default function CloudinaryUpload({ personId, photos = [], onPhotosChange }) {
@@ -75,7 +76,13 @@ export default function CloudinaryUpload({ personId, photos = [], onPhotosChange
     widget.open();
   }, [cloudName, uploadPreset, photos, onPhotosChange]);
 
-  const handleDelete = useCallback((publicId) => {
+  const handleDelete = useCallback(async (publicId) => {
+    const ok = await confirmDialog({
+      title: 'Remove photo?',
+      message: 'This image will be removed from this profile.',
+      confirmLabel: 'Remove',
+    });
+    if (!ok) return;
     onPhotosChange?.(photos.filter(p => p.public_id !== publicId));
   }, [photos, onPhotosChange]);
 

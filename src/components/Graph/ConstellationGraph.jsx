@@ -38,6 +38,44 @@ function isBirthdayToday(iso) {
   return d.getMonth() === today.getMonth() && Math.abs(d.getDate() - today.getDate()) <= 1;
 }
 
+// Single source of truth for graph centering and overall spread.
+// Reserves room for the header (top) and prompt bar (bottom) so every
+// node fits visibly between them at the default zoom. Users can still
+// pan/zoom freely — this only sets the *initial* spread.
+//
+// V_REACH / H_REACH are the empirical worst-case node distances from
+// (cx, cy) as a fraction of baseWinSize, given the radial layout in
+// initNodes (cat at 0.36*1.35 horiz / 0.36*0.8 vert, plus a person
+// pushed out by another ~0.292 horiz / 0.173 vert at min strength).
+function computeLayout(width, height) {
+  const TOP_INSET = 76;     // header (~64px) + a few px of breathing room
+  const BOTTOM_INSET = 116; // prompt input + hint + bottom offset
+  const SIDE_INSET = 24;
+  const NODE_PAD = 24;      // small bloom/label margin
+  // Reach is sized for a *typical* low-strength person (~25), not the
+  // theoretical strength=0 worst case. Real scores cluster 20–90 so this
+  // fills the safe area without wasting space; the rare very-weak node
+  // can drift slightly into the pad area without overlapping UI chrome.
+  //   typical pDist factor at strength 25: 0.567
+  //   H: 0.486 + 0.567*0.36*1.35 ≈ 0.76
+  //   V: 0.288 + 0.567*0.36*0.80 ≈ 0.45
+  const H_REACH = 0.76;
+  const V_REACH = 0.45;
+  const safeH = Math.max(280, height - TOP_INSET - BOTTOM_INSET - NODE_PAD * 2);
+  const safeW = Math.max(280, width - SIDE_INSET * 2 - NODE_PAD * 2);
+  const cx = width / 2;
+  const cy = TOP_INSET + NODE_PAD + safeH / 2 - Math.min(safeW, safeH) * 0.05;
+  // Reach extends *both* directions from (cx, cy), so each axis only has
+  // safe/2 to work with. Clamp to the original min(w,h) so we never
+  // accidentally make the graph *larger* than it used to be.
+  const baseWinSize = Math.min(
+    safeW / 2 / H_REACH,
+    safeH / 2 / V_REACH,
+    Math.min(width, height),
+  );
+  return { cx, cy, baseWinSize };
+}
+
 function hexWithAlpha(hex, alpha) {
   const a = Math.max(0, Math.min(1, alpha));
   const h = hex.startsWith('#') ? hex.slice(1) : hex;
@@ -364,7 +402,10 @@ function clampToBounds(node, width, height) {
   node.baseY = Math.max(PADDING_TOP + r, Math.min(height - PADDING_BOTTOM - r, node.baseY));
 }
 
-export default function ConstellationGraph({ activeFilters, focusedCategory, onZoomOut, onZoomIn, people = DEMO_PEOPLE, onNodeClick, onNodeDoubleClick, activeTool, onSnip, deletingIds = [], panRef: externalPanRef, isFirstExperience = false, userName = '', onCenterClick }) {
+export default function ConstellationGraph({ activeFilters, focusedCategory, onZoomOut, onZoomIn, people = DEMO_PEOPLE, onNodeClick, onNodeDoubleClick, activeTool, onSnip, deletingIds = [], panRef: externalPanRef, isFirstExperience = false, userName = '', onCenterClick, onHoverChange }) {
+  // Keep latest onHoverChange in a ref so the canvas effect (which only runs once) can call it.
+  const onHoverChangeRef = useRef(onHoverChange);
+  useEffect(() => { onHoverChangeRef.current = onHoverChange; }, [onHoverChange]);
   const filterSet = activeFilters instanceof Set ? activeFilters : new Set();
   const hasFilter = filterSet.size > 0;
   const isDimmed = (cat) => {
@@ -386,6 +427,9 @@ export default function ConstellationGraph({ activeFilters, focusedCategory, onZ
   const hoveredRef = useRef(null);
   const hoverStartRef = useRef(0);
   const hoveredEdgeRef = useRef(null);
+  // Per-node spotlight dim, eased per frame so non-neighbors fade in/out of
+  // the dim state instead of snapping. 0 = fully bright, 1 = fully dimmed.
+  const hoverDimsRef = useRef(new Map());
   const clickTimerRef = useRef(null);
   const timeRef = useRef(0);
   const mouseRef = useRef({ x: 0, y: 0 });
@@ -408,8 +452,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
   const prevHoveredIdRef = useRef(null); // hover transitions trigger one chain pulse
 
   const initNodes = useCallback((width, height) => {
-    const cx = width / 2;
-    const cy = height / 2 - Math.min(width, height) * 0.05;
+    const { cx, cy, baseWinSize } = computeLayout(width, height);
 
     const grouped = {};
     for (const p of people) {
@@ -420,7 +463,6 @@ const internalPanRef = useRef({ x: 0, y: 0 });
 
     const catKeys = Object.keys(grouped);
     const numCats = catKeys.length;
-    const baseWinSize = Math.min(width, height);
     const nodes = [];
 
     catKeys.forEach((catKey, i) => {
@@ -475,7 +517,14 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         // Proximity = strength: strong relationships sit close to the category
         // anchor, weak ones drift outward into a looser ring of acquaintances.
         const pStrength = Math.max(0, Math.min(100, person.relationship?.strength ?? 50));
-        const pDist = catRadiusOffset * (0.60 - (pStrength / 100) * 0.35);
+        // Strength → proximity. Wider dynamic range + concave curve so a
+        // mid-strength person (35) and a strong one (88) sit at visibly
+        // different orbits, not just nudged. Strong people hug the
+        // category anchor; weak people drift far past it.
+        //   pDist factor: strength 0 → 0.85, 35 → 0.54, 50 → 0.45,
+        //                 88 → 0.21, 100 → 0.10  (≈ 8× dynamic range)
+        const sNorm = pStrength / 100;
+        const pDist = catRadiusOffset * (0.85 - Math.pow(sNorm, 0.7) * 0.75);
         const basePx = baseCatX + Math.cos(pTheta) * pDist * 1.35;
         const basePy = baseCatY + Math.sin(pTheta) * pDist * 0.8;
 
@@ -545,10 +594,10 @@ const internalPanRef = useRef({ x: 0, y: 0 });
     };
     resize();
 
-    const getCenter = () => ({
-      cx: width / 2,
-      cy: height / 2 - Math.min(width, height) * 0.05,
-    });
+    const getCenter = () => {
+      const { cx, cy } = computeLayout(width, height);
+      return { cx, cy };
+    };
 
     const screenToWorld = (sx, sy) => {
       const { cx, cy } = getCenter();
@@ -607,8 +656,9 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         const catNode = nodesRef.current.find(n => n.isCategory && n.category === fc);
         if (catNode) {
           const s = camRef.current.scale;
-          camRef.current.x = (width / 2 - catNode.x) * s + userPanRef.current.x;
-          camRef.current.y = (height / 2 - Math.min(width, height) * 0.05 - catNode.y) * s + userPanRef.current.y;
+          const { cx: lcx, cy: lcy } = computeLayout(width, height);
+          camRef.current.x = (lcx - catNode.x) * s + userPanRef.current.x;
+          camRef.current.y = (lcy - catNode.y) * s + userPanRef.current.y;
         }
       } else {
         camRef.current.x = userPanRef.current.x;
@@ -703,8 +753,9 @@ const internalPanRef = useRef({ x: 0, y: 0 });
             const catNode = nodesRef.current.find(n => n.isCategory && n.category === focusedCategoryRef.current);
             if (catNode) {
               const s = camRef.current.scale;
-              camRef.current.x = (width / 2 - catNode.x) * s + userPanRef.current.x;
-              camRef.current.y = (height / 2 - Math.min(width, height) * 0.05 - catNode.y) * s + userPanRef.current.y;
+              const { cx: lcx, cy: lcy } = computeLayout(width, height);
+              camRef.current.x = (lcx - catNode.x) * s + userPanRef.current.x;
+              camRef.current.y = (lcy - catNode.y) * s + userPanRef.current.y;
             }
           } else {
             camRef.current.x = userPanRef.current.x;
@@ -743,7 +794,10 @@ const internalPanRef = useRef({ x: 0, y: 0 });
 
       if (activeTool === 'snip') {
         hoveredEdgeRef.current = hitTestEdge(mouseRef.current.x, mouseRef.current.y);
-        if (hoveredRef.current) hoverStartRef.current = 0;
+        if (hoveredRef.current) {
+          hoverStartRef.current = 0;
+          onHoverChangeRef.current?.(null);
+        }
         hoveredRef.current = null;
         canvas.style.cursor = 'crosshair';
       } else {
@@ -752,6 +806,15 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         const prev = hoveredRef.current;
         if (found?.id !== prev?.id) {
           hoverStartRef.current = found && !found.isCategory && !found.isCenter ? performance.now() : 0;
+          if (found && found.isCenter) {
+            onHoverChangeRef.current?.(null);
+          } else if (found?.isCategory) {
+            onHoverChangeRef.current?.({ id: found.id, type: 'category', category: found.category });
+          } else if (found) {
+            onHoverChangeRef.current?.({ id: found.id, type: 'person', category: found.category });
+          } else {
+            onHoverChangeRef.current?.(null);
+          }
         }
         hoveredRef.current = found;
         canvas.style.cursor = found ? 'pointer' : 'grab';
@@ -1023,11 +1086,23 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       // Spotlight + magnetic lean. neighborSet=null means nothing is hovered = full bright.
       // edgeAlphaMul folds the zoom-fade dim from gogobop into the hover-spotlight dim.
       const neighborSet = computeNeighborSet(hoveredRef.current, nodesRef.current);
+      // Ease per-node spotlight dim toward target (1 = dimmed, 0 = bright)
+      // so hover-in / hover-out transitions are gradual, not instant.
+      const HOVER_EASE = 0.12;
+      const hoverDims = hoverDimsRef.current;
+      const allIds = ['you', ...nodesRef.current.map((n) => n.id)];
+      for (const id of allIds) {
+        const target = (neighborSet && !neighborSet.has(id)) ? 1 : 0;
+        const prev = hoverDims.get(id) ?? 0;
+        hoverDims.set(id, prev + (target - prev) * HOVER_EASE);
+      }
+      const getHoverDim = (id) => hoverDims.get(id) ?? 0;
       const edgeAlphaMul = (fromId, toId, cat) => {
         let m = 1;
         const dimT = dimAmount(cat, camRef.current.scale);
         if (dimT > 0) m *= (1 - dimT * (1 - 0.12));
-        if (neighborSet && (!neighborSet.has(fromId) || !neighborSet.has(toId))) m *= 0.20;
+        const edgeDim = Math.max(getHoverDim(fromId), getHoverDim(toId));
+        if (edgeDim > 0) m *= 1 - edgeDim * (1 - 0.20);
         return m;
       };
       {
@@ -1125,7 +1200,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         const dimT = dimAmount(node.category, camRef.current.scale);
         const isHov = hoveredRef.current?.id === node.id;
         const filterDimVal = 1 - dimT * (1 - 0.20);
-        const hoverDimVal = (neighborSet && !neighborSet.has(node.id)) ? 0.28 : 1;
+        const hoverDimVal = 1 - getHoverDim(node.id) * (1 - 0.28);
         const nodeAlpha = filterDimVal * hoverDimVal;
         const r = node.radius * (isHov ? 1.18 : 1);
         const renderColor = dimT > 0.5 ? '#6a6f7a' : cat.color;
@@ -1308,6 +1383,14 @@ const internalPanRef = useRef({ x: 0, y: 0 });
     canvas.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mouseup', onMouseUp);
     canvas.addEventListener('mousemove', onMouseMove);
+    const onMouseLeave = () => {
+      if (hoveredRef.current) {
+        hoveredRef.current = null;
+        hoverStartRef.current = 0;
+        onHoverChangeRef.current?.(null);
+      }
+    };
+    canvas.addEventListener('mouseleave', onMouseLeave);
     canvas.addEventListener('click', onClick);
     window.addEventListener('keydown', onKeyDown);
     canvas.addEventListener('wheel', onWheel, { passive: false });
@@ -1320,6 +1403,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       canvas.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mouseup', onMouseUp);
       canvas.removeEventListener('mousemove', onMouseMove);
+      canvas.removeEventListener('mouseleave', onMouseLeave);
       canvas.removeEventListener('click', onClick);
       window.removeEventListener('keydown', onKeyDown);
       canvas.removeEventListener('wheel', onWheel);

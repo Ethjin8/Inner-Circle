@@ -256,8 +256,13 @@ export default function ChatModal({
 
   if (!open) return null;
   return (
-    <div className="chat-modal-overlay" role="dialog" aria-modal="true">
-      <div className="chat-modal">
+    <div
+      className="chat-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) handleClose(); }}
+    >
+      <div className="chat-modal" onMouseDown={(e) => e.stopPropagation()}>
         <header className="chat-modal-header">
           <button className="chat-new-btn" onClick={handleNewChat} aria-label="Start a new chat">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

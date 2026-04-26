@@ -1,4 +1,5 @@
 import { Trash2 } from 'lucide-react';
+import { confirmDialog } from '../ConfirmDialog/ConfirmDialog';
 
 // Renders inside ChatModal (or anywhere the threads list is needed).
 // Props:
@@ -28,7 +29,15 @@ export default function ChatHistory({ threads, onOpenThread, onDeleteThread }) {
             <button
               type="button"
               className="chat-history-item-delete"
-              onClick={(e) => { e.stopPropagation(); onDeleteThread(t.id); }}
+              onClick={async (e) => {
+                e.stopPropagation();
+                const ok = await confirmDialog({
+                  title: 'Delete chat?',
+                  message: `"${title}" will be permanently removed.`,
+                  confirmLabel: 'Delete',
+                });
+                if (ok) onDeleteThread(t.id);
+              }}
               aria-label={`Delete chat "${title}"`}
               title="Delete"
             >
