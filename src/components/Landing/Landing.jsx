@@ -1,94 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
-import { CONSTELLATIONS } from './constellations';
+import { useEffect, useRef, useState, useMemo } from 'react';
+import { allocateConstellations } from './allocateConstellations';
+import { layoutConstellations } from './layoutConstellations';
+import { RELATIONSHIP_TYPES } from '../../constants/personSchema';
 import { useAuth } from '../../contexts/AuthContext';
 import './Landing.css';
 import '../SignIn/SignIn.css';
 
-const STAR_COUNT = 240;
-const HOVER_RADIUS = 70;
-const CONSTELLATION_HOVER_PADDING = 50;
-const SHOOTING_INTERVAL_MS = 3500;
-
-const buildConstellations = (w, h) => {
-  const base = Math.min(w, h);
-  return CONSTELLATIONS.map((c, index) => {
-    const size = c.scale * base;
-    const cx = c.pos.cx * w;
-    const cy = c.pos.cy * h;
-    const stars = c.stars.map(([ux, uy]) => ({
-      x: cx + (ux - 0.5) * size,
-      y: cy + (uy - 0.5) * size,
-    }));
-    return { name: c.name, index, stars, edges: c.edges, litT: 0 };
-  });
-};
-
-const FADE_SPEED = 0.018; // per frame, ~1.5s to settle
-
-const easeInOutCubic = (t) =>
-  t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-
-const findHoveredConstellation = (constellations, mx, my) => {
-  for (const c of constellations) {
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const s of c.stars) {
-      if (s.x < minX) minX = s.x;
-      if (s.x > maxX) maxX = s.x;
-      if (s.y < minY) minY = s.y;
-      if (s.y > maxY) maxY = s.y;
-    }
-    const pad = CONSTELLATION_HOVER_PADDING;
-    if (mx >= minX - pad && mx <= maxX + pad && my >= minY - pad && my <= maxY + pad) {
-      return c.index;
-    }
-  }
-  return null;
-};
-
-const AMBIENT_EXCLUSION = 28;
-
-const tooCloseToConstellation = (x, y, constellations) => {
-  for (const c of constellations) {
-    for (const s of c.stars) {
-      if (Math.hypot(s.x - x, s.y - y) < AMBIENT_EXCLUSION) return true;
-    }
-  }
-  return false;
-};
-
-const generateAmbientStars = (w, h, count, constellations) => {
-  const stars = [];
-  let tries = 0;
-  while (stars.length < count && tries < count * 8) {
-    tries += 1;
-    const x = Math.random() * w;
-    const y = Math.random() * h * 0.85;
-    if (tooCloseToConstellation(x, y, constellations)) continue;
-    stars.push({
-      x,
-      y,
-      r: Math.random() * 1.2 + 0.25,
-      phase: Math.random() * Math.PI * 2,
-      speed: 0.4 + Math.random() * 0.8,
-    });
-  }
-  return stars;
-};
-
-const spawnShootingStar = (w, h) => {
-  const fromLeft = Math.random() < 0.5;
-  return {
-    x: fromLeft ? -80 : w + 80,
-    y: Math.random() * h * 0.5,
-    vx: fromLeft ? 9 : -9,
-    vy: 2.4,
-    life: 1,
-  };
-};
-
-const proximity = (sx, sy, mx, my, radius) => {
-  const d = Math.hypot(sx - mx, sy - my);
-  return Math.max(0, 1 - d / radius);
+const generateDemoPeople = (count) => {
+  const types = RELATIONSHIP_TYPES.map((t) => t.key);
+  return Array.from({ length: count }, (_, i) => ({
+    id: `demo-${i}`,
+    name: `Demo ${i + 1}`,
+    relType: types[i % types.length],
+  }));
 };
 
 const drawSkyGradient = (ctx, w, h) => {
@@ -100,12 +24,72 @@ const drawSkyGradient = (ctx, w, h) => {
   ctx.fillRect(0, 0, w, h);
 };
 
-const drawStarGlow = (ctx, x, y, radius, alpha) => {
-  const g = ctx.createRadialGradient(x, y, 0, x, y, radius);
-  g.addColorStop(0, `rgba(255, 220, 130, ${alpha})`);
-  g.addColorStop(1, 'rgba(255, 220, 130, 0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+const hexToRgb = (hex) => {
+  const h = hex.replace('#', '');
+  const v = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  return [parseInt(v.slice(0, 2), 16), parseInt(v.slice(2, 4), 16), parseInt(v.slice(4, 6), 16)];
+};
+
+const drawConstellation = (ctx, group) => {
+  const { stars, edges, label, cx, size } = group;
+
+  ctx.strokeStyle = 'rgba(180, 200, 255, 0.32)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  for (const [a, b] of edges) {
+    const sa = stars[a]; const sb = stars[b];
+    if (!sa || !sb) continue;
+    ctx.moveTo(sa.x, sa.y);
+    ctx.lineTo(sb.x, sb.y);
+  }
+  ctx.stroke();
+
+  for (const s of stars) {
+    const [r, g, b] = hexToRgb(s.color);
+    const halo = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 14);
+    halo.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.55)`);
+    halo.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+    ctx.fillStyle = halo;
+    ctx.fillRect(s.x - 14, s.y - 14, 28, 28);
+
+    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (label) {
+    let maxY = -Infinity;
+    for (const s of stars) if (s.y > maxY) maxY = s.y;
+    ctx.fillStyle = 'rgba(220, 230, 255, 0.55)';
+    ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, cx, maxY + size * 0.12);
+  }
+};
+
+const generateBackgroundStars = (count, w, h) => {
+  const stars = [];
+  for (let i = 0; i < count; i++) {
+    stars.push({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      r: 0.4 + Math.random() * 1.1,
+      a: 0.25 + Math.random() * 0.55,
+      tw: Math.random() * Math.PI * 2,
+    });
+  }
+  return stars;
+};
+
+const drawBackgroundStars = (ctx, stars, t) => {
+  for (const s of stars) {
+    const flicker = 0.7 + 0.3 * Math.sin(t * 0.001 + s.tw);
+    ctx.fillStyle = `rgba(220, 230, 255, ${s.a * flicker})`;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
 };
 
 const drawNorthStar = (ctx, w, h, t, yRatio = 0.45) => {
@@ -131,16 +115,7 @@ const drawNorthStar = (ctx, w, h, t, yRatio = 0.45) => {
   ctx.fill();
 };
 
-const drawStar = (ctx, x, y, r, lit, alpha = 1) => {
-  const g = Math.round(255 - 50 * lit);
-  const b = Math.round(255 - 150 * lit);
-  ctx.fillStyle = `rgba(255, ${g}, ${b}, ${alpha})`;
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fill();
-};
-
-export default function Landing({ onEnter, user }) {
+export default function Landing({ onEnter, user, people = [] }) {
   const { signInWithGoogle } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
   const [authClosing, setAuthClosing] = useState(false);
@@ -177,11 +152,28 @@ export default function Landing({ onEnter, user }) {
     else setShowAuth(true);
   };
   const stateRef = useRef({
-    mouse: { x: -9999, y: -9999 },
-    ambient: [],
-    shooting: [],
     constellations: [],
+    bgStars: [],
   });
+
+  const [demoCount, setDemoCount] = useState(0);
+  const [demoInput, setDemoInput] = useState(20);
+  const effectivePeople = demoCount > 0 ? generateDemoPeople(demoCount) : people;
+  const groups = useMemo(
+    () => {
+      const show = demoCount > 0 || (user && people.length > 0);
+      return show ? allocateConstellations(effectivePeople) : [];
+    },
+    [user, people, demoCount, effectivePeople],
+  );
+  const groupsRef = useRef(groups);
+  const effectivePeopleRef = useRef(effectivePeople);
+  const layoutRef = useRef(null);
+  useEffect(() => {
+    groupsRef.current = groups;
+    effectivePeopleRef.current = effectivePeople;
+    layoutRef.current?.();
+  }, [groups, effectivePeople]);
 
   const prevUserRef = useRef(user);
   useEffect(() => {
@@ -195,6 +187,17 @@ export default function Landing({ onEnter, user }) {
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
 
+    const layout = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const overlay = document.querySelector('.landing-overlay');
+      const rect = overlay ? overlay.getBoundingClientRect() : null;
+      stateRef.current.constellations = layoutConstellations(groupsRef.current, w, h, rect);
+      const peopleCount = effectivePeopleRef.current.length;
+      stateRef.current.bgStars = generateBackgroundStars(peopleCount * 15, w, h);
+    };
+    layoutRef.current = layout;
+
     const resize = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
@@ -203,37 +206,85 @@ export default function Landing({ onEnter, user }) {
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      stateRef.current.constellations = buildConstellations(w, h);
-      stateRef.current.ambient = generateAmbientStars(
-        w,
-        h,
-        STAR_COUNT,
-        stateRef.current.constellations,
-      );
+      layout();
     };
     resize();
 
-    const onMove = (e) => {
-      stateRef.current.mouse = { x: e.clientX, y: e.clientY };
-    };
-    const onLeave = () => {
-      stateRef.current.mouse = { x: -9999, y: -9999 };
-    };
     window.addEventListener('resize', resize);
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseleave', onLeave);
 
     let raf;
     const render = (t) => {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      const { mouse, ambient, constellations } = stateRef.current;
+      const { constellations } = stateRef.current;
 
       ctx.clearRect(0, 0, w, h);
       drawSkyGradient(ctx, w, h);
-
+      drawBackgroundStars(ctx, stateRef.current.bgStars, t);
+      const flying = zoomingRef.current;
+      for (const c of constellations) {
+        if (flying) {
+          if (!c.dustInit) {
+            c.dustInit = true;
+            c.snapStart = t;
+            for (const s of c.stars) {
+              const wx = Math.sin(t * s.freqX + s.phaseX) * s.amp;
+              const wy = Math.cos(t * s.freqY + s.phaseY) * s.amp;
+              s.x = c.cx + (s.ux - 0.5) * c.size + wx;
+              s.y = c.cy + (s.uy - 0.5) * c.size + wy;
+              s.dvx = (Math.random() - 0.5) * 1.2;
+              s.dvy = -0.4 - Math.random() * 1.2;
+            }
+          }
+          const elapsed = t - c.snapStart;
+          const edgeAlpha = Math.max(0, 1 - elapsed / 180);
+          if (edgeAlpha > 0) {
+            ctx.strokeStyle = `rgba(180, 200, 255, ${0.32 * edgeAlpha})`;
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            for (const [a, b] of c.edges) {
+              const sa = c.stars[a]; const sb = c.stars[b];
+              if (!sa || !sb) continue;
+              const j = (Math.random() - 0.5) * (1 - edgeAlpha) * 8;
+              ctx.moveTo(sa.x + j, sa.y + j);
+              ctx.lineTo(sb.x - j, sb.y - j);
+            }
+            ctx.stroke();
+          }
+          const dustAlpha = Math.max(0, 1 - elapsed / 1400);
+          for (const s of c.stars) {
+            s.dvy -= 0.015;
+            s.x += s.dvx;
+            s.y += s.dvy;
+            const [r, g, bl] = hexToRgb(s.color);
+            const halo = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 8);
+            halo.addColorStop(0, `rgba(${r}, ${g}, ${bl}, ${0.5 * dustAlpha})`);
+            halo.addColorStop(1, `rgba(${r}, ${g}, ${bl}, 0)`);
+            ctx.fillStyle = halo;
+            ctx.fillRect(s.x - 8, s.y - 8, 16, 16);
+            ctx.fillStyle = `rgba(${r}, ${g}, ${bl}, ${dustAlpha})`;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, 1.4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else {
+          c.cx += c.vx;
+          c.cy += c.vy;
+          const half = c.size / 2;
+          if (c.cx - half < c.xMin) { c.cx = c.xMin + half; c.vx = -c.vx; }
+          if (c.cx + half > c.xMax) { c.cx = c.xMax - half; c.vx = -c.vx; }
+          if (c.cy - half < c.yMin) { c.cy = c.yMin + half; c.vy = -c.vy; }
+          if (c.cy + half > c.yMax) { c.cy = c.yMax - half; c.vy = -c.vy; }
+          for (const s of c.stars) {
+            const wx = Math.sin(t * s.freqX + s.phaseX) * s.amp;
+            const wy = Math.cos(t * s.freqY + s.phaseY) * s.amp;
+            s.x = c.cx + (s.ux - 0.5) * c.size + wx;
+            s.y = c.cy + (s.uy - 0.5) * c.size + wy;
+          }
+          drawConstellation(ctx, c);
+        }
+      }
       drawNorthStar(ctx, w, h, t, 0.45);
-
 
       raf = requestAnimationFrame(render);
     };
@@ -241,9 +292,8 @@ export default function Landing({ onEnter, user }) {
 
     return () => {
       cancelAnimationFrame(raf);
+      layoutRef.current = null;
       window.removeEventListener('resize', resize);
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseleave', onLeave);
     };
   }, [onEnter]);
 
@@ -259,6 +309,17 @@ export default function Landing({ onEnter, user }) {
       <canvas ref={canvasRef} className="landing-canvas" />
       <img src="/foreground.png" alt="" className="landing-foreground" />
       <div className="landing-flash" />
+      <div className="landing-demo" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="number"
+          min="0"
+          max="100"
+          value={demoInput}
+          onChange={(e) => setDemoInput(Number(e.target.value) || 0)}
+        />
+        <button onClick={() => setDemoCount(demoInput)}>Load demo</button>
+        {demoCount > 0 && <button onClick={() => setDemoCount(0)}>Clear</button>}
+      </div>
       {showAuth && !user ? (
         <div className={`signin-panel ${authClosing ? 'closing' : ''}`} onClick={(e) => e.stopPropagation()}>
           <div className="signin-logo">

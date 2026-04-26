@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>constellation viewer</title>
+<style>
+  body { margin: 0; background: #05060a; color: #cfd6e4; font: 13px ui-sans-serif, system-ui, sans-serif; }
+  h1 { font-size: 14px; padding: 12px 16px; margin: 0; border-bottom: 1px solid #1a1f2e; position: sticky; top: 0; background: #05060a; z-index: 1; }
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; padding: 16px; }
+  .card { background: #0b0e16; border: 1px solid #1a1f2e; border-radius: 8px; padding: 8px; }
+  .card .name { font-size: 12px; opacity: .8; margin-bottom: 4px; text-transform: capitalize; }
+  .card svg { width: 100%; aspect-ratio: 1; display: block; }
+  .err { color: #f88; font-size: 11px; }
+  circle { fill: #fff; }
+  line { stroke: #6aa9ff; stroke-width: 1; opacity: .7; }
+</style>
+</head>
+<body>
+<h1>constellations preview <span id="count" style="opacity:.6"></span></h1>
+<div id="grid"></div>
+<script>
+const files = [
+  'constellations_antlia.json','constellations_Aries.json','constellations_Big_Dipper.json',
+  'constellations_Bootes.json','constellations_Caelum.json','constellations_Cancer.json',
+  'constellations_Capricornus.json','constellations_Carina.json','constellations_Cassiopeia.json',
+  'constellations_Cepheus.json','constellations_Corvus.json','constellations_Cygnus.json',
+  'constellations_Delphinus.json','constellations_Gemini.json','constellations_Great_Diamond.json',
+  'constellations_Lacerta.json','constellations_Leo.json','constellations_Libra.json',
+  'constellations_Little_Dipper.json','constellations_Lyra.json','constellations_Orion.json',
+  'constellations_Sagitta.json','constellations_Tarus.json','constellations_Winter_Hexagon.json',
+];
+
+const grid = document.getElementById('grid');
+const countEl = document.getElementById('count');
+
+const render = (data) => {
+  const S = 200, pad = 10;
+  const stars = data.stars || [];
+  const edges = data.edges || [];
+  const pts = stars.map(([x, y]) => [pad + x * (S - pad * 2), pad + y * (S - pad * 2)]);
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${S} ${S}`);
+  edges.forEach(([a, b]) => {
+    if (!pts[a] || !pts[b]) return;
+    const ln = document.createElementNS(svgNS, 'line');
+    ln.setAttribute('x1', pts[a][0]); ln.setAttribute('y1', pts[a][1]);
+    ln.setAttribute('x2', pts[b][0]); ln.setAttribute('y2', pts[b][1]);
+    svg.appendChild(ln);
+  });
+  pts.forEach(([x, y]) => {
+    const c = document.createElementNS(svgNS, 'circle');
+    c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 2.2);
+    svg.appendChild(c);
+  });
+  return svg;
+};
+
+let ok = 0, fail = 0;
+Promise.all(files.map(async (f) => {
+  const card = document.createElement('div');
+  card.className = 'card';
+  const name = document.createElement('div');
+  name.className = 'name';
+  name.textContent = f.replace(/^constellations_/, '').replace(/\.json$/, '').replace(/_/g, ' ');
+  card.appendChild(name);
+  try {
+    const r = await fetch('constellations/' + f);
+    if (!r.ok) throw new Error(r.status);
+    const data = await r.json();
+    card.appendChild(render(data));
+    const meta = document.createElement('div');
+    meta.style.fontSize = '10px'; meta.style.opacity = '.5'; meta.style.marginTop = '4px';
+    meta.textContent = `${(data.stars||[]).length} stars · ${(data.edges||[]).length} edges`;
+    card.appendChild(meta);
+    ok++;
+  } catch (e) {
+    const err = document.createElement('div');
+    err.className = 'err';
+    err.textContent = 'failed: ' + e.message;
+    card.appendChild(err);
+    fail++;
+  }
+  grid.appendChild(card);
+})).then(() => {
+  countEl.textContent = `· ${ok} ok${fail ? ` · ${fail} failed` : ''}`;
+});
+</script>
+</body>
+</html>

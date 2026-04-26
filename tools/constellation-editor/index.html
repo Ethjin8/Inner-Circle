@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Constellation Editor</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #050414; color: #e8e6f3;
+    font: 13px/1.4 ui-monospace, Menlo, monospace; overflow: hidden; }
+  #stage { position: fixed; inset: 0; cursor: crosshair; }
+  #panel { position: fixed; top: 12px; left: 12px; padding: 10px 12px;
+    background: rgba(10,8,32,0.85); border: 1px solid #2a2550; border-radius: 8px;
+    backdrop-filter: blur(6px); display: flex; flex-direction: column; gap: 6px;
+    min-width: 220px; }
+  #panel button { background: #1a1640; color: #e8e6f3; border: 1px solid #2a2550;
+    padding: 6px 8px; border-radius: 4px; font: inherit; cursor: pointer; text-align: left; }
+  #panel button:hover { background: #251f55; }
+  #panel input { background: #0a0820; color: #e8e6f3; border: 1px solid #2a2550;
+    padding: 6px 8px; border-radius: 4px; font: inherit; }
+  #stats { color: #8a85b8; font-size: 11px; }
+  #out { position: fixed; bottom: 12px; right: 12px; max-width: 420px;
+    max-height: 40vh; overflow: auto; padding: 10px 12px;
+    background: rgba(10,8,32,0.92); border: 1px solid #2a2550; border-radius: 8px;
+    white-space: pre; font-size: 11px; color: #b8b4dd; display: none; }
+  #help { position: fixed; bottom: 12px; left: 12px; color: #6a6590; font-size: 11px; }
+  .hint b { color: #e8e6f3; }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<div id="panel">
+  <input id="name" placeholder="constellation name" value="untitled" />
+  <button data-act="export">Export JSON</button>
+  <button data-act="undo">Undo (Z)</button>
+  <button data-act="delete">Delete selected (⌫)</button>
+  <button data-act="clear">Clear all</button>
+  <label style="display:flex;gap:6px;align-items:center;">
+    <input type="checkbox" id="snap" /> snap to grid (20px)
+  </label>
+  <div id="stats">0 stars · 0 edges</div>
+</div>
+
+<div id="help" class="hint">
+  <b>click empty</b> add star · <b>click star</b> select · <b>click 2nd star</b> add edge · <b>esc</b> deselect
+</div>
+
+<pre id="out"></pre>
+
+<script>
+const cvs = document.getElementById('stage');
+const ctx = cvs.getContext('2d');
+const out = document.getElementById('out');
+const stats = document.getElementById('stats');
+const nameInput = document.getElementById('name');
+const snapInput = document.getElementById('snap');
+
+const STORAGE_KEY = 'constellation-editor-draft';
+const HIT_RADIUS = 14;
+
+let stars = [];   // [{x, y}]
+let edges = [];   // [[i, j]]
+let history = []; // stack of {stars, edges}
+let selected = null; // index
+
+const load = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    stars = d.stars || [];
+    edges = d.edges || [];
+    if (d.name) nameInput.value = d.name;
+  } catch {}
+};
+const persist = () => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    stars, edges, name: nameInput.value,
+  }));
+};
+
+const snapshot = () => {
+  history.push({ stars: stars.map(s => ({...s})), edges: edges.map(e => [...e]) });
+  if (history.length > 100) history.shift();
+};
+
+const resize = () => {
+  const dpr = window.devicePixelRatio || 1;
+  cvs.width = innerWidth * dpr;
+  cvs.height = innerHeight * dpr;
+  cvs.style.width = innerWidth + 'px';
+  cvs.style.height = innerHeight + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+};
+addEventListener('resize', resize);
+resize();
+
+const findStarAt = (x, y) => {
+  for (let i = stars.length - 1; i >= 0; i--) {
+    if (Math.hypot(stars[i].x - x, stars[i].y - y) <= HIT_RADIUS) return i;
+  }
+  return null;
+};
+
+const addStar = (x, y) => {
+  if (snapInput.checked) {
+    x = Math.round(x / 20) * 20;
+    y = Math.round(y / 20) * 20;
+  }
+  snapshot();
+  stars = [...stars, { x, y }];
+  persist();
+};
+
+const addEdge = (a, b) => {
+  if (a === b) return;
+  const exists = edges.some(([i, j]) =>
+    (i === a && j === b) || (i === b && j === a));
+  if (exists) return;
+  snapshot();
+  edges = [...edges, [a, b]];
+  persist();
+};
+
+const deleteStar = (idx) => {
+  snapshot();
+  stars = stars.filter((_, i) => i !== idx);
+  edges = edges
+    .filter(([a, b]) => a !== idx && b !== idx)
+    .map(([a, b]) => [a > idx ? a - 1 : a, b > idx ? b - 1 : b]);
+  persist();
+};
+
+const undo = () => {
+  const prev = history.pop();
+  if (!prev) return;
+  stars = prev.stars;
+  edges = prev.edges;
+  selected = null;
+  persist();
+};
+
+const clearAll = () => {
+  if (!confirm('Clear everything?')) return;
+  snapshot();
+  stars = []; edges = []; selected = null;
+  persist();
+};
+
+cvs.addEventListener('click', (e) => {
+  const x = e.clientX, y = e.clientY;
+  const hit = findStarAt(x, y);
+  if (hit === null) {
+    addStar(x, y);
+    selected = null;
+    return;
+  }
+  if (selected === null) {
+    selected = hit;
+  } else if (selected === hit) {
+    selected = null;
+  } else {
+    addEdge(selected, hit);
+    selected = hit;
+  }
+});
+
+addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { selected = null; return; }
+  if (e.key === 'z' || e.key === 'Z') { undo(); return; }
+  if ((e.key === 'Backspace' || e.key === 'Delete') && selected !== null) {
+    deleteStar(selected); selected = null;
+  }
+});
+
+const exportJSON = () => {
+  if (stars.length === 0) { alert('no stars'); return; }
+  const w = innerWidth, h = innerHeight;
+  const xs = stars.map(s => s.x), ys = stars.map(s => s.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  const size = Math.max(maxX - minX, maxY - minY, 1);
+  const base = Math.min(w, h);
+  const unitStars = stars.map(s => [
+    +(0.5 + (s.x - cx) / size).toFixed(4),
+    +(0.5 + (s.y - cy) / size).toFixed(4),
+  ]);
+  const obj = {
+    name: nameInput.value || 'untitled',
+    pos: { cx: +(cx / w).toFixed(4), cy: +(cy / h).toFixed(4) },
+    scale: +(size / base).toFixed(4),
+    stars: unitStars,
+    edges,
+  };
+  const json = JSON.stringify(obj, null, 2);
+  out.textContent = json;
+  out.style.display = 'block';
+  navigator.clipboard?.writeText(json).then(
+    () => console.log('copied to clipboard'),
+    () => console.log('clipboard blocked, copy from panel'),
+  );
+  saveToConstellations(obj.name, json);
+};
+
+let dirHandle = null;
+const saveToConstellations = async (name, json) => {
+  const filename = `${name.replace(/[^a-z0-9-_]/gi, '_')}.json`;
+  if (window.showDirectoryPicker) {
+    try {
+      if (!dirHandle) {
+        dirHandle = await window.showDirectoryPicker({
+          id: 'constellations',
+          mode: 'readwrite',
+          startIn: 'documents',
+        });
+      }
+      const fh = await dirHandle.getFileHandle(filename, { create: true });
+      const w = await fh.createWritable();
+      await w.write(json);
+      await w.close();
+      console.log(`saved ${filename} to ${dirHandle.name}/`);
+      return;
+    } catch (err) {
+      console.warn('directory save failed, falling back to download', err);
+      dirHandle = null;
+    }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  a.download = `constellations/${filename}`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+document.querySelectorAll('#panel button').forEach(b => {
+  b.addEventListener('click', () => {
+    const act = b.dataset.act;
+    if (act === 'export') exportJSON();
+    if (act === 'undo') undo();
+    if (act === 'delete' && selected !== null) { deleteStar(selected); selected = null; }
+    if (act === 'clear') clearAll();
+  });
+});
+nameInput.addEventListener('input', persist);
+
+const draw = () => {
+  const w = innerWidth, h = innerHeight;
+  ctx.clearRect(0, 0, w, h);
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, '#020108');
+  g.addColorStop(0.5, '#0a0820');
+  g.addColorStop(1, '#1a0e2a');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+
+  if (snapInput.checked) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < w; x += 20) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+    for (let y = 0; y < h; y += 20) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+  }
+
+  ctx.strokeStyle = 'rgba(180, 170, 255, 0.55)';
+  ctx.lineWidth = 1;
+  edges.forEach(([a, b]) => {
+    const sa = stars[a], sb = stars[b];
+    if (!sa || !sb) return;
+    ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
+  });
+
+  stars.forEach((s, i) => {
+    const isSel = i === selected;
+    ctx.fillStyle = isSel ? '#ffd76a' : '#fff';
+    ctx.beginPath(); ctx.arc(s.x, s.y, isSel ? 5 : 3.5, 0, Math.PI * 2); ctx.fill();
+    if (isSel) {
+      ctx.strokeStyle = 'rgba(255,215,106,0.4)';
+      ctx.beginPath(); ctx.arc(s.x, s.y, 12, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(180,170,255,0.5)';
+    ctx.font = '10px ui-monospace';
+    ctx.fillText(i, s.x + 6, s.y - 6);
+  });
+
+  stats.textContent = `${stars.length} stars · ${edges.length} edges${selected !== null ? ` · sel #${selected}` : ''}`;
+  requestAnimationFrame(draw);
+};
+
+load();
+draw();
+</script>
+</body>
+</html>
