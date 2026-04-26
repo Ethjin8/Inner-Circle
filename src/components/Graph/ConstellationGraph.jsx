@@ -92,6 +92,33 @@ function drawStarNode(ctx, node, r, color, alpha, isHovered, strength = 50) {
   }
 }
 
+function drawNudgeIcon(ctx, pos, type, color, alpha) {
+  const size = 10;
+  const gx = pos.x + 14;
+  const gy = pos.y - 14;
+
+  ctx.save();
+  if (type === 'star') {
+    ctx.font = `${size * 1.6}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = '#f3d24d';
+    ctx.shadowBlur = 8;
+    ctx.fillText('⭐', gx, gy);
+  } else if (type === 'exclamation') {
+    ctx.beginPath();
+    ctx.arc(gx, gy, size * 0.7, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.fillStyle = '#0a0a1e';
+    ctx.font = `bold ${size}px Inter`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('!', gx, gy + 0.5);
+  }
+  ctx.restore();
+}
+
 // Category nodes use a shadcn-style hollow ring + wider/softer bloom so they read
 // as "regions" rather than additional stars; the ring + locator dot signal anchor.
 function drawCategoryStar(ctx, node, r, color, alpha, isHovered) {
@@ -468,6 +495,9 @@ const internalPanRef = useRef({ x: 0, y: 0 });
           orbitSpeed: oldNode ? oldNode.orbitSpeed : 0.0006 + Math.random() * 0.0008,
           daysSince: daysSince(person.lastContactAt),
           isBirthday: isBirthdayToday(person.birthday),
+          // If the person has an explicit status (like 'yellow'), use it. 
+          // Otherwise, if they are stale (>30 days), default to 'red'.
+          nudgeStatus: person.nudgeStatus || (daysSince(person.lastContactAt) > 30 ? 'red' : null),
         });
       });
     });
@@ -1129,6 +1159,20 @@ const internalPanRef = useRef({ x: 0, y: 0 });
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText('!', gx, gy + 0.5);
             ctx.restore();
+          }
+
+          // Birthday Star
+          if (node.isBirthday) {
+            drawNudgeIcon(ctx, pos, 'star', '#f3d24d', nodeAlpha);
+          }
+
+          // Stale Nudge
+          if (node.nudgeStatus === 'red' || node.nudgeStatus === 'yellow') {
+            const nudgeColor = node.nudgeStatus === 'red' ? '#f05050' : '#f3d24d';
+            // If birthday or failed status is already there, offset the exclamation mark
+            const hasIndicator = node.isBirthday || node.scoringStatus === 'failed';
+            const offsetPos = hasIndicator ? { x: pos.x - 28, y: pos.y } : pos;
+            drawNudgeIcon(ctx, offsetPos, 'exclamation', nudgeColor, nodeAlpha);
           }
         }
       }

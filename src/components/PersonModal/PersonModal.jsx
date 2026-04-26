@@ -45,6 +45,13 @@ function strengthRingColor(s) {
   return '#f05050';
 }
 
+function formatLastContact(iso) {
+  if (!iso) return 'Never';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'Never';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 function formatBirthday(iso) {
   if (!iso) return null;
   const d = new Date(iso + 'T00:00:00');
@@ -139,6 +146,7 @@ function fromDraft(person, draft) {
       important_events: importantEvents,
       things_to_look_forward_to: forwardTo,
     },
+    nudgeStatus: person.nudgeStatus || null,
   };
 }
 
@@ -146,6 +154,8 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
   const [activeTab, setActiveTab] = useState('info');
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(() => toDraft(person));
+  const [showNudgePrompt, setShowNudgePrompt] = useState(false);
+  const [daysAgo, setDaysAgo] = useState('');
 
   useEffect(() => {
     if (!person) return;
@@ -304,8 +314,82 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
             </div>
 
             {person.birthday && (
-              <div className="pm-birthday">{formatBirthday(person.birthday)}</div>
+              <div className="pm-birthday">🎂 {formatBirthday(person.birthday)}</div>
             )}
+
+            <div className="pm-last-contact">
+              Last Contact: {formatLastContact(person.lastContactAt)}
+            </div>
+
+            {/* Nudge Interaction */}
+            {(() => {
+              const last = new Date(person.lastContactAt || 0);
+              const diffDays = Math.floor((Date.now() - last.getTime()) / (1000 * 60 * 60 * 24));
+              const isStale = diffDays > 30 || person.nudgeStatus === 'red' || person.nudgeStatus === 'yellow';
+              
+              if (!isStale) return null;
+
+              return (
+                <div className="pm-nudge-box">
+                  {!showNudgePrompt ? (
+                    <>
+                      <div className="pm-nudge-text">Have you reached out to this person recently?</div>
+                      <div className="pm-nudge-btns">
+                        <button 
+                          className="pm-nudge-btn defer"
+                          onClick={() => {
+                            onUpdatePerson?.({ ...person, nudgeStatus: 'yellow' });
+                            onClose();
+                          }}
+                        >
+                          Not yet, but will do
+                        </button>
+                        <button 
+                          className="pm-nudge-btn confirm"
+                          onClick={() => setShowNudgePrompt(true)}
+                        >
+                          YES
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="pm-nudge-prompt">
+                      <div className="pm-nudge-text">How many days ago?</div>
+                      <div className="pm-nudge-input-row">
+                        <input 
+                          type="number" 
+                          className="pm-nudge-input"
+                          placeholder="0"
+                          value={daysAgo}
+                          onChange={(e) => setDaysAgo(e.target.value)}
+                          autoFocus
+                        />
+                        <button 
+                          className="pm-nudge-btn confirm"
+                          onClick={() => {
+                            const days = parseInt(daysAgo) || 0;
+                            const newDate = new Date();
+                            newDate.setHours(0,0,0,0); // start of day
+                            newDate.setDate(newDate.getDate() - days);
+                            
+                            onUpdatePerson?.({ 
+                              ...person, 
+                              lastContactAt: newDate.toISOString(),
+                              nudgeStatus: null 
+                            });
+                            setShowNudgePrompt(false);
+                            setDaysAgo('');
+                          }}
+                        >
+                          Update
+                        </button>
+                        <button className="pm-nudge-cancel" onClick={() => setShowNudgePrompt(false)}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Info tab content */}

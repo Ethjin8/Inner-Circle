@@ -72,7 +72,8 @@ function App() {
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [pastChatsOpen, setPastChatsOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [showDemo, setShowDemo] = useState(false); // testing: show demo people without persisting
+  const [showDemo, setShowDemo] = useState(false);
+  const [demoPeople, setDemoPeople] = useState(DEMO_PEOPLE.map(p => ({ ...p, isDemo: true })));
   const promptInputRef = useRef(null);
   const [autoExpanded, setAutoExpanded] = useState(false);
   const [interactionTick, setInteractionTick] = useState(0);
@@ -97,8 +98,8 @@ function App() {
   }, []);
 
   const displayPeople = useMemo(() => (
-    showDemo ? [...people, ...DEMO_PEOPLE.map(p => ({ ...p, isDemo: true }))] : people
-  ), [people, showDemo]);
+    showDemo ? [...people, ...demoPeople] : people
+  ), [people, demoPeople, showDemo]);
 
   const [viewMode, setViewMode] = useState('graph'); // 'graph' | 'gallery'
   const [modalPhase, setModalPhase] = useState(null); // null | 'zooming-in' | 'open' | 'zooming-out'
@@ -231,19 +232,13 @@ function App() {
     setPhotosForPerson(personId, newPhotos);
   }, [setPhotosForPerson]);
 
-  const handlePersonUpdate = useCallback((updatedPerson) => {
-    if (!updatedPerson.isDemo) updatePerson(updatedPerson);
-    setSelectedPerson(updatedPerson);
-    // Edits change the relationship signal, so rescore. README §AI Workflow point 5.
-    scoreAndPatch(updatedPerson);
-  // scoreAndPatch is a stable useCallback — safe to omit
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
 
   // Mark a person as scoring-pending, run the AI pipeline, then patch the
   // result back. Used by both onAdd (initial) and the sidebar Retry button.
   const scoreAndPatch = useCallback((person) => {
-    setPeople((prev) =>
+    const setList = person.isDemo ? setDemoPeople : setPeople;
+    setList((prev) =>
       prev.map((p) => (p.id === person.id ? { ...p, scoring: { status: 'pending' } } : p)),
     );
     scorePerson(person)
@@ -254,12 +249,12 @@ function App() {
           relationship: { ...(person.relationship || {}), strength: scoring.aggregate },
           updated_at: scoring.scored_at,
         };
-        setPeople((prev) => prev.map((p) => (p.id === person.id ? { ...p, ...patched } : p)));
-        updatePerson(patched);
+        setList((prev) => prev.map((p) => (p.id === person.id ? { ...p, ...patched } : p)));
+        if (!person.isDemo) updatePerson(patched);
       })
       .catch((err) => {
         console.error('Scoring failed for', person.name, err);
-        setPeople((prev) =>
+        setList((prev) =>
           prev.map((p) =>
             p.id === person.id
               ? { ...p, scoring: { status: 'failed', error: err.message } }
@@ -267,7 +262,17 @@ function App() {
           ),
         );
       });
-  }, []);
+  }, [updatePerson]);
+
+  const handlePersonUpdate = useCallback((updatedPerson) => {
+    if (updatedPerson.isDemo) {
+      setDemoPeople(prev => prev.map(p => p.id === updatedPerson.id ? updatedPerson : p));
+    } else {
+      updatePerson(updatedPerson);
+    }
+    setSelectedPerson(updatedPerson);
+    scoreAndPatch(updatedPerson);
+  }, [updatePerson, scoreAndPatch]);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
