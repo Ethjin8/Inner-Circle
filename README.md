@@ -54,11 +54,15 @@ The result is part PRM, part visual playground: rigorous on the data side, expre
    ```
    Fill in:
    ```env
+   # Client-side (exposed via Vite)
    VITE_GEMINI_API_KEY=your_gemini_key
-   VITE_ANTHROPIC_API_KEY=your_anthropic_key
    VITE_CLOUDINARY_CLOUD_NAME=your_cloud_name
    VITE_CLOUDINARY_UPLOAD_PRESET=your_unsigned_preset
    VITE_FIREBASE_CONFIG=your_firebase_config_json
+
+   # Server-side (Vite middleware, never exposed to browser)
+   ANTHROPIC_API_KEY=sk-ant-…   # offline scoring + online chat agent
+   VOYAGE_API_KEY=pa-…          # embeddings for the chat agent's semantic_search tool
    ```
 
 3. **Start the development server:**
