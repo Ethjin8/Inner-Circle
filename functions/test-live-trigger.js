@@ -58,7 +58,7 @@ async function runLiveTest() {
 
       if (nudges.length > 0) {
         console.log(`   🚀 PREPARING EMAIL FOR ${user.email} with ${nudges.length} nudges...`);
-        const emailBody = nudges.map(n => `📢 ${n.message}`).join('\n\n');
+        const emailBody = nudges.map(n => n.message).join('\n\n');
 
         try {
           await transporter.sendMail({

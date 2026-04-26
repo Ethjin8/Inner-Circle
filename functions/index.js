@@ -7,6 +7,8 @@ const nodemailer = require("nodemailer");
 initializeApp();
 const db = getFirestore();
 const auth = getAuth();
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+const STALE_CONTACT_DAYS = 31;
 
 // Setup the email transporter
 const transporter = nodemailer.createTransport({
@@ -38,11 +40,22 @@ function formatRefresher(person) {
 `.trim();
 }
 
+function toDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value?.toDate === "function") {
+    const asDate = value.toDate();
+    return Number.isNaN(asDate.getTime()) ? null : asDate;
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 /**
  * Scheduled function: Runs at 3:00 AM PDT
  */
 exports.dailyNudge = onSchedule({
-  schedule: "7 6 * * *",
+  schedule: "55 6 * * *",
   timeZone: "America/Los_Angeles"
 }, async (event) => {
   const now = new Date();
@@ -79,13 +92,19 @@ exports.dailyNudge = onSchedule({
           });
         }
 
-        // Scenario 2: Stale Connection (Multiple of 31 days)
+        // Scenario 2: Stale Connection (31+ days since last contact)
         if (person.lastContactAt) {
-          const lastDate = new Date(person.lastContactAt);
-          const diffTime = Math.abs(now - lastDate);
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          
-          if (diffDays > 0 && diffDays % 31 === 0) {
+          const lastDate = toDate(person.lastContactAt);
+          if (!lastDate) {
+            console.warn(`Skipping stale nudge for ${person.name || person.id}: invalid lastContactAt`, person.lastContactAt);
+            return;
+          }
+
+          const diffTime = now.getTime() - lastDate.getTime();
+          if (diffTime <= 0) return;
+
+          const diffDays = Math.floor(diffTime / MS_PER_DAY);
+          if (diffDays >= STALE_CONTACT_DAYS) {
             nudges.push({
               type: 'CATCHUP',
               name: person.name,
