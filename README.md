@@ -4,7 +4,7 @@ An AI-powered personal relationship manager wrapped in a cinematic constellation
 
 ## Overview
 
-Inner Circle treats your social world as a deterministic, hierarchical radial graph. Every person becomes a node attached by category to a central "You," with edge thickness encoding relationship strength. Connections are added through a voice-first onboarding agent or a manual form, persisted per-user to Firestore, scored offline by an anchored Claude rubric pipeline, and surfaced again as nudges (birthdays, stale connections) on-graph and over email.
+Inner Circle treats your social world as a deterministic, hierarchical radial graph. Every person becomes a node attached by category to a central "You," with a hover + pulse feature encoding relationship strength. Connections are added through a voice-first onboarding agent or a manual form, persisted per-user to Firestore, scored offline by an anchored Claude rubric pipeline, and surfaced again as nudges (birthdays, stale connections) on-graph and over email.
 
 Part PRM, part visual playground: rigorous on the data side, expressive on the interaction side.
 
