@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { Camera, X } from 'lucide-react';
 import './PersonModal.css';
 import CloudinaryUpload from '../CloudinaryUpload/CloudinaryUpload';
 import {
@@ -14,6 +15,47 @@ import {
 const REL_BY_KEY = Object.fromEntries(RELATIONSHIP_TYPES.map((r) => [r.key, r]));
 const OTHER_REL  = REL_BY_KEY.other;
 const labelOf = (options, key) => options.find((o) => o.key === key)?.label ?? null;
+
+const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+const PROFILE_PIC_WIDGET_STYLES = {
+  palette: {
+    window: '#0e0e0e', windowBorder: 'rgba(255,255,255,0.10)',
+    tabIcon: '#e8e8f0', inactiveTabIcon: '#55556a', menuIcons: '#8a8a9a',
+    textLight: '#e8e8f0', textDark: '#0e0e0e',
+    link: '#7df9ff', action: '#7df9ff', inProgress: '#7df9ff',
+    complete: '#5fd496', error: '#f06d6d', sourceBg: '#0e0e0e',
+  },
+  fonts: {
+    default: null,
+    "'Geist', sans-serif": {
+      url: 'https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap',
+      active: true,
+    },
+  },
+};
+
+const CATEGORY_COLORS = {
+  family: '#e8b06b',
+  friend: '#ffce5c',
+  classmate: '#b9d0ff',
+  coworker: '#9be6c4',
+  professional: '#ff9c5a',
+  romantic: '#ffc8d6',
+  mentor: '#7df9ff',
+  other: '#cdc9c0',
+};
+
+const CATEGORY_LABELS = {
+  family: 'Family',
+  friend: 'Friend',
+  classmate: 'School',
+  coworker: 'Work',
+  professional: 'Professional',
+  romantic: 'Romantic',
+  mentor: 'Mentor',
+  other: 'Other',
+};
 
 const DIMENSION_LABELS = {
   depth_of_knowledge:     'Depth of knowledge',
@@ -35,6 +77,13 @@ function strengthRingColor(s) {
   if (s > 70) return 'rgb(var(--strength-strong, 120, 220, 170))';
   if (s >= 30) return 'rgb(var(--strength-mid,    240, 210, 110))';
   return 'rgb(var(--strength-weak,   220, 130, 130))';
+}
+
+function formatLastContact(iso) {
+  if (!iso) return 'Never';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'Never';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function formatBirthday(iso) {
@@ -148,6 +197,7 @@ function fromDraft(person, draft) {
       important_events: importantEvents,
       things_to_look_forward_to: forwardTo,
     },
+    nudgeStatus: person.nudgeStatus || null,
   };
 }
 
@@ -157,10 +207,12 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
   const [draft, setDraft] = useState(() => toDraft(person));
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [showNudgePrompt, setShowNudgePrompt] = useState(false);
+  const [daysAgo, setDaysAgo] = useState('');
 
   const startEdit = () => {
     setSaveError(null);
-    setDraft(toDraft(person)); // refresh from latest props in case data changed
+    setDraft(toDraft(person));
     setIsEditing(true);
   };
 
@@ -192,6 +244,52 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [person, onClose]);
+
+  // Profile pic upload — Cloudinary widget, single image
+  const profileWidgetRef = useRef(null);
+  const personRef = useRef(person);
+  useEffect(() => { personRef.current = person; }, [person]);
+  const onUpdatePersonRef = useRef(onUpdatePerson);
+  useEffect(() => { onUpdatePersonRef.current = onUpdatePerson; }, [onUpdatePerson]);
+
+  const openProfilePicker = useCallback(() => {
+    if (!CLOUD_NAME || !window.cloudinary) return;
+    if (!profileWidgetRef.current) {
+      profileWidgetRef.current = window.cloudinary.createUploadWidget(
+        {
+          cloudName: CLOUD_NAME,
+          uploadPreset: UPLOAD_PRESET,
+          multiple: false,
+          maxFiles: 1,
+          sources: ['local', 'camera', 'url'],
+          showAdvancedOptions: false,
+          cropping: false,
+          defaultSource: 'local',
+          showPoweredBy: false,
+          styles: PROFILE_PIC_WIDGET_STYLES,
+        },
+        (error, result) => {
+          if (!error && result?.event === 'success') {
+            const { public_id, secure_url } = result.info;
+            const current = personRef.current;
+            onUpdatePersonRef.current?.({
+              ...current,
+              profilePic: { public_id, secure_url },
+            });
+          }
+        }
+      );
+    }
+    profileWidgetRef.current.open();
+  }, []);
+
+  const removeProfilePic = useCallback((e) => {
+    e?.stopPropagation();
+    const current = personRef.current;
+    if (!current) return;
+    const { profilePic, ...rest } = current;
+    onUpdatePersonRef.current?.(rest);
+  }, []);
 
   if (!person) return null;
 
@@ -342,12 +440,45 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
                   transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
                 />
               </svg>
-              <div className="pm-avatar">
-                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="8" r="3.6" />
-                  <path d="M4.5 20c0-3.9 3.4-6.8 7.5-6.8s7.5 2.9 7.5 6.8" />
-                </svg>
-              </div>
+              <button
+                type="button"
+                className="pm-avatar"
+                onClick={openProfilePicker}
+                aria-label={person.profilePic ? 'Change profile picture' : 'Add profile picture'}
+              >
+                {person.profilePic?.secure_url ? (
+                  <img
+                    src={person.profilePic.secure_url}
+                    alt={`${person.name} profile`}
+                    className="pm-avatar-img"
+                  />
+                ) : (
+                  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="8" r="3.6" />
+                    <path d="M4.5 20c0-3.9 3.4-6.8 7.5-6.8s7.5 2.9 7.5 6.8" />
+                  </svg>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className="pm-avatar-edit"
+                onClick={openProfilePicker}
+                aria-label={person.profilePic ? 'Change profile picture' : 'Upload profile picture'}
+              >
+                <Camera size={12} strokeWidth={2} aria-hidden="true" />
+              </button>
+
+              {person.profilePic?.secure_url && (
+                <button
+                  type="button"
+                  className="pm-avatar-remove"
+                  onClick={removeProfilePic}
+                  aria-label="Remove profile picture"
+                >
+                  <X size={11} strokeWidth={2.5} aria-hidden="true" />
+                </button>
+              )}
             </div>
 
             <div className="pm-name">{person.name}</div>
@@ -365,7 +496,7 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
             )}
 
             {person.birthday && (
-              <div className="pm-birthday">{formatBirthday(person.birthday)}</div>
+              <div className="pm-birthday">🎂 {formatBirthday(person.birthday)}</div>
             )}
 
             {hasStats && (
@@ -392,6 +523,79 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
                 )}
               </div>
             )}
+            <div className="pm-last-contact">
+              Last Contact: {formatLastContact(person.lastContactAt)}
+            </div>
+
+            {/* Nudge Interaction */}
+            {(() => {
+              const last = new Date(person.lastContactAt || 0);
+              const diffDays = Math.floor((Date.now() - last.getTime()) / (1000 * 60 * 60 * 24));
+              const isStale = diffDays > 30 || person.nudgeStatus === 'red' || person.nudgeStatus === 'yellow';
+              
+              if (!isStale) return null;
+
+              return (
+                <div className="pm-nudge-box">
+                  {!showNudgePrompt ? (
+                    <>
+                      <div className="pm-nudge-text">Have you reached out to this person recently?</div>
+                      <div className="pm-nudge-btns">
+                        <button 
+                          className="pm-nudge-btn defer"
+                          onClick={() => {
+                            onUpdatePerson?.({ ...person, nudgeStatus: 'yellow' });
+                            onClose();
+                          }}
+                        >
+                          Not yet, but will do
+                        </button>
+                        <button 
+                          className="pm-nudge-btn confirm"
+                          onClick={() => setShowNudgePrompt(true)}
+                        >
+                          YES
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="pm-nudge-prompt">
+                      <div className="pm-nudge-text">How many days ago?</div>
+                      <div className="pm-nudge-input-row">
+                        <input 
+                          type="number" 
+                          className="pm-nudge-input"
+                          placeholder="0"
+                          value={daysAgo}
+                          onChange={(e) => setDaysAgo(e.target.value)}
+                          autoFocus
+                        />
+                        <button 
+                          className="pm-nudge-btn confirm"
+                          onClick={() => {
+                            const days = parseInt(daysAgo) || 0;
+                            const newDate = new Date();
+                            newDate.setHours(0,0,0,0); // start of day
+                            newDate.setDate(newDate.getDate() - days);
+                            
+                            onUpdatePerson?.({ 
+                              ...person, 
+                              lastContactAt: newDate.toISOString(),
+                              nudgeStatus: null 
+                            });
+                            setShowNudgePrompt(false);
+                            setDaysAgo('');
+                          }}
+                        >
+                          Update
+                        </button>
+                        <button className="pm-nudge-cancel" onClick={() => setShowNudgePrompt(false)}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Info tab content */}

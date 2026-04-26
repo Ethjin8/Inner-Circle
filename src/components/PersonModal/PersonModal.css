@@ -282,7 +282,73 @@
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  transition: background var(--duration-fast) var(--ease-out);
 }
+.pm-avatar:hover { background: rgba(255, 255, 255, 0.10); }
+.pm-avatar:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(125, 249, 255, 0.5);
+}
+
+.pm-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.pm-avatar-edit {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: 50%;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+.pm-avatar-edit:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+.pm-avatar-edit:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(125, 249, 255, 0.3);
+}
+
+.pm-avatar-remove {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+.pm-avatar-wrap:hover .pm-avatar-remove,
+.pm-avatar-remove:focus-visible { opacity: 1; }
+.pm-avatar-remove:focus-visible { outline: none; border-color: var(--accent); }
 
 /* DS §2: serif display for names. Serif ships only at 400. */
 .pm-name {
@@ -376,6 +442,12 @@
   font-weight: 400;
   color: var(--text-muted);
   margin-left: 1px;
+}
+
+.pm-last-contact {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: -2px;
 }
 
 /* ===== SECTIONS ===== */
@@ -663,4 +735,117 @@
   color: var(--text-primary);
   border-color: var(--border-strong);
   background: rgba(255, 255, 255, 0.04);
+}
+
+/* ===== NUDGE BOX ===== */
+.pm-nudge-box {
+  margin-top: 24px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: center;
+  font-family: 'Space Grotesk', sans-serif;
+  animation: pm-nudge-in 0.4s var(--ease-out);
+}
+
+@keyframes pm-nudge-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.pm-nudge-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+}
+
+.pm-nudge-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.pm-nudge-btn {
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+  font-family: inherit;
+}
+
+.pm-nudge-btn.defer {
+  background: rgba(243, 210, 77, 0.08);
+  color: #f3d24d;
+  border-color: rgba(243, 210, 77, 0.15);
+}
+
+.pm-nudge-btn.defer:hover {
+  background: rgba(243, 210, 77, 0.14);
+  border-color: rgba(243, 210, 77, 0.3);
+}
+
+.pm-nudge-btn.confirm {
+  background: rgba(95, 212, 150, 0.1);
+  color: #5fd496;
+  border-color: rgba(95, 212, 150, 0.2);
+}
+
+.pm-nudge-btn.confirm:hover {
+  background: rgba(95, 212, 150, 0.2);
+  border-color: rgba(95, 212, 150, 0.35);
+}
+
+.pm-nudge-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.pm-nudge-input-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.pm-nudge-input {
+  width: 90px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: white;
+  text-align: center;
+  font-size: 15px;
+  font-family: inherit;
+}
+
+.pm-nudge-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.pm-nudge-cancel {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0 4px;
+  font-family: inherit;
+}
+
+.pm-nudge-cancel:hover {
+  color: var(--text-primary);
 }

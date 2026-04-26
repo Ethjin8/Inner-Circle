@@ -108,24 +108,24 @@ const drawStarGlow = (ctx, x, y, radius, alpha) => {
   ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
 };
 
-const drawNorthStar = (ctx, w, h, t, yRatio = 0.25) => {
+const drawNorthStar = (ctx, w, h, t, yRatio = 0.45) => {
   const x = w / 2;
   const y = h * yRatio;
   const pulse = 0.75 + 0.25 * Math.sin(t * 0.0008);
 
   const outerGlow = ctx.createRadialGradient(x, y, 0, x, y, 70 * pulse);
-  outerGlow.addColorStop(0, `rgba(255, 220, 130, ${0.18 * pulse})`);
-  outerGlow.addColorStop(1, 'rgba(255, 220, 130, 0)');
+  outerGlow.addColorStop(0, `rgba(255, 255, 255, ${0.18 * pulse})`);
+  outerGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
   ctx.fillStyle = outerGlow;
   ctx.fillRect(x - 70, y - 70, 140, 140);
 
   const innerGlow = ctx.createRadialGradient(x, y, 0, x, y, 14 * pulse);
-  innerGlow.addColorStop(0, `rgba(255, 245, 190, ${0.85 * pulse})`);
-  innerGlow.addColorStop(1, 'rgba(255, 220, 130, 0)');
+  innerGlow.addColorStop(0, `rgba(255, 255, 255, ${0.85 * pulse})`);
+  innerGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
   ctx.fillStyle = innerGlow;
   ctx.fillRect(x - 14, y - 14, 28, 28);
 
-  ctx.fillStyle = `rgba(255, 252, 230, ${0.95 * pulse})`;
+  ctx.fillStyle = `rgba(255, 255, 255, ${0.95 * pulse})`;
   ctx.beginPath();
   ctx.arc(x, y, 2.5, 0, Math.PI * 2);
   ctx.fill();
@@ -284,7 +284,13 @@ export default function Landing({ onEnter, user }) {
           {error && <div className="signin-error">{error}</div>}
         </div>
       ) : (
-        <div className="landing-hint">Click anywhere to enter</div>
+        <>
+          <div className="landing-overlay">
+            <h1 className="landing-wordmark">Inner Circle</h1>
+            <p className="landing-tagline">Stay in touch with the people who matter most.</p>
+          </div>
+          <div className="landing-hint">Click anywhere to enter</div>
+        </>
       )}
     </div>
   );

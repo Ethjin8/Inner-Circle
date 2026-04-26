@@ -1,0 +1,40 @@
+.cmdk-nudge {
+  position: fixed;
+  top: var(--space-12, 48px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: var(--space-2, 8px) var(--space-4, 16px);
+  background: var(--surface-1, #0e0e0e);
+  border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10));
+  border-radius: var(--radius-full, 9999px);
+  color: var(--text-secondary);
+  font: 400 var(--text-sm, 12px)/1.4 var(--font-body, 'Geist', sans-serif);
+  box-shadow: var(--elevation-sm, 0 1px 2px rgba(2, 2, 8, 0.4));
+  animation: cmdk-nudge-in var(--duration-base, 200ms) var(--ease-out, ease);
+}
+
+.cmdk-nudge-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  border-radius: var(--radius-xs, 6px);
+  font-family: var(--font-mono, 'Geist Mono', ui-monospace, monospace);
+  font-size: var(--text-xs, 11px);
+  color: var(--text-primary);
+}
+
+@keyframes cmdk-nudge-in {
+  from { opacity: 0; transform: translate(-50%, -4px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cmdk-nudge { animation: none; }
+}
