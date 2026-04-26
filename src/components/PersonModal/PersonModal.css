@@ -36,6 +36,7 @@
 }
 
 /* ===== PANEL ===== */
+/* Per DS §3: flat true-black surface. Hierarchy from borders, not fills. */
 .pm-panel {
   position: relative;
   width: calc(100% - 48px);
@@ -44,11 +45,12 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: rgba(10, 10, 30, 0.95);
+  background: var(--surface-3, #0e0e0e);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   box-shadow: var(--elevation-lg);
   font-family: var(--font-body);
+  color: var(--text-primary);
   transform-origin: 50% 50%;
 }
 
@@ -145,19 +147,45 @@
   margin: 10px 0 4px;
 }
 
+/* DS §10: outlined buttons only, no fills in chrome. */
 .pm-edit-btn {
   border: 1px solid var(--border-default);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-primary);
-  border-radius: 8px;
-  padding: 6px 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-family: var(--font-body);
   font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
+  transition: background 0.12s var(--ease-out, ease), color 0.12s var(--ease-out, ease), border-color 0.12s var(--ease-out, ease);
+}
+
+.pm-edit-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .pm-edit-btn.primary {
-  border-color: rgba(125, 249, 255, 0.45);
-  background: rgba(125, 249, 255, 0.16);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.pm-edit-btn.primary:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.pm-edit-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pm-save-error {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: rgba(255, 140, 120, 0.95);
+  margin-right: auto;
+  align-self: center;
 }
 
 .pm-tab {
@@ -180,17 +208,19 @@
 
 .pm-tab:hover { color: rgba(255, 255, 255, 0.75); }
 
+/* DS §3: active state is bright primary text + cyan underline (accent reserved for tab underlines). */
 .pm-tab.active {
-  color: var(--accent);
+  color: var(--text-primary);
   border-bottom-color: var(--accent);
 }
 
 .pm-tab-badge {
-  background: rgba(125, 249, 255, 0.2);
-  color: var(--accent);
+  background: rgba(232, 232, 240, 0.08);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
   font-size: 10px;
-  font-weight: 600;
-  border-radius: 10px;
+  font-weight: 500;
+  border-radius: var(--radius-full, 999px);
   padding: 1px 6px;
   min-width: 18px;
   text-align: center;
@@ -254,36 +284,98 @@
   color: var(--text-secondary);
 }
 
+/* DS §2: serif display for names. Serif ships only at 400. */
 .pm-name {
   font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 22px;
-  color: var(--text-primary);
-  letter-spacing: -0.3px;
+  font-weight: 400;
+  font-size: 28px;
   line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  margin-top: 4px;
 }
 
-.pm-badge {
+/* DS §12: secondary line "Friend · since 2024 · UCLA" */
+.pm-subtitle {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.pm-subtitle-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  margin-right: 2px;
+}
+
+.pm-subtitle-part {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-secondary);
 }
 
-.pm-badge-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+.pm-subtitle-sep {
+  color: var(--text-muted);
 }
 
 .pm-birthday {
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: 12px;
   color: var(--text-secondary);
+}
+
+/* ===== STAT STRIP (DS §12) ===== */
+.pm-stats {
+  display: flex;
+  gap: var(--space-8, 32px);
+  padding-top: var(--space-3, 12px);
+}
+
+.pm-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.pm-stat-label {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.pm-stat-value {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.pm-stat-value-text {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-primary);
+}
+
+.pm-stat-suffix {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: 1px;
 }
 
 /* ===== SECTIONS ===== */
@@ -497,9 +589,11 @@
   overflow: hidden;
 }
 
+/* DS §14: no gradients in chrome. Solid primary fill, opacity for emphasis. */
 .pm-score-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, rgba(232,232,240,0.4) 0%, rgba(232,232,240,0.85) 100%);
+  background: var(--text-primary);
+  opacity: 0.85;
   border-radius: 2px;
   transition: width 0.4s ease-out;
 }
@@ -538,4 +632,35 @@
 
 .pm-input-wide {
   grid-column: 1 / -1;
+}
+
+/* ===== CHIP ROW (Connection editor) — DS §10 chip pattern ===== */
+.pm-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pm-chip {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full, 999px);
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+
+.pm-chip:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.pm-chip.on {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.04);
 }

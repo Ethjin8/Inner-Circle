@@ -169,6 +169,13 @@ export default function Landing({ onEnter, user }) {
     setZooming(true);
     onEnter();
   };
+
+  const handleLandingClick = () => {
+    if (zoomingRef.current) return;
+    if (user) triggerEnter();
+    else if (showAuthRef.current) closeAuth();
+    else setShowAuth(true);
+  };
   const stateRef = useRef({
     mouse: { x: -9999, y: -9999 },
     ambient: [],
@@ -212,17 +219,9 @@ export default function Landing({ onEnter, user }) {
     const onLeave = () => {
       stateRef.current.mouse = { x: -9999, y: -9999 };
     };
-    const onClick = () => {
-      if (zoomingRef.current) return;
-      if (user) triggerEnter();
-      else if (showAuthRef.current) closeAuth();
-      else setShowAuth(true);
-    };
-
     window.addEventListener('resize', resize);
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseleave', onLeave);
-    window.addEventListener('click', onClick);
 
     let raf;
     const render = (t) => {
@@ -245,7 +244,6 @@ export default function Landing({ onEnter, user }) {
       window.removeEventListener('resize', resize);
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseleave', onLeave);
-      window.removeEventListener('click', onClick);
     };
   }, [onEnter]);
 
@@ -257,7 +255,7 @@ export default function Landing({ onEnter, user }) {
   };
 
   return (
-    <div className={`landing ${zooming ? 'zooming' : ''}`}>
+    <div className={`landing ${zooming ? 'zooming' : ''}`} onClick={handleLandingClick} role="presentation">
       <canvas ref={canvasRef} className="landing-canvas" />
       <img src="/foreground.png" alt="" className="landing-foreground" />
       <div className="landing-flash" />

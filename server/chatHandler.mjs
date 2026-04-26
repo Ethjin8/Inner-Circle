@@ -88,6 +88,7 @@ function buildSystemPrompt(people, attachedNodeIds) {
     "- After calling an action tool, give a one-line confirmation in your reply (e.g. 'Drafted a coffee invite to Jake — open the editor to tweak and send.'). The user sees the editable draft as a modal, so don't paste the full body into chat.",
     "- Keep answers concrete and actionable. Cite specific fields ('Mom's gardening hobby suggests...') rather than vague generalities.",
     "- The user's chat is informal. Match that tone; don't over-format.",
+    "- NEVER use emoji in your replies (no 😊, 🎉, ✨, 🔥, etc.). The interface is editorial; emoji clash with the typography. Use plain words for emphasis instead.",
     "",
     "ATTACHED PEOPLE (full JSON):",
     JSON.stringify({ attached_people: attached }, null, 2),

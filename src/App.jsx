@@ -231,17 +231,9 @@ function App() {
     setPhotosForPerson(personId, newPhotos);
   }, [setPhotosForPerson]);
 
-  const handlePersonUpdate = useCallback((updatedPerson) => {
-    if (!updatedPerson.isDemo) updatePerson(updatedPerson);
-    setSelectedPerson(updatedPerson);
-    // Edits change the relationship signal, so rescore. README §AI Workflow point 5.
-    scoreAndPatch(updatedPerson);
-  // scoreAndPatch is a stable useCallback — safe to omit
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Mark a person as scoring-pending, run the AI pipeline, then patch the
   // result back. Used by both onAdd (initial) and the sidebar Retry button.
+  // NOTE: must be declared BEFORE handlePersonUpdate, which lists it in deps.
   const scoreAndPatch = useCallback((person) => {
     setPeople((prev) =>
       prev.map((p) => (p.id === person.id ? { ...p, scoring: { status: 'pending' } } : p)),
@@ -255,7 +247,9 @@ function App() {
           updated_at: scoring.scored_at,
         };
         setPeople((prev) => prev.map((p) => (p.id === person.id ? { ...p, ...patched } : p)));
-        updatePerson(patched);
+        updatePerson(patched).catch((err) =>
+          console.error('Persist score failed for', person.name, err),
+        );
       })
       .catch((err) => {
         console.error('Scoring failed for', person.name, err);
@@ -267,7 +261,23 @@ function App() {
           ),
         );
       });
-  }, []);
+  }, [setPeople, updatePerson]);
+
+  const handlePersonUpdate = useCallback(async (updatedPerson) => {
+    // Write FIRST so Firestore failures (rules, validation, network) propagate
+    // up to PersonModal.saveEdit before we mark the UI as saved.
+    if (!updatedPerson.isDemo) {
+      try {
+        await updatePerson(updatedPerson);
+      } catch (err) {
+        console.error('[updatePerson] Firestore rejected the write:', err);
+        throw err; // surface to saveEdit
+      }
+    }
+    setSelectedPerson(updatedPerson);
+    // Rescoring is fire-and-forget — long pipeline, shouldn't block Save UI.
+    scoreAndPatch(updatedPerson);
+  }, [updatePerson, scoreAndPatch]);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();

@@ -187,6 +187,12 @@ export default function ChatModal({
     streamingRef.current = false;
     setStreaming(false);
     setErrorMsg(null);
+    setStreaming(false);
+    setErrorMsg(null);
+    setStreaming(false);
+    setErrorMsg(null);
+    setStreaming(false);
+    setErrorMsg(null);
     if (initialThread) {
       setThreadId(initialThread.id ?? null);
       setMessages(initialThread.messages ?? []);
@@ -253,9 +259,20 @@ export default function ChatModal({
     <div className="chat-modal-overlay" role="dialog" aria-modal="true">
       <div className="chat-modal">
         <header className="chat-modal-header">
-          <button className="chat-new-btn" onClick={handleNewChat}>+ New Chat</button>
+          <button className="chat-new-btn" onClick={handleNewChat} aria-label="Start a new chat">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            <span>New chat</span>
+          </button>
           <span className="chat-modal-title">Constellation Chat</span>
-          <button className="chat-close-btn" onClick={handleClose} aria-label="Close">×</button>
+          <button className="chat-close-btn" onClick={handleClose} aria-label="Close">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
         </header>
 
         {attachedNodeIds.length > 0 && (

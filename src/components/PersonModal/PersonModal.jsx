@@ -1,28 +1,19 @@
 import { useEffect, useState } from 'react';
 import './PersonModal.css';
 import CloudinaryUpload from '../CloudinaryUpload/CloudinaryUpload';
+import {
+  RELATIONSHIP_TYPES,
+  TENURE_OPTIONS,
+  FREQUENCY_OPTIONS,
+  LAST_INTERACTION_OPTIONS,
+  CHANNEL_OPTIONS,
+  SUPPORT_OPTIONS,
+  KNOWS_OPTIONS,
+} from '../../constants/personSchema';
 
-const CATEGORY_COLORS = {
-  family: '#e8b06b',
-  friend: '#ffce5c',
-  classmate: '#b9d0ff',
-  coworker: '#9be6c4',
-  professional: '#ff9c5a',
-  romantic: '#ffc8d6',
-  mentor: '#7df9ff',
-  other: '#cdc9c0',
-};
-
-const CATEGORY_LABELS = {
-  family: 'Family',
-  friend: 'Friend',
-  classmate: 'School',
-  coworker: 'Work',
-  professional: 'Professional',
-  romantic: 'Romantic',
-  mentor: 'Mentor',
-  other: 'Other',
-};
+const REL_BY_KEY = Object.fromEntries(RELATIONSHIP_TYPES.map((r) => [r.key, r]));
+const OTHER_REL  = REL_BY_KEY.other;
+const labelOf = (options, key) => options.find((o) => o.key === key)?.label ?? null;
 
 const DIMENSION_LABELS = {
   depth_of_knowledge:     'Depth of knowledge',
@@ -39,10 +30,11 @@ const DIMENSION_ORDER = [
   'reciprocity',
 ];
 
+// Buckets per design-system.md §11 (graph edges): strong >70, mid 30-70, weak <30.
 function strengthRingColor(s) {
-  if (s >= 65) return '#34d399';
-  if (s >= 40) return '#facc32';
-  return '#f05050';
+  if (s > 70) return 'rgb(var(--strength-strong, 120, 220, 170))';
+  if (s >= 30) return 'rgb(var(--strength-mid,    240, 210, 110))';
+  return 'rgb(var(--strength-weak,   220, 130, 130))';
 }
 
 function formatBirthday(iso) {
@@ -84,21 +76,31 @@ function listToText(items) {
 }
 
 function toDraft(person) {
+  const rel = person.relationship ?? {};
   return {
     name: person.name || '',
     birthday: person.birthday || '',
-    relationshipType: person.relationship?.type || 'other',
+    relationshipType: rel.type || 'other',
     notes: person.notes || '',
-    howWeMet: person.context?.how_we_met || '',
-    school: person.context?.school || '',
-    work: person.context?.work || '',
-    hobbies: listToText(person.context?.hobbies),
-    sports: listToText(person.context?.sports),
-    favoriteFoods: listToText(person.context?.favorites?.foods),
-    favoriteMusic: listToText(person.context?.favorites?.music),
+    // Connection (7 structured fields — schema v2)
+    tenure:           rel.tenure              || '',
+    frequency:        rel.frequency           || '',
+    lastInteraction:  rel.last_interaction    || '',
+    channels:         Array.isArray(rel.channels) ? [...rel.channels] : [],
+    theyShowUpForMe:  rel.they_show_up_for_me || '',
+    iShowUpForThem:   rel.i_show_up_for_them  || '',
+    knowsAboutMe:     rel.knows_about_me      || '',
+    // Context + history
+    howWeMet:         person.context?.how_we_met || '',
+    school:           person.context?.school || '',
+    work:             person.context?.work || '',
+    hobbies:          listToText(person.context?.hobbies),
+    sports:           listToText(person.context?.sports),
+    favoriteFoods:    listToText(person.context?.favorites?.foods),
+    favoriteMusic:    listToText(person.context?.favorites?.music),
     memoriesTogether: listToText(person.history?.memories_together),
-    importantEvents: listToText(person.history?.important_events),
-    forwardTo: listToText(person.history?.things_to_look_forward_to),
+    importantEvents:  listToText(person.history?.important_events),
+    forwardTo:        listToText(person.history?.things_to_look_forward_to),
   };
 }
 
@@ -119,6 +121,13 @@ function fromDraft(person, draft) {
     relationship: {
       ...(person.relationship || {}),
       type: draft.relationshipType || 'other',
+      tenure:              draft.tenure              || null,
+      frequency:           draft.frequency           || null,
+      last_interaction:    draft.lastInteraction     || null,
+      channels:            Array.isArray(draft.channels) ? draft.channels : [],
+      they_show_up_for_me: draft.theyShowUpForMe     || null,
+      i_show_up_for_them:  draft.iShowUpForThem      || null,
+      knows_about_me:      draft.knowsAboutMe        || null,
     },
     context: {
       ...(person.context || {}),
@@ -146,6 +155,36 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
   const [activeTab, setActiveTab] = useState('info');
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(() => toDraft(person));
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+
+  const startEdit = () => {
+    setSaveError(null);
+    setDraft(toDraft(person)); // refresh from latest props in case data changed
+    setIsEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setSaveError(null);
+    setDraft(toDraft(person));
+    setIsEditing(false);
+  };
+
+  const saveEdit = async () => {
+    if (saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const updated = fromDraft(person, draft || {});
+      await onUpdatePerson?.(updated);
+      setDraft(toDraft(updated));
+      setIsEditing(false);
+    } catch (err) {
+      setSaveError(err?.message || 'Could not save — please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (!person) return;
@@ -156,16 +195,24 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
 
   if (!person) return null;
 
-  const type = person.relationship?.type ?? 'other';
-  const strength = person.relationship?.strength ?? 0;
+  const rel = person.relationship ?? {};
+  const type = rel.type ?? 'other';
+  const strength = rel.strength ?? 0;
   const ctx = person.context ?? {};
   const fav = ctx.favorites ?? {};
   const history = person.history ?? {};
+
+  const relMeta = REL_BY_KEY[type] ?? OTHER_REL;
 
   const hasContext = Boolean(
     ctx.how_we_met || ctx.school || ctx.work
     || ctx.hobbies?.length || ctx.sports?.length
     || fav.foods?.length || fav.music?.length
+  );
+  const hasConnection = Boolean(
+    rel.tenure || rel.frequency || rel.last_interaction
+    || rel.channels?.length
+    || rel.they_show_up_for_me || rel.i_show_up_for_them || rel.knows_about_me
   );
   const hasMemoriesTogether = history.memories_together?.length > 0;
   const hasImportantEvents = history.important_events?.length > 0;
@@ -174,6 +221,18 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
   const showSubLabels = hasMemoriesTogether && hasImportantEvents;
 
   const isScored = Boolean(person.scoring?.dimensions);
+
+  // Stat strip (DS §12)
+  const memoriesCount = (history.memories_together?.length ?? 0) + (history.important_events?.length ?? 0);
+  const lastSeenLabel = labelOf(LAST_INTERACTION_OPTIONS, rel.last_interaction);
+  const tenureLabel   = labelOf(TENURE_OPTIONS, rel.tenure);
+  const hasStats = isScored || lastSeenLabel || memoriesCount > 0;
+  // Subtitle: "Friend · A lifetime · UCLA"
+  const subtitleParts = [
+    relMeta.label,
+    tenureLabel,
+    ctx.school || null,
+  ].filter(Boolean);
   const RING_R = 44;
   const RING_W = 3;
   const SIZE = (RING_R + RING_W) * 2;
@@ -240,29 +299,24 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
             <div className="pm-edit-actions">
               {isEditing ? (
                 <>
+                  {saveError && <span className="pm-save-error" role="alert">{saveError}</span>}
                   <button
                     className="pm-edit-btn"
-                    onClick={() => {
-                      setIsEditing(false);
-                      setDraft(toDraft(person));
-                    }}
+                    onClick={cancelEdit}
+                    disabled={saving}
                   >
                     Cancel
                   </button>
                   <button
                     className="pm-edit-btn primary"
-                    onClick={() => {
-                      const updated = fromDraft(person, draft || {});
-                      onUpdatePerson?.(updated);
-                      setIsEditing(false);
-                      setDraft(toDraft(updated));
-                    }}
+                    onClick={saveEdit}
+                    disabled={saving}
                   >
-                    Save
+                    {saving ? 'Saving…' : 'Save'}
                   </button>
                 </>
               ) : (
-                <button className="pm-edit-btn primary" onClick={() => setIsEditing(true)}>
+                <button className="pm-edit-btn primary" onClick={startEdit}>
                   Edit
                 </button>
               )}
@@ -298,13 +352,45 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
 
             <div className="pm-name">{person.name}</div>
 
-            <div className="pm-badge">
-              <span className="pm-badge-dot" style={{ background: CATEGORY_COLORS[type] || CATEGORY_COLORS.other }} />
-              <span>{CATEGORY_LABELS[type] || CATEGORY_LABELS.other}</span>
-            </div>
+            {subtitleParts.length > 0 && (
+              <div className="pm-subtitle">
+                <span className="pm-subtitle-dot" style={{ background: relMeta.color }} />
+                {subtitleParts.map((part, i) => (
+                  <span key={i} className="pm-subtitle-part">
+                    {i > 0 && <span className="pm-subtitle-sep">·</span>}
+                    {part}
+                  </span>
+                ))}
+              </div>
+            )}
 
             {person.birthday && (
               <div className="pm-birthday">{formatBirthday(person.birthday)}</div>
+            )}
+
+            {hasStats && (
+              <div className="pm-stats">
+                {isScored && (
+                  <div className="pm-stat">
+                    <div className="pm-stat-label">Closeness</div>
+                    <div className="pm-stat-value">
+                      {strength}<span className="pm-stat-suffix">/100</span>
+                    </div>
+                  </div>
+                )}
+                {lastSeenLabel && (
+                  <div className="pm-stat">
+                    <div className="pm-stat-label">Last seen</div>
+                    <div className="pm-stat-value-text">{lastSeenLabel}</div>
+                  </div>
+                )}
+                {memoriesCount > 0 && (
+                  <div className="pm-stat">
+                    <div className="pm-stat-label">Memories</div>
+                    <div className="pm-stat-value">{memoriesCount}</div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
@@ -341,8 +427,8 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
                           value={draft.relationshipType}
                           onChange={(e) => setDraft((prev) => ({ ...prev, relationshipType: e.target.value }))}
                         >
-                          {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
-                            <option key={value} value={value}>{label}</option>
+                          {RELATIONSHIP_TYPES.map((r) => (
+                            <option key={r.key} value={r.key}>{r.label}</option>
                           ))}
                         </select>
                       </label>
@@ -354,6 +440,78 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
                           onChange={(e) => setDraft((prev) => ({ ...prev, notes: e.target.value }))}
                           placeholder="Your own words on this relationship — closeness, cadence, tone."
                         />
+                      </label>
+                    </div>
+                  </section>
+                  <div className="pm-divider" />
+                  <section className="pm-section">
+                    <div className="pm-section-label">Edit Connection</div>
+                    <div className="pm-edit-grid">
+                      <label className="pm-input-label">Known for
+                        <select className="pm-input" value={draft.tenure}
+                          onChange={(e) => setDraft((prev) => ({ ...prev, tenure: e.target.value }))}>
+                          <option value="">—</option>
+                          {TENURE_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                        </select>
+                      </label>
+                      <label className="pm-input-label">Frequency
+                        <select className="pm-input" value={draft.frequency}
+                          onChange={(e) => setDraft((prev) => ({ ...prev, frequency: e.target.value }))}>
+                          <option value="">—</option>
+                          {FREQUENCY_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                        </select>
+                      </label>
+                      <label className="pm-input-label">Last interaction
+                        <select className="pm-input" value={draft.lastInteraction}
+                          onChange={(e) => setDraft((prev) => ({ ...prev, lastInteraction: e.target.value }))}>
+                          <option value="">—</option>
+                          {LAST_INTERACTION_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                        </select>
+                      </label>
+                      <div className="pm-input-label pm-input-wide">
+                        <span>Channels</span>
+                        <div className="pm-chip-row">
+                          {CHANNEL_OPTIONS.map((o) => {
+                            const on = draft.channels.includes(o.key);
+                            return (
+                              <button
+                                key={o.key}
+                                type="button"
+                                className={`pm-chip ${on ? 'on' : ''}`}
+                                aria-pressed={on}
+                                onClick={() => setDraft((prev) => ({
+                                  ...prev,
+                                  channels: on
+                                    ? prev.channels.filter((c) => c !== o.key)
+                                    : [...prev.channels, o.key],
+                                }))}
+                              >
+                                {o.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <label className="pm-input-label">They show up for me
+                        <select className="pm-input" value={draft.theyShowUpForMe}
+                          onChange={(e) => setDraft((prev) => ({ ...prev, theyShowUpForMe: e.target.value }))}>
+                          <option value="">—</option>
+                          {SUPPORT_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                        </select>
+                      </label>
+                      <label className="pm-input-label">I show up for them
+                        <select className="pm-input" value={draft.iShowUpForThem}
+                          onChange={(e) => setDraft((prev) => ({ ...prev, iShowUpForThem: e.target.value }))}>
+                          <option value="">—</option>
+                          {SUPPORT_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                        </select>
+                      </label>
+                      <label className="pm-input-label">Knows about me
+                        <select className="pm-input" value={draft.knowsAboutMe}
+                          onChange={(e) => setDraft((prev) => ({ ...prev, knowsAboutMe: e.target.value }))}>
+                          <option value="">—</option>
+                          {KNOWS_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                        </select>
                       </label>
                     </div>
                   </section>
@@ -404,6 +562,24 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
                   <section className="pm-section">
                     <div className="pm-section-label">Notes</div>
                     <div className="pm-notes">{person.notes}</div>
+                  </section>
+                </>
+              )}
+
+              {hasConnection && (
+                <>
+                  <div className="pm-divider" />
+                  <section className="pm-section">
+                    <div className="pm-section-label">Connection</div>
+                    {rel.tenure           && <Field label="Known for"           value={labelOf(TENURE_OPTIONS, rel.tenure)} />}
+                    {rel.frequency        && <Field label="Frequency"           value={labelOf(FREQUENCY_OPTIONS, rel.frequency)} />}
+                    {rel.last_interaction && <Field label="Last interaction"    value={labelOf(LAST_INTERACTION_OPTIONS, rel.last_interaction)} />}
+                    {rel.channels?.length > 0 && (
+                      <Pills label="Channels" items={rel.channels.map((c) => labelOf(CHANNEL_OPTIONS, c) ?? c)} />
+                    )}
+                    {rel.they_show_up_for_me && <Field label="They show up for me" value={labelOf(SUPPORT_OPTIONS, rel.they_show_up_for_me)} />}
+                    {rel.i_show_up_for_them  && <Field label="I show up for them"  value={labelOf(SUPPORT_OPTIONS, rel.i_show_up_for_them)} />}
+                    {rel.knows_about_me      && <Field label="Knows about me"      value={labelOf(KNOWS_OPTIONS, rel.knows_about_me)} />}
                   </section>
                 </>
               )}

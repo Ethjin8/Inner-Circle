@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  collection, doc, onSnapshot, setDoc, updateDoc, writeBatch,
+  collection, doc, onSnapshot, setDoc, writeBatch,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -22,28 +22,37 @@ export function usePeople() {
     });
   }, [user]);
 
-  const personRef = (id) => doc(db, 'users', user.uid, 'people', id);
+  // Each callback is keyed on `user` so consumers that memoize them with
+  // [updatePerson] etc. as deps automatically pick up the post-sign-in version
+  // — without this, callers that wrap these in their own useCallback with
+  // empty deps would silently keep the pre-auth (user=null) closure forever
+  // and writes would throw "Not signed in" even after sign-in.
+  const personRef = useCallback(
+    (id) => doc(db, 'users', user.uid, 'people', id),
+    [user],
+  );
 
-  const addPerson = async (person) => {
+  const addPerson = useCallback(async (person) => {
     if (!user) return;
     const { id, ...rest } = person;
     await setDoc(personRef(id), rest);
-  };
+  }, [user, personRef]);
 
-  const updatePerson = async (person) => {
-    if (!user) return;
+  const updatePerson = useCallback(async (person) => {
+    if (!user) throw new Error('Not signed in — cannot save changes.');
+    if (!person?.id) throw new Error('Cannot save: person has no id.');
     const { id, ...rest } = person;
-    await updateDoc(personRef(id), rest);
-  };
+    await setDoc(personRef(id), rest, { merge: true });
+  }, [user, personRef]);
 
-  const removePeople = async (ids) => {
+  const removePeople = useCallback(async (ids) => {
     if (!user || ids.length === 0) return;
     const batch = writeBatch(db);
     ids.forEach((id) => batch.delete(personRef(id)));
     await batch.commit();
-  };
+  }, [user, personRef]);
 
-  const restorePeople = async (peopleToRestore) => {
+  const restorePeople = useCallback(async (peopleToRestore) => {
     if (!user || peopleToRestore.length === 0) return;
     const batch = writeBatch(db);
     peopleToRestore.forEach((p) => {
@@ -51,7 +60,7 @@ export function usePeople() {
       batch.set(personRef(id), rest);
     });
     await batch.commit();
-  };
+  }, [user, personRef]);
 
   return { people, setPeople, loading, addPerson, updatePerson, removePeople, restorePeople };
 }
