@@ -5,6 +5,8 @@ import PersonModal from './components/PersonModal/PersonModal';
 import AddPersonModal from './components/AddPersonModal/AddPersonModal';
 import MemoryCarousel from './components/MemoryCarousel/MemoryCarousel';
 import SignIn from './components/SignIn/SignIn';
+import GmailDraftEditor from './components/GmailDraftEditor/GmailDraftEditor';
+import CalendarEventCard from './components/CalendarEventCard/CalendarEventCard';
 import { useAuth } from './contexts/AuthContext';
 import { usePeople } from './hooks/usePeople';
 import { usePhotos } from './hooks/usePhotos';
@@ -51,6 +53,9 @@ function App() {
   const [deletedHistory, setDeletedHistory] = useState([]); // undo stack: [{type:'person'|'category', ids:[]}]
   const [searchQuery, setSearchQuery] = useState('');
   const [showDemo, setShowDemo] = useState(false); // testing: show demo people without persisting
+  const [gmailDraft, setGmailDraft] = useState(null);
+  const [calendarEvent, setCalendarEvent] = useState(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
 
   const displayPeople = useMemo(() => (
     showDemo ? [...people, ...DEMO_PEOPLE.map(p => ({ ...p, isDemo: true }))] : people
@@ -227,11 +232,36 @@ function App() {
       });
   }, []);
 
-  const handleSubmit = useCallback((e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     if (!promptText.trim() && attachedNodes.length === 0) return;
-    setPromptText('');
-    setAttachedNodes([]);
+
+    setIsAiLoading(true);
+    setGmailDraft(null);
+
+    try {
+      const response = await fetch('http://localhost:3001/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: promptText,
+          contextNodes: attachedNodes,
+        })
+      });
+
+      const data = await response.json();
+      if (data.type === 'calendar') {
+        setCalendarEvent(data);
+      } else if (data.type === 'email' || data.subject || data.body) {
+        setGmailDraft(data);
+      }
+    } catch (err) {
+      console.error('AI Error:', err);
+    } finally {
+      setIsAiLoading(false);
+      setPromptText('');
+      setAttachedNodes([]);
+    }
   }, [promptText, attachedNodes]);
 
   const stageStyle = zoomTarget
@@ -527,18 +557,23 @@ function App() {
           <input
             className="prompt-input"
             type="text"
-            placeholder="Ask about your connections..."
+            placeholder={isAiLoading ? "Thinking..." : "Ask about your connections..."}
             value={promptText}
             onChange={(e) => setPromptText(e.target.value)}
+            disabled={isAiLoading}
           />
           <button
             className="prompt-submit"
             type="submit"
-            disabled={!promptText.trim() && attachedNodes.length === 0}
+            disabled={isAiLoading || (!promptText.trim() && attachedNodes.length === 0)}
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            {isAiLoading ? (
+              <div className="ai-loader" />
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
           </button>
         </form>
         <div className="prompt-hint">Click a node to view details — double-click to attach as context</div>
@@ -555,6 +590,20 @@ function App() {
           scoreAndPatch(person);
         }}
       />
+
+      {gmailDraft && (
+        <GmailDraftEditor
+          draft={gmailDraft}
+          onClose={() => setGmailDraft(null)}
+        />
+      )}
+
+      {calendarEvent && (
+        <CalendarEventCard
+          event={calendarEvent}
+          onClose={() => setCalendarEvent(null)}
+        />
+      )}
     </div>
   );
 }
