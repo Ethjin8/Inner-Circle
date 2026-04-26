@@ -143,6 +143,19 @@ const drawStar = (ctx, x, y, r, lit, alpha = 1) => {
 export default function Landing({ onEnter, user }) {
   const { signInWithGoogle } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
+  const [authClosing, setAuthClosing] = useState(false);
+  const showAuthRef = useRef(false);
+  const authCloseTimerRef = useRef(null);
+  useEffect(() => { showAuthRef.current = showAuth; }, [showAuth]);
+
+  const closeAuth = () => {
+    setAuthClosing(true);
+    clearTimeout(authCloseTimerRef.current);
+    authCloseTimerRef.current = setTimeout(() => {
+      setShowAuth(false);
+      setAuthClosing(false);
+    }, 240);
+  };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [zooming, setZooming] = useState(false);
@@ -202,6 +215,7 @@ export default function Landing({ onEnter, user }) {
     const onClick = () => {
       if (zoomingRef.current) return;
       if (user) triggerEnter();
+      else if (showAuthRef.current) closeAuth();
       else setShowAuth(true);
     };
 
@@ -248,7 +262,7 @@ export default function Landing({ onEnter, user }) {
       <img src="/foreground.png" alt="" className="landing-foreground" />
       <div className="landing-flash" />
       {showAuth && !user ? (
-        <div className="signin-panel" onClick={(e) => e.stopPropagation()}>
+        <div className={`signin-panel ${authClosing ? 'closing' : ''}`} onClick={(e) => e.stopPropagation()}>
           <div className="signin-logo">
             <svg width="32" height="32" viewBox="0 0 14 14" fill="none">
               <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="0.9" opacity="0.85" />

@@ -9,7 +9,18 @@
   z-index: 1;
 }
 
+@keyframes signin-panel-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); filter: blur(6px); }
+  to   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+@keyframes signin-panel-out {
+  from { opacity: 1; filter: blur(0); }
+  to   { opacity: 0; filter: blur(6px); }
+}
+
 .signin-panel {
+  animation: signin-panel-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
   position: relative;
   z-index: 2;
   display: flex;
@@ -26,6 +37,10 @@
   max-width: 400px;
   width: calc(100% - 48px);
   box-sizing: border-box;
+}
+
+.signin-panel.closing {
+  animation: signin-panel-out 0.24s cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 .signin-logo {

@@ -638,6 +638,17 @@ function App() {
         </div>
       </aside>}
 
+      {isFirstExperience && (
+        <button
+          className={`demo-toggle ${showDemo ? 'active' : ''}`}
+          onClick={() => setShowDemo(s => !s)}
+          title={showDemo ? 'Hide demo people' : 'Show demo people (not saved)'}
+        >
+          <span className="demo-toggle-dot" />
+          {showDemo ? 'Demo on' : 'Demo'}
+        </button>
+      )}
+
       {!isFirstExperience && focusedCategory && (
         <button className="back-to-galaxy-btn" onClick={() => setFocusedCategory(null)}>
           ← Back to Galaxy
