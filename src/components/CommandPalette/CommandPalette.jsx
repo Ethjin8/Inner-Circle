@@ -74,6 +74,13 @@ export default function CommandPalette({
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose?.(); } };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
   const peopleById = useMemo(() => {
     const map = new Map();
     people.forEach((p) => map.set(p.id, p));
