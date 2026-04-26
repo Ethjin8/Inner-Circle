@@ -13,6 +13,7 @@ import MemoryCarousel from './components/MemoryCarousel/MemoryCarousel';
 import Landing from './components/Landing/Landing';
 import GmailDraftEditor from './components/GmailDraftEditor/GmailDraftEditor';
 import CalendarEventCard from './components/CalendarEventCard/CalendarEventCard';
+import Explorer from './components/Explorer/Explorer';
 import { useAuth } from './contexts/AuthContext';
 import { usePeople } from './hooks/usePeople';
 import { usePhotos } from './hooks/usePhotos';
@@ -108,7 +109,7 @@ function App() {
   const [deletingIds, setDeletingIds] = useState([]); // ids being animated out
   const [deletedHistory, setDeletedHistory] = useState([]); // undo stack: [{type:'person'|'category', ids:[]}]
   const [searchQuery, setSearchQuery] = useState('');
-  const [explorerOpen, setExplorerOpen] = useState(true);
+  const [explorerOpen, setExplorerOpen] = useState(false);
   const [pastChatsOpen, setPastChatsOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showDemo, setShowDemo] = useState(false); // testing: show demo people without persisting
@@ -678,7 +679,12 @@ function App() {
 
       {!isFirstExperience && <header className="header">
         <div className="header-slot header-slot-left">
-          <SearchPill onClick={openPalette} disabled={!!selectedPerson} />
+          <SearchPill 
+            onClick={openPalette} 
+            onToggleExplorer={() => setExplorerOpen(s => !s)}
+            explorerOpen={explorerOpen}
+            disabled={!!selectedPerson} 
+          />
         </div>
 
         {/* Center Toolbar */}
@@ -729,6 +735,16 @@ function App() {
           />
         </div>
       </header>}
+
+      <Explorer 
+        isOpen={explorerOpen} 
+        onClose={() => setExplorerOpen(false)}
+        people={displayPeople}
+        onSelectPerson={(p) => {
+          setSelectedPerson(p);
+          setZoomTarget(null);
+        }}
+      />
 
       {!isFirstExperience && viewMode === 'graph' && (
         <>

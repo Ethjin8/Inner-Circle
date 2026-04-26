@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Camera, X } from 'lucide-react';
+import { Camera, X, Gift } from 'lucide-react';
 import './PersonModal.css';
 import CloudinaryUpload from '../CloudinaryUpload/CloudinaryUpload';
 import {
@@ -496,7 +496,10 @@ export default function PersonModal({ person, originPoint, phase, onClose, photo
             )}
 
             {person.birthday && (
-              <div className="pm-birthday">🎂 {formatBirthday(person.birthday)}</div>
+              <div className="pm-birthday">
+                <Gift size={12} className="pm-birthday-icon" />
+                {formatBirthday(person.birthday)}
+              </div>
             )}
 
             {hasStats && (

@@ -99,12 +99,24 @@ function drawNudgeIcon(ctx, pos, type, color, alpha) {
 
   ctx.save();
   if (type === 'star') {
-    ctx.font = `${size * 1.6}px serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+    const s = size * 0.8;
+    ctx.beginPath();
+    ctx.moveTo(gx, gy - s * 1.5);
+    ctx.quadraticCurveTo(gx, gy, gx + s * 1.5, gy);
+    ctx.quadraticCurveTo(gx, gy, gx, gy + s * 1.5);
+    ctx.quadraticCurveTo(gx, gy, gx - s * 1.5, gy);
+    ctx.quadraticCurveTo(gx, gy, gx, gy - s * 1.5);
+    ctx.closePath();
+    ctx.fillStyle = hexWithAlpha('#f3d24d', alpha);
     ctx.shadowColor = '#f3d24d';
-    ctx.shadowBlur = 8;
-    ctx.fillText('⭐', gx, gy);
+    ctx.shadowBlur = 10;
+    ctx.fill();
+    
+    // Add a tiny bright center
+    ctx.beginPath();
+    ctx.arc(gx, gy, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.fill();
   } else if (type === 'exclamation') {
     ctx.beginPath();
     ctx.arc(gx, gy, size * 0.7, 0, Math.PI * 2);
