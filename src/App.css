@@ -773,6 +773,7 @@
 .cosmos-stage {
   position: absolute;
   inset: 0;
+  background: #000;
   transition: transform var(--duration-slow) var(--ease-out), filter var(--duration-slow) var(--ease-out);
   transform-origin: 50% 50%;
   will-change: transform, filter;
