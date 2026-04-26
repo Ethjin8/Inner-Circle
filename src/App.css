@@ -738,13 +738,46 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--elevation-md);
   padding: 6px;
+  z-index: 70;
+  overflow: hidden;
+}
+
+.mention-picker-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  z-index: 70;
-  max-height: 280px;
+  max-height: calc(36px * 5 + 2px * 4);
   overflow-y: auto;
+  scrollbar-width: none;
 }
+
+.mention-picker-list::-webkit-scrollbar { display: none; }
+
+.mention-picker::before,
+.mention-picker::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 44px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms;
+  z-index: 1;
+}
+
+.mention-picker::before {
+  top: 0;
+  background: linear-gradient(to bottom, var(--surface-2) 0%, var(--surface-2) 35%, rgba(0, 0, 0, 0) 100%);
+}
+
+.mention-picker::after {
+  bottom: 0;
+  background: linear-gradient(to top, var(--surface-2) 0%, var(--surface-2) 35%, rgba(0, 0, 0, 0) 100%);
+}
+
+.mention-picker.fade-top::before { opacity: 1; }
+.mention-picker.fade-bottom::after { opacity: 1; }
 
 .mention-item {
   display: flex;

@@ -18,6 +18,41 @@ import { useChatHistory } from './hooks/useChatHistory';
 import './App.css';
 import './components/Chat/Chat.css';
 
+function ScrollFadePicker({ children, activeIndex }) {
+  const ref = useRef(null);
+  const [edges, setEdges] = useState({ top: false, bottom: false });
+  const update = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const top = el.scrollTop > 1;
+    const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+    setEdges((p) => (p.top === top && p.bottom === bottom) ? p : { top, bottom });
+  }, []);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    update();
+    el.addEventListener('scroll', update);
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => { el.removeEventListener('scroll', update); ro.disconnect(); };
+  }, [update, children]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || activeIndex == null) return;
+    const item = el.children[activeIndex];
+    if (item && item.scrollIntoView) item.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex]);
+  const cls = `mention-picker${edges.top ? ' fade-top' : ''}${edges.bottom ? ' fade-bottom' : ''}`;
+  return (
+    <div className={cls}>
+      <div className="mention-picker-list" role="listbox" ref={ref}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 const FILTERS = [
   { key: null, label: 'All' },
   { key: 'family', label: 'Family', color: '#e8b06b' },
@@ -123,7 +158,7 @@ function App() {
       return p.name.toLowerCase().includes(q);
     });
     const score = (p) => p.relationship?.strength ?? p.scoring?.aggregate ?? 0;
-    return filtered
+    const sorted = filtered
       .sort((a, b) => {
         const an = a.name.toLowerCase();
         const bn = b.name.toLowerCase();
@@ -133,8 +168,14 @@ function App() {
           if (aStarts !== bStarts) return aStarts - bStarts;
         }
         return score(b) - score(a);
-      })
-      .slice(0, 6);
+      });
+    if (mentionRange.kind === 'deletePerson') {
+      const everyoneMatches = !q || 'everyone'.startsWith(q);
+      if (everyoneMatches) {
+        return [{ id: '__everyone__', name: 'everyone', isEveryone: true }, ...sorted];
+      }
+    }
+    return sorted;
   }, [mentionRange, displayPeople, NEW_MODE_OPTIONS]);
 
   const [viewMode, setViewMode] = useState('graph'); // 'graph' | 'gallery'
@@ -393,7 +434,9 @@ function App() {
     if (!m) return null;
     const start = caret - m[1].length - 1;
     const prefix = value.slice(0, start);
-    const kind = /^\/new\s+$/i.test(prefix) ? 'newMode' : 'person';
+    const kind = /^\/new\s+$/i.test(prefix)
+      ? 'newMode'
+      : (/^\/delete\s+$/i.test(prefix) ? 'deletePerson' : 'person');
     return { start, query: m[1], kind };
   };
 
@@ -430,7 +473,9 @@ function App() {
       });
       return next;
     });
-    setAttachedNodes((prev) => prev.some((n) => n.id === item.id) ? prev : [...prev, item]);
+    if (!item.isEveryone) {
+      setAttachedNodes((prev) => prev.some((n) => n.id === item.id) ? prev : [...prev, item]);
+    }
     setMentionRange(null);
     setMentionIndex(0);
   }, [mentionRange]);
@@ -495,7 +540,10 @@ function App() {
         return;
       }
       if (cmd === 'delete') {
-        const targets = attachedNodes.filter((n) => !n.isCategory);
+        const isEveryone = /@everyone\b/i.test(trimmed);
+        const targets = isEveryone
+          ? displayPeople
+          : attachedNodes.filter((n) => !n.isCategory);
         targets.forEach((n) => handleSnip(n));
         setPromptText('');
         setAttachedNodes([]);
@@ -510,7 +558,7 @@ function App() {
     setChatModalOpen(true);
     setPromptText('');
     setAttachedNodes([]);
-  }, [promptText, attachedNodes, handleSnip]);
+  }, [promptText, attachedNodes, handleSnip, displayPeople]);
 
   const handleOpenThread = useCallback((thread) => {
     setChatInitialThread(thread);
@@ -939,7 +987,7 @@ function App() {
           </button>
           <form className="prompt-form" onSubmit={handleSubmit}>
             {slashRange && slashMatches.length > 0 && (
-              <div className="mention-picker" role="listbox">
+              <ScrollFadePicker activeIndex={slashIndex}>
                 {slashMatches.map((c, i) => (
                   <button
                     type="button"
@@ -954,10 +1002,10 @@ function App() {
                     <span className="mention-meta">{c.desc}</span>
                   </button>
                 ))}
-              </div>
+              </ScrollFadePicker>
             )}
             {mentionRange && mentionMatches.length > 0 && (
-              <div className="mention-picker" role="listbox">
+              <ScrollFadePicker activeIndex={mentionIndex}>
                 {mentionMatches.map((p, i) => {
                   const isNewMode = mentionRange?.kind === 'newMode';
                   return (
@@ -983,7 +1031,7 @@ function App() {
                   </button>
                   );
                 })}
-              </div>
+              </ScrollFadePicker>
             )}
             <div className="prompt-input-wrap">
               <div className="prompt-highlight" ref={highlightRef} aria-hidden="true">
