@@ -741,6 +741,16 @@ const internalPanRef = useRef({ x: 0, y: 0 });
     };
 
     const onKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'Delete' || e.key === 'Backspace')) {
+        const h = hoveredRef.current;
+        if (h && !h.isCenter) {
+          e.preventDefault();
+          onSnip?.(h);
+          hoveredRef.current = null;
+          hoverStartRef.current = 0;
+        }
+        return;
+      }
       if (e.key === 'Escape' || e.key === '-') {
         stopMomentum();
         markActivity();
@@ -1141,6 +1151,15 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         const youDim = (!isFirstExperience && neighborSet && !neighborSet.has('you')) ? 0.40 : 1;
         const youDrawR = 44;
         drawStarNode(ctx, { x: youWorldX, y: youWorldY }, youDrawR, '#ffffff', youDim, youHov);
+        if (isFirstExperience || youHov) {
+          const bpm = 30;
+          const pulse = (Math.sin(timeRef.current * (bpm / 60) * 0.05) + 1) / 2;
+          const plusAlpha = (0.3 + 0.7 * pulse) * 0.4;
+          ctx.fillStyle = `rgba(11,15,25,${plusAlpha})`;
+          ctx.font = "300 36px 'Inter',sans-serif";
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('+', youWorldX, youWorldY);
+        }
         if (!isFirstExperience) {
           ctx.fillStyle = `rgba(232,232,240,${0.95 * youDim})`;
           ctx.font = "600 11px 'Space Grotesk','Inter',sans-serif";
@@ -1154,16 +1173,26 @@ const internalPanRef = useRef({ x: 0, y: 0 });
 
       if (isFirstExperience) {
         const FADE_START = 300; // ~1.8s transition + 1s delay
-        const FADE_DURATION = 160;
-        const textAlpha = Math.min(1, Math.max(0, (timeRef.current - FADE_START) / FADE_DURATION)) * 0.85;
+        const FADE_DURATION = 240;
+        const SWAP_START = FADE_START + FADE_DURATION + 300; // ~3s after fully visible
+        const SWAP_DURATION = 40;
+        const baseAlpha = Math.min(1, Math.max(0, (timeRef.current - FADE_START) / FADE_DURATION)) * 0.85;
+        const swapT = Math.min(1, Math.max(0, (timeRef.current - SWAP_START) / SWAP_DURATION));
+        const firstAlpha = baseAlpha * (1 - swapT);
+        const secondAlpha = baseAlpha * swapT;
 
         ctx.font = "400 35px 'Inter',sans-serif";
-        ctx.fillStyle = `rgba(200,200,210,${textAlpha})`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'top';
         const greetingOffset = 40;
-        const lineHeight = 50;
         const baseY = youWorldY + 44 + greetingOffset;
-        ctx.fillText(`Talk to me, ${userName}.`, youWorldX, baseY);
+        if (firstAlpha > 0) {
+          ctx.fillStyle = `rgba(200,200,210,${firstAlpha})`;
+          ctx.fillText(`Talk to me, ${userName}.`, youWorldX, baseY);
+        }
+        if (secondAlpha > 0) {
+          ctx.fillStyle = `rgba(200,200,210,${secondAlpha})`;
+          ctx.fillText('Tap to talk.', youWorldX, baseY);
+        }
       }
 
       ctx.restore();

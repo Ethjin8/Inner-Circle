@@ -114,18 +114,18 @@ const drawNorthStar = (ctx, w, h, t, yRatio = 0.25) => {
   const pulse = 0.75 + 0.25 * Math.sin(t * 0.0008);
 
   const outerGlow = ctx.createRadialGradient(x, y, 0, x, y, 70 * pulse);
-  outerGlow.addColorStop(0, `rgba(255, 220, 130, ${0.18 * pulse})`);
-  outerGlow.addColorStop(1, 'rgba(255, 220, 130, 0)');
+  outerGlow.addColorStop(0, `rgba(255, 255, 255, ${0.18 * pulse})`);
+  outerGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
   ctx.fillStyle = outerGlow;
   ctx.fillRect(x - 70, y - 70, 140, 140);
 
   const innerGlow = ctx.createRadialGradient(x, y, 0, x, y, 14 * pulse);
-  innerGlow.addColorStop(0, `rgba(255, 245, 190, ${0.85 * pulse})`);
-  innerGlow.addColorStop(1, 'rgba(255, 220, 130, 0)');
+  innerGlow.addColorStop(0, `rgba(255, 255, 255, ${0.85 * pulse})`);
+  innerGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
   ctx.fillStyle = innerGlow;
   ctx.fillRect(x - 14, y - 14, 28, 28);
 
-  ctx.fillStyle = `rgba(255, 252, 230, ${0.95 * pulse})`;
+  ctx.fillStyle = `rgba(255, 255, 255, ${0.95 * pulse})`;
   ctx.beginPath();
   ctx.arc(x, y, 2.5, 0, Math.PI * 2);
   ctx.fill();

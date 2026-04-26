@@ -62,6 +62,7 @@ function App() {
   const [promptText, setPromptText] = useState('');
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [addPersonOpen, setAddPersonOpen] = useState(false);
+  const [addPersonInitialMode, setAddPersonInitialMode] = useState('voice');
   const [zoomTarget, setZoomTarget] = useState(null);
   const [focusedCategory, setFocusedCategory] = useState(null);
   const [expandedCats, setExpandedCats] = useState(new Set());
@@ -86,7 +87,7 @@ function App() {
     setInteractionTick((t) => t + 1);
     setAutoExpanded(false);
   }, []);
-  const isPromptExpanded = promptText.length > 0 || attachedNodes.length > 0 || autoExpanded;
+  const isPromptExpanded = true;
 
   const [chatModalOpen, setChatModalOpen] = useState(false);
   const [chatInitialThread, setChatInitialThread] = useState(null);
@@ -105,9 +106,17 @@ function App() {
     showDemo ? [...people, ...DEMO_PEOPLE.map(p => ({ ...p, isDemo: true }))] : people
   ), [people, showDemo]);
 
+  const NEW_MODE_OPTIONS = useMemo(() => ([
+    { id: '__new_audio', name: 'audio', mode: 'voice', desc: 'Voice interview' },
+    { id: '__new_text', name: 'text', mode: 'form', desc: 'Fill out the form' },
+  ]), []);
+
   const mentionMatches = useMemo(() => {
     if (!mentionRange) return [];
     const q = mentionRange.query.toLowerCase();
+    if (mentionRange.kind === 'newMode') {
+      return NEW_MODE_OPTIONS.filter((o) => !q || o.name.startsWith(q));
+    }
     const filtered = displayPeople.filter((p) => {
       if (!p?.name) return false;
       if (!q) return true;
@@ -126,7 +135,7 @@ function App() {
         return score(b) - score(a);
       })
       .slice(0, 6);
-  }, [mentionRange, displayPeople]);
+  }, [mentionRange, displayPeople, NEW_MODE_OPTIONS]);
 
   const [viewMode, setViewMode] = useState('graph'); // 'graph' | 'gallery'
   const [modalPhase, setModalPhase] = useState(null); // null | 'zooming-in' | 'open' | 'zooming-out'
@@ -259,6 +268,21 @@ function App() {
     setDeletedHistory(prev => prev.slice(0, -1));
   }, [deletedHistory, restorePeople]);
 
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.key !== 'z' && e.key !== 'Z') return;
+      if (e.shiftKey) return;
+      const t = e.target;
+      const tag = t?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || t?.isContentEditable) return;
+      e.preventDefault();
+      handleUndo();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleUndo]);
+
   const handlePhotosChange = useCallback((personId, newPhotos) => {
     setPhotosForPerson(personId, newPhotos);
   }, [setPhotosForPerson]);
@@ -367,7 +391,10 @@ function App() {
     const before = value.slice(0, caret);
     const m = /(?:^|\s)@([^\s@]*)$/.exec(before);
     if (!m) return null;
-    return { start: caret - m[1].length - 1, query: m[1] };
+    const start = caret - m[1].length - 1;
+    const prefix = value.slice(0, start);
+    const kind = /^\/new\s+$/i.test(prefix) ? 'newMode' : 'person';
+    return { start, query: m[1], kind };
   };
 
   const handlePromptChange = useCallback((e) => {
@@ -380,12 +407,21 @@ function App() {
     setSlashIndex(0);
   }, []);
 
-  const insertMention = useCallback((person) => {
+  const insertMention = useCallback((item) => {
     if (!mentionRange) return;
+    if (mentionRange.kind === 'newMode') {
+      setAddPersonInitialMode(item.mode);
+      setAddPersonOpen(true);
+      setPromptText('');
+      setAttachedNodes([]);
+      setMentionRange(null);
+      setMentionIndex(0);
+      return;
+    }
     setPromptText((prev) => {
       const before = prev.slice(0, mentionRange.start);
       const after = prev.slice(mentionRange.start + 1 + mentionRange.query.length);
-      const inserted = `@${person.name} `;
+      const inserted = `@${item.name} `;
       const next = before + inserted + after;
       const caret = before.length + inserted.length;
       requestAnimationFrame(() => {
@@ -394,15 +430,29 @@ function App() {
       });
       return next;
     });
-    setAttachedNodes((prev) => prev.some((n) => n.id === person.id) ? prev : [...prev, person]);
+    setAttachedNodes((prev) => prev.some((n) => n.id === item.id) ? prev : [...prev, item]);
     setMentionRange(null);
     setMentionIndex(0);
   }, [mentionRange]);
 
   const insertSlash = useCallback((cmd) => {
-    setPromptText(`/${cmd.name} `);
+    const opensNewMode = cmd.name === 'new';
+    const opensMention = cmd.name === 'delete';
+    const next = (opensMention || opensNewMode) ? `/${cmd.name} @` : `/${cmd.name} `;
+    setPromptText(next);
     setSlashRange(null);
-    requestAnimationFrame(() => promptInputRef.current?.focus());
+    setSlashIndex(0);
+    if (opensNewMode) {
+      setMentionRange({ start: next.length - 1, query: '', kind: 'newMode' });
+      setMentionIndex(0);
+    } else if (opensMention) {
+      setMentionRange({ start: next.length - 1, query: '', kind: 'person' });
+      setMentionIndex(0);
+    }
+    requestAnimationFrame(() => {
+      const el = promptInputRef.current;
+      if (el) { el.focus(); el.setSelectionRange(next.length, next.length); }
+    });
   }, []);
 
   const handlePromptKeyDown = useCallback((e) => {
@@ -426,7 +476,7 @@ function App() {
       e.preventDefault();
       setMentionRange(null);
     }
-  }, [mentionRange, mentionMatches, mentionIndex, insertMention]);
+  }, [mentionRange, mentionMatches, mentionIndex, insertMention, slashRange, slashMatches, slashIndex, insertSlash]);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -435,6 +485,9 @@ function App() {
       const [rawCmd] = trimmed.slice(1).split(/\s+/);
       const cmd = rawCmd.toLowerCase();
       if (cmd === 'new') {
+        const sub = (trimmed.slice(1).split(/\s+/)[1] || '').replace(/^@/, '').toLowerCase();
+        const mode = sub === 'text' ? 'form' : 'voice';
+        setAddPersonInitialMode(mode);
         setAddPersonOpen(true);
         setPromptText('');
         setAttachedNodes([]);
@@ -509,7 +562,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (isFirstExperience || isPromptExpanded) return;
+    if (isFirstExperience) return;
     const onKeyDown = (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key.length !== 1) return;
@@ -517,12 +570,12 @@ function App() {
       const tag = (t?.tagName || '').toLowerCase();
       if (tag === 'input' || tag === 'textarea' || t?.isContentEditable) return;
       e.preventDefault();
-      setPromptText(e.key);
+      setPromptText((prev) => prev + e.key);
       requestAnimationFrame(() => promptInputRef.current?.focus());
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isFirstExperience, isPromptExpanded]);
+  }, [isFirstExperience]);
   const showModal = !!selectedPerson || modalPhase === 'zooming-out';
   // Pull the latest copy from `people` so async scoring updates flow into an
   // already-open modal. Falls back to the snapshot for the zooming-out frame.
@@ -878,12 +931,11 @@ function App() {
             className="prompt-add-button"
             onClick={() => setAddPersonOpen(true)}
             aria-label="Add person"
-            tabIndex={isPromptExpanded ? -1 : 0}
+            title="Add person"
           >
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
               <path d="M10 4v12M4 10h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
-            <span>Add Person</span>
           </button>
           <form className="prompt-form" onSubmit={handleSubmit}>
             {slashRange && slashMatches.length > 0 && (
@@ -906,7 +958,9 @@ function App() {
             )}
             {mentionRange && mentionMatches.length > 0 && (
               <div className="mention-picker" role="listbox">
-                {mentionMatches.map((p, i) => (
+                {mentionMatches.map((p, i) => {
+                  const isNewMode = mentionRange?.kind === 'newMode';
+                  return (
                   <button
                     type="button"
                     key={p.id}
@@ -918,14 +972,17 @@ function App() {
                   >
                     <span
                       className="mention-dot"
-                      style={{ background: CATEGORY_COLORS[p.relationship?.type] || '#cdc9c0' }}
+                      style={{ background: isNewMode ? '#cdc9c0' : (CATEGORY_COLORS[p.relationship?.type] || '#cdc9c0') }}
                     />
                     <span className="mention-name">{p.name}</span>
-                    {p.relationship?.type && (
+                    {isNewMode ? (
+                      <span className="mention-meta">{p.desc}</span>
+                    ) : p.relationship?.type && (
                       <span className="mention-meta">{p.relationship.type}</span>
                     )}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             )}
             <div className="prompt-input-wrap">
@@ -990,6 +1047,7 @@ function App() {
       )}
       <AddPersonModal
         open={addPersonOpen}
+        initialMode={addPersonInitialMode}
         onClose={() => setAddPersonOpen(false)}
         onAdd={(person) => {
           // Optimistic local insert (renderer treats unscored nodes as
