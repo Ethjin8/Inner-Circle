@@ -378,6 +378,12 @@
   margin-left: 1px;
 }
 
+.pm-last-contact {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: -2px;
+}
+
 /* ===== SECTIONS ===== */
 .pm-divider {
   height: 1px;
@@ -663,4 +669,117 @@
   color: var(--text-primary);
   border-color: var(--border-strong);
   background: rgba(255, 255, 255, 0.04);
+}
+
+/* ===== NUDGE BOX ===== */
+.pm-nudge-box {
+  margin-top: 24px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: center;
+  font-family: 'Space Grotesk', sans-serif;
+  animation: pm-nudge-in 0.4s var(--ease-out);
+}
+
+@keyframes pm-nudge-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.pm-nudge-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+}
+
+.pm-nudge-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.pm-nudge-btn {
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+  font-family: inherit;
+}
+
+.pm-nudge-btn.defer {
+  background: rgba(243, 210, 77, 0.08);
+  color: #f3d24d;
+  border-color: rgba(243, 210, 77, 0.15);
+}
+
+.pm-nudge-btn.defer:hover {
+  background: rgba(243, 210, 77, 0.14);
+  border-color: rgba(243, 210, 77, 0.3);
+}
+
+.pm-nudge-btn.confirm {
+  background: rgba(95, 212, 150, 0.1);
+  color: #5fd496;
+  border-color: rgba(95, 212, 150, 0.2);
+}
+
+.pm-nudge-btn.confirm:hover {
+  background: rgba(95, 212, 150, 0.2);
+  border-color: rgba(95, 212, 150, 0.35);
+}
+
+.pm-nudge-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.pm-nudge-input-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.pm-nudge-input {
+  width: 90px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: white;
+  text-align: center;
+  font-size: 15px;
+  font-family: inherit;
+}
+
+.pm-nudge-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.pm-nudge-cancel {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0 4px;
+  font-family: inherit;
+}
+
+.pm-nudge-cancel:hover {
+  color: var(--text-primary);
 }
