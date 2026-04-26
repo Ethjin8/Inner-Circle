@@ -908,6 +908,17 @@ function App() {
           document.body,
         )}
         <div className="prompt-switcher">
+          <button
+            ref={historyButtonRef}
+            className={`prompt-history-button ${chatHistoryOpen ? 'is-active' : ''}`}
+            onClick={() => setChatHistoryOpen((v) => !v)}
+            aria-label="Past chats"
+            aria-expanded={chatHistoryOpen}
+            title="Past chats"
+            type="button"
+          >
+            <History size={14} aria-hidden />
+          </button>
           <form className="prompt-form" onSubmit={handleSubmit}>
             {slashRange && slashMatches.length > 0 && (
               <ScrollFadePicker activeIndex={slashIndex}>
