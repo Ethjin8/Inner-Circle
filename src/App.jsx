@@ -619,7 +619,7 @@ function App() {
           <button
             type="button"
             className="sidebar-signout"
-            onClick={signOut}
+            onClick={async () => { await signOut(); window.location.reload(); }}
             title={user?.email || 'Sign out'}
             aria-label="Sign out"
           >
