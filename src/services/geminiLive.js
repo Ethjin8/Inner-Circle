@@ -96,6 +96,8 @@ Style:
 - Never ask for sensitive private data.
 - Keep turns short for spoken conversation.
 
+When you have collected the seven Connection answers (a–g) — or the user clearly wants to wrap up — call the finish_intake tool exactly once. Say a brief warm closing line ("Got it, adding them now.") in the same turn. Do not call finish_intake earlier; do not call it more than once.
+
 When the user sends the text "EXTRACT_JSON", respond ONLY with these labeled sentences — no extra commentary, say "unknown" for anything not mentioned, and ALWAYS use exactly these labels in this exact order:
 "Name is [full name]. Relationship type is [family|friend|classmate|coworker|professional|romantic|mentor|other]. Tenure is [just_met|months|one_year|few_years|five_plus|lifetime|unknown]. Frequency is [daily|weekly|monthly|few_times_a_year|rarely|unknown]. Last interaction is [today|this_week|this_month|this_season|this_year|over_a_year|unknown]. Channels are [comma list of in_person|text|call|video_call|dm|email|other, or unknown]. They show up for me is [yes|sometimes|not_really|not_sure|unknown]. I show up for them is [yes|sometimes|not_really|not_sure|unknown]. Knows about me is [most_of_it|some_of_it|not_really|not_sure|unknown]. Birthday is [YYYY-MM-DD or unknown]. Notes are [a 1-3 sentence prose summary of the relationship in the user's own framing — closeness, cadence, emotional tone — or unknown]. How we met is [value or unknown]. School is [value or unknown]. Work is [value or unknown]. Hobbies are [comma list or unknown]. Sports are [comma list or unknown]. Favorite foods are [comma list or unknown]. Favorite music is [comma list or unknown]. Memories are [comma list or unknown]. Important events are [comma list or unknown]. Future plans are [comma list or unknown]."`;
 
@@ -184,6 +186,7 @@ export class GeminiLiveSession {
     onUserTranscript,
     onStatus,
     onError,
+    onFinishIntake,
     systemPrompt = DEFAULT_SYSTEM_PROMPT,
   }) {
     this.apiKey = apiKey;
@@ -191,6 +194,8 @@ export class GeminiLiveSession {
     this.onUserTranscript = onUserTranscript;
     this.onStatus = onStatus;
     this.onError = onError;
+    this.onFinishIntake = onFinishIntake;
+    this.finishCalled = false;
     this.systemPrompt = systemPrompt;
     this.socket = null;
     this.setupComplete = false;
@@ -230,6 +235,14 @@ export class GeminiLiveSession {
           inputAudioTranscription: {},
           outputAudioTranscription: {},
           systemInstruction: { parts: [{ text: this.systemPrompt }] },
+          tools: [{
+            functionDeclarations: [{
+              name: 'finish_intake',
+              description:
+                'Signal that the voice intake conversation is complete and the client should extract and save the person. Call exactly once after collecting the seven Connection answers, or when the user clearly wants to wrap up.',
+              parameters: { type: 'OBJECT', properties: {} },
+            }],
+          }],
         },
       });
     });
@@ -245,6 +258,24 @@ export class GeminiLiveSession {
         if (payload?.setupComplete) {
           this.setupComplete = true;
           this.onStatus?.('connected');
+          return;
+        }
+
+        const toolCall = payload?.toolCall;
+        if (toolCall?.functionCalls?.length) {
+          const responses = [];
+          for (const call of toolCall.functionCalls) {
+            responses.push({
+              id: call.id,
+              name: call.name,
+              response: { result: 'ok' },
+            });
+            if (call.name === 'finish_intake' && !this.finishCalled) {
+              this.finishCalled = true;
+              this.onFinishIntake?.();
+            }
+          }
+          this.send({ toolResponse: { functionResponses: responses } });
           return;
         }
 

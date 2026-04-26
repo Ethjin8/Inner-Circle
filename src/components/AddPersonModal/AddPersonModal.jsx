@@ -198,8 +198,12 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
   const processorNodeRef = useRef(null);
   const liveSessionRef   = useRef(null);
   const lastUserTextRef  = useRef(''); // tracks in-progress user utterance between agent turns
+  const conversationRef  = useRef([]); // mirrors conversation state for callbacks
+  const wrappedRef       = useRef(false); // guards against double wrap (probe click + tool call)
 
   const [extracting, setExtracting] = useState(false);
+
+  useEffect(() => { conversationRef.current = conversation; }, [conversation]);
 
   // Stop only the microphone pipeline — leaves the WebSocket session open for extraction
   function stopMicInput() {
@@ -224,6 +228,7 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
     setVoiceStatus('Tap probe to start'); setCurrentTranscript(''); setVoiceError('');
     setConversation([]); setExtracting(false);
     setStep(0); setForm(BLANK_PERSON());
+    wrappedRef.current = false;
   };
 
   const handleClose = () => { resetAll(); onClose(); };
@@ -238,6 +243,86 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
 
   useEffect(() => () => stopVoiceFlow(), []);
 
+  // Shared wrap-up: triggered either by user tapping the probe or by the
+  // agent calling the finish_intake tool. Idempotent via wrappedRef.
+  const wrapUpAndExtract = () => {
+    if (wrappedRef.current) return;
+    wrappedRef.current = true;
+    setVoiceStatus('Transcribing conversation...');
+
+    const pendingUser = lastUserTextRef.current;
+    lastUserTextRef.current = '';
+    const convSnapshot = pendingUser
+      ? [...conversationRef.current, { role: 'user', text: pendingUser }]
+      : [...conversationRef.current];
+
+    stopMicInput();
+    setParticles(generateParticles()); setBursting(true);
+    setTimeout(() => { setBursting(false); setParticles([]); }, 720);
+
+    const hasContent = convSnapshot.some((m) => m.role === 'user');
+    if (!hasContent) {
+      stopVoiceFlow();
+      setVoiceStatus('Tap probe to start');
+      wrappedRef.current = false;
+      return;
+    }
+
+    setExtracting(true);
+
+    const finish = (person) => {
+      setVoiceStatus(`Adding ${person.name} to your constellation...`);
+      onAdd?.(person);
+      resetAll();
+      onClose();
+    };
+
+    const fail = (msg) => {
+      liveSessionRef.current?.disconnect();
+      liveSessionRef.current = null;
+      setVoiceError(msg);
+      setVoiceStatus('Tap probe to start');
+      setExtracting(false);
+      wrappedRef.current = false;
+    };
+
+    setVoiceStatus('Transcribing conversation...');
+    liveSessionRef.current.requestExtraction()
+      .then((extracted) => {
+        liveSessionRef.current?.disconnect();
+        liveSessionRef.current = null;
+        const person = buildPersonFromExtraction(extracted);
+        if (!person) { fail("Couldn't catch a name — try again."); return; }
+        finish(person);
+      })
+      .catch((liveErr) => {
+        console.warn('Live extraction failed, trying REST fallback:', liveErr.message);
+        liveSessionRef.current?.disconnect();
+        liveSessionRef.current = null;
+
+        setVoiceStatus('Transcribing conversation...');
+        const transcript = convSnapshot
+          .map((m) => `${m.role === 'user' ? 'User' : 'Agent'}: ${m.text}`)
+          .join('\n');
+        extractPersonFromTranscript(transcript, import.meta.env.VITE_GEMINI_API_KEY, {
+          maxRetries: 2,
+          onRetry: (n) => setVoiceStatus(`Charting… retry ${n}`),
+        })
+          .then((extracted) => {
+            const person = buildPersonFromExtraction(extracted);
+            if (!person) { fail("Couldn't catch a name — try again."); return; }
+            finish(person);
+          })
+          .catch((restErr) => {
+            const msg = restErr.message || '';
+            const isQuotaZero = msg.includes('limit: 0') || msg.includes('Quota exceeded');
+            fail(isQuotaZero
+              ? 'Free-tier quota exhausted for this model. Try again later or check aistudio.google.com/usage.'
+              : msg || 'Could not chart person');
+          });
+      });
+  };
+
   // voice flow
   const startVoiceFlow = async () => {
     const live = new GeminiLiveSession({
@@ -250,7 +335,7 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
         } else if (status === 'connecting') {
           setVoiceStatus('Connecting to Gemini Live...');
         } else if (status === 'closed') {
-          setVoiceStatus('Tap probe to start');
+          if (!wrappedRef.current) setVoiceStatus('Tap probe to start');
         }
       },
       onUserTranscript: (text) => {
@@ -274,6 +359,7 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
         // Audio plays directly via GeminiLiveSession.playAudioChunk
       },
       onError: (err) => { setVoiceError(err.message || 'Gemini Live failed.'); setVoiceStatus('Connection issue'); },
+      onFinishIntake: () => { wrapUpAndExtract(); },
     });
     live.connect();
     liveSessionRef.current = live;
@@ -307,80 +393,7 @@ export default function AddPersonModal({ open, onClose, onAdd }) {
 
   const handleProbeToggle = () => {
     if (listening) {
-      const pendingUser = lastUserTextRef.current;
-      lastUserTextRef.current = '';
-      const convSnapshot = pendingUser
-        ? [...conversation, { role: 'user', text: pendingUser }]
-        : [...conversation];
-
-      // Stop mic, keep WebSocket alive for extraction
-      stopMicInput();
-      setParticles(generateParticles()); setBursting(true);
-      setTimeout(() => { setBursting(false); setParticles([]); }, 720);
-
-      const hasContent = convSnapshot.some((m) => m.role === 'user');
-      if (!hasContent) {
-        stopVoiceFlow();
-        setVoiceStatus('Tap probe to start');
-        return;
-      }
-
-      setExtracting(true);
-
-      const buildPerson = buildPersonFromExtraction;
-
-      const finish = (person) => {
-        setVoiceStatus(`Adding ${person.name} to your constellation...`);
-        onAdd?.(person);
-        resetAll();
-        onClose();
-      };
-
-      const fail = (msg) => {
-        liveSessionRef.current?.disconnect();
-        liveSessionRef.current = null;
-        setVoiceError(msg);
-        setVoiceStatus('Tap probe to start');
-        setExtracting(false);
-      };
-
-      // ── Step 1: extract via the open Live session (no extra quota needed) ──
-      setVoiceStatus('Requesting summary from agent...');
-      liveSessionRef.current.requestExtraction()
-        .then((extracted) => {
-          liveSessionRef.current?.disconnect();
-          liveSessionRef.current = null;
-          const person = buildPerson(extracted);
-          if (!person) { fail("Couldn't catch a name — try again."); return; }
-          finish(person);
-        })
-        .catch((liveErr) => {
-          console.warn('Live extraction failed, trying REST fallback:', liveErr.message);
-          liveSessionRef.current?.disconnect();
-          liveSessionRef.current = null;
-
-          // ── Step 2: fallback to REST generateContent ──
-          setVoiceStatus('Charting via REST...');
-          const transcript = convSnapshot
-            .map((m) => `${m.role === 'user' ? 'User' : 'Agent'}: ${m.text}`)
-            .join('\n');
-          extractPersonFromTranscript(transcript, import.meta.env.VITE_GEMINI_API_KEY, {
-            maxRetries: 2,
-            onRetry: (n) => setVoiceStatus(`Charting… retry ${n}`),
-          })
-            .then((extracted) => {
-              const person = buildPerson(extracted);
-              if (!person) { fail("Couldn't catch a name — try again."); return; }
-              finish(person);
-            })
-            .catch((restErr) => {
-              const msg = restErr.message || '';
-              const isQuotaZero = msg.includes('limit: 0') || msg.includes('Quota exceeded');
-              fail(isQuotaZero
-                ? 'Free-tier quota exhausted for this model. Try again later or check aistudio.google.com/usage.'
-                : msg || 'Could not chart person');
-            });
-        });
+      wrapUpAndExtract();
     } else {
       startVoiceFlow();
     }
