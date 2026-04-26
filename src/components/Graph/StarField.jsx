@@ -16,7 +16,7 @@ const NEBULA_COLORS = [
   'rgba(180, 140, 220, 0.04)',
 ];
 
-export default function StarField() {
+export default function StarField({ panRef }) {
   const canvasRef = useRef(null);
   const farRef = useRef([]);
   const midRef = useRef([]);
@@ -132,8 +132,9 @@ export default function StarField() {
       time += 1;
       ctx.clearRect(0, 0, width, height);
 
-      const farPx = 0;
-      const farPy = 0;
+      const pan = panRef?.current ?? { x: 0, y: 0 };
+      const farPx = pan.x * 0.15;
+      const farPy = pan.y * 0.15;
 
       for (const star of farRef.current) {
         const tw = Math.sin(time * star.twinkleSpeed + star.twinkleOffset);
@@ -150,8 +151,8 @@ export default function StarField() {
         }
       }
 
-      const midPx = 0;
-      const midPy = 0;
+      const midPx = pan.x * 0.3;
+      const midPy = pan.y * 0.3;
       for (const n of midRef.current) {
         n.driftPhase += n.driftSpeed;
         const dx = Math.cos(n.driftPhase) * n.driftRadius;
@@ -167,8 +168,8 @@ export default function StarField() {
         ctx.fill();
       }
 
-      const nearPx = 0;
-      const nearPy = 0;
+      const nearPx = pan.x * 0.5;
+      const nearPy = pan.y * 0.5;
       for (const d of nearRef.current) {
         d.x += d.vx;
         d.y += d.vy;

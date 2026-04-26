@@ -37,6 +37,7 @@ function App() {
   const [view, setView] = useState('landing');
   const [landingExiting, setLandingExiting] = useState(false);
   const landingExitTimerRef = useRef(null);
+  const panRef = useRef({ x: 0, y: 0 });
 
   const handleEnterFromLanding = useCallback(() => {
     setView('app');
@@ -267,9 +268,10 @@ function App() {
     {view === 'app' && (
     <div className="app">
       <div className={`cosmos-stage ${showModal ? 'modal-open' : ''} ${viewMode === 'gallery' ? 'hidden-behind-gallery' : ''}`} style={stageStyle}>
-        <StarField />
+        <StarField panRef={panRef} />
         <div className="graph-container">
           <ConstellationGraph
+            panRef={panRef}
             activeFilters={activeFilters}
             focusedCategory={focusedCategory}
             onZoomOut={() => setFocusedCategory(null)}
