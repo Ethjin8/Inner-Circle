@@ -1,7 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import SearchPill from './components/SearchPill/SearchPill';
 import CommandPalette from './components/CommandPalette/CommandPalette';
-import CategoryLegend from './components/CategoryLegend/CategoryLegend';
 import AvatarMenu from './components/AvatarMenu/AvatarMenu';
 import CmdKNudge from './components/CmdKNudge/CmdKNudge';
 import { useRecentPeople } from './hooks/useRecentPeople';
@@ -141,9 +140,12 @@ function App() {
   }, [bumpInteraction, recordOpen]);
 
   const handlePaletteSelect = useCallback((person) => {
-    setPaletteOpen(false);
-    // Pass null screenPos — zoom origin defaults to viewport center.
+    // Trigger the zoom-in + modal flow first; keep the palette mounted in
+    // its "transitioning" state (backdrop covers the canvas) until the modal
+    // is fully open, then close. This prevents the brief graph-flash between
+    // palette and modal.
     handleNodeClick(person, null);
+    setTimeout(() => setPaletteOpen(false), 380);
   }, [handleNodeClick]);
 
   const handleNodeDoubleClick = useCallback((node) => {
@@ -412,19 +414,17 @@ function App() {
 
       {!isFirstExperience && viewMode === 'graph' && (
         <>
-          <CategoryLegend
-            countsByCategory={countsByCategory}
-            activeFilters={activeFilters}
-            onToggle={toggleBranchHighlight}
-            onClearAll={() => setActiveFilters(new Set())}
-            hidden={landingExiting || !!selectedPerson}
-          />
           <CommandPalette
             open={paletteOpen}
             onClose={closePalette}
             people={displayPeople}
             recentIds={recentIds}
+            countsByCategory={countsByCategory}
+            activeCategories={activeFilters}
+            onToggleCategory={toggleBranchHighlight}
+            onClearCategories={() => setActiveFilters(new Set())}
             onSelect={handlePaletteSelect}
+            transitioning={!!selectedPerson}
           />
           <CmdKNudge />
         </>

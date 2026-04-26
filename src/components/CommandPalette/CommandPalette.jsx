@@ -1,21 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Command } from 'cmdk';
-import { Search } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import './CommandPalette.css';
 
-const CATEGORY_LABEL = {
-  family: 'Family',
-  friend: 'Friend',
-  classmate: 'Classmate',
-  coworker: 'Coworker',
-  professional: 'Professional',
-  romantic: 'Romantic',
-  mentor: 'Mentor',
-  other: 'Other',
-};
+const CATEGORIES = [
+  { key: 'family',       label: 'Family',       token: 'var(--celestial-family)' },
+  { key: 'friend',       label: 'Friend',       token: 'var(--celestial-friend)' },
+  { key: 'coworker',     label: 'Coworker',     token: 'var(--celestial-coworker)' },
+  { key: 'classmate',    label: 'Classmate',    token: 'var(--celestial-classmate)' },
+  { key: 'mentor',       label: 'Mentor',       token: 'var(--celestial-mentor)' },
+  { key: 'romantic',     label: 'Romantic',     token: 'var(--celestial-romantic)' },
+  { key: 'professional', label: 'Pro',          token: 'var(--celestial-professional)' },
+  { key: 'other',        label: 'Other',        token: 'var(--celestial-other)' },
+];
+
+const CATEGORY_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.key, c.label]));
 
 function categoryToken(cat) {
-  // Maps person.relationship.type → CSS celestial token.
   if (!cat) return 'var(--celestial-other)';
   return `var(--celestial-${cat})`;
 }
@@ -29,7 +30,6 @@ function PersonRow({ person, onSelect }) {
   }`;
   return (
     <Command.Item
-      key={person.id}
       value={`${person.name}__${person.id}`}
       onSelect={() => onSelect(person)}
       className="cmdp-row"
@@ -45,21 +45,31 @@ function PersonRow({ person, onSelect }) {
   );
 }
 
+// Custom cmdk filter: match person.name (the part before "__"), case-insensitive
+// substring. shouldFilter stays true the whole time so cmdk never resets state.
+function paletteFilter(value, search) {
+  if (!search) return 1;
+  const name = (value.split('__')[0] || '').toLowerCase();
+  const q = search.trim().toLowerCase();
+  return name.includes(q) ? 1 : 0;
+}
+
 export default function CommandPalette({
   open,
   onClose,
   people,
   recentIds,
+  countsByCategory,
+  activeCategories,
+  onToggleCategory,
+  onClearCategories,
   onSelect,
+  transitioning = false,
 }) {
   const [query, setQuery] = useState('');
 
-  // Reset query only when palette opens from a closed state
   useEffect(() => {
     if (open) {
-      // Note: setState within effect is intentional for resetting query on open.
-      // This does not violate best practices as we are synchronizing state with
-      // an external prop change (open/close state from parent).
       setQuery(''); // eslint-disable-line react-hooks/set-state-in-effect
     }
   }, [open]);
@@ -70,36 +80,52 @@ export default function CommandPalette({
     return map;
   }, [people]);
 
-  const recents = useMemo(() => {
-    if (recentIds.length === 0) return [];
-    return recentIds.map((id) => peopleById.get(id)).filter(Boolean).slice(0, 6);
-  }, [recentIds, peopleById]);
+  // Apply category filter at the data layer. cmdk handles text filtering on top.
+  const peopleAfterCategoryFilter = useMemo(() => {
+    if (!activeCategories || activeCategories.size === 0) return people;
+    return people.filter((p) => {
+      const cat = p.relationship?.type ?? 'other';
+      return activeCategories.has(cat);
+    });
+  }, [people, activeCategories]);
 
-  const fallback = useMemo(() => {
-    if (recents.length > 0) return [];
-    return [...people]
-      .sort((a, b) => (b.relationship?.strength ?? -1) - (a.relationship?.strength ?? -1))
-      .slice(0, 12);
-  }, [people, recents.length]);
+  const isEmptyQuery = query.trim().length === 0;
+  const noFilters = !activeCategories || activeCategories.size === 0;
+
+  // Recents only show when query is empty AND no category filters are active.
+  // Otherwise the user is intentionally narrowing — recents would be noise.
+  const recentItems = useMemo(() => {
+    if (!isEmptyQuery || !noFilters) return [];
+    return recentIds
+      .map((id) => peopleById.get(id))
+      .filter(Boolean)
+      .slice(0, 6);
+  }, [isEmptyQuery, noFilters, recentIds, peopleById]);
+
+  // Main list — exclude recents from this group when recents are shown,
+  // to avoid showing the same person twice (and double cmdk values).
+  const mainListItems = useMemo(() => {
+    if (recentItems.length === 0) return peopleAfterCategoryFilter;
+    const recentIdSet = new Set(recentItems.map((p) => p.id));
+    return peopleAfterCategoryFilter.filter((p) => !recentIdSet.has(p.id));
+  }, [peopleAfterCategoryFilter, recentItems]);
 
   if (!open) return null;
 
-  const isEmpty = query.trim().length === 0;
+  const showRecentsHeading = recentItems.length > 0;
+  const showMainHeading = isEmptyQuery && mainListItems.length > 0;
 
   return (
     <div
-      className="cmdp-backdrop"
+      className={`cmdp-backdrop ${transitioning ? 'is-transitioning' : ''}`}
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="cmdp-shell"
+        className={`cmdp-shell ${transitioning ? 'is-transitioning' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <Command
-          label="Search people"
-          shouldFilter={!isEmpty}
-        >
+        <Command label="Search people" filter={paletteFilter} shouldFilter>
           <div className="cmdp-input-row">
             <Search size={16} aria-hidden className="cmdp-input-icon" />
             <Command.Input
@@ -111,32 +137,63 @@ export default function CommandPalette({
             />
           </div>
 
+          <div className="cmdp-categories" role="group" aria-label="Filter by category">
+            {CATEGORIES.map((c) => {
+              const count = countsByCategory?.[c.key] ?? 0;
+              if (count === 0) return null;
+              const active = activeCategories?.has(c.key) ?? false;
+              return (
+                <button
+                  key={c.key}
+                  type="button"
+                  className={`cmdp-cat-chip ${active ? 'is-active' : ''}`}
+                  style={{ '--chip-color': c.token }}
+                  onClick={() => onToggleCategory(c.key)}
+                  aria-pressed={active}
+                  aria-label={`${c.label}, ${count} ${count === 1 ? 'person' : 'people'}, ${active ? 'on' : 'off'}`}
+                >
+                  <span className="cmdp-cat-dot" aria-hidden />
+                  <span className="cmdp-cat-name">{c.label}</span>
+                  <span className="cmdp-cat-count">{count}</span>
+                </button>
+              );
+            })}
+            {!noFilters && (
+              <button
+                type="button"
+                className="cmdp-cat-clear"
+                onClick={onClearCategories}
+                aria-label="Clear category filters"
+                title="Clear"
+              >
+                <X size={12} aria-hidden />
+              </button>
+            )}
+          </div>
+
           <Command.List className="cmdp-list">
-            <Command.Empty className="cmdp-empty">No people match "{query}"</Command.Empty>
+            <Command.Empty className="cmdp-empty">
+              {isEmptyQuery
+                ? 'No people in this category yet'
+                : `No people match "${query}"`}
+            </Command.Empty>
 
-            {isEmpty && recents.length > 0 && (
+            {showRecentsHeading && (
               <Command.Group heading="RECENT" className="cmdp-group">
-                {recents.map((p) => (
+                {recentItems.map((p) => (
                   <PersonRow key={p.id} person={p} onSelect={onSelect} />
                 ))}
               </Command.Group>
             )}
 
-            {isEmpty && recents.length === 0 && fallback.length > 0 && (
-              <Command.Group heading="ALL" className="cmdp-group">
-                {fallback.map((p) => (
-                  <PersonRow key={p.id} person={p} onSelect={onSelect} />
-                ))}
-              </Command.Group>
-            )}
-
-            {!isEmpty && (
-              <Command.Group className="cmdp-group">
-                {people.slice(0, 50).map((p) => (
-                  <PersonRow key={p.id} person={p} onSelect={onSelect} />
-                ))}
-              </Command.Group>
-            )}
+            <Command.Group
+              heading={showMainHeading ? 'ALL' : undefined}
+              className="cmdp-group"
+            >
+              {mainListItems.map((p) => (
+                <PersonRow key={p.id} person={p} onSelect={onSelect} />
+              ))}
+            </Command.Group>
           </Command.List>
 
           <div className="cmdp-footer">
