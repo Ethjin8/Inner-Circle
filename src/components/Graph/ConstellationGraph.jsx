@@ -218,12 +218,21 @@ function clampToBounds(node, width, height) {
   node.baseY = Math.max(PADDING_TOP + r, Math.min(height - PADDING_BOTTOM - r, node.baseY));
 }
 
-export default function ConstellationGraph({ activeFilters, focusedCategory, onZoomOut, people = DEMO_PEOPLE, onNodeClick, onNodeDoubleClick, activeTool, onSnip, deletingIds = [], panRef: externalPanRef, isFirstExperience = false, userName = '', onCenterClick }) {
+export default function ConstellationGraph({ activeFilters, focusedCategory, onZoomOut, onZoomIn, people = DEMO_PEOPLE, onNodeClick, onNodeDoubleClick, activeTool, onSnip, deletingIds = [], panRef: externalPanRef, isFirstExperience = false, userName = '', onCenterClick }) {
   const filterSet = activeFilters instanceof Set ? activeFilters : new Set();
   const hasFilter = filterSet.size > 0;
   const isDimmed = (cat) => {
     if (focusedCategory) return cat !== focusedCategory;
     return hasFilter && !filterSet.has(cat);
+  };
+  // Fade focus dimming based on zoom: full at scale >= 2.6, gone at <= 1.2
+  const dimAmount = (cat, scale) => {
+    if (focusedCategory) {
+      if (cat === focusedCategory) return 0;
+      const t = Math.max(0, Math.min(1, (scale - 1.2) / (2.6 - 1.2)));
+      return t;
+    }
+    return hasFilter && !filterSet.has(cat) ? 1 : 0;
   };
   const canvasRef = useRef(null);
   const nodesRef = useRef([]);
@@ -238,6 +247,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
   const userPanRef = externalPanRef ?? internalPanRef;
   const youPosRef = useRef({ x: 0, y: 0 });
   const camRef = useRef({ x: 0, y: 0, scale: 1, targetX: 0, targetY: 0, targetScale: 1 });
+  const zoomRef = useRef(1);
   const dragStateRef = useRef({ active: false, nodeId: null, startMx: 0, startMy: 0, startNx: 0, startNy: 0, moved: false, suppressClick: false, lastMx: 0, lastMy: 0, vx: 0, vy: 0 });
   const panMomentumRef = useRef({ vx: 0, vy: 0, raf: null });
   const particlesRef = useRef([]); // [{x,y,vx,vy,r,alpha,color,life,maxLife}]
@@ -348,11 +358,14 @@ const internalPanRef = useRef({ x: 0, y: 0 });
     nodesRef.current = nodes;
   }, [people]);
 
-  // Whenever focus mode changes, reset user pan so the focused cat (or galaxy)
-  // lands cleanly centered regardless of prior panning.
+  // Reset user pan only when entering a category focus, so scroll-out exits
+  // smoothly without snapping the camera.
   useEffect(() => {
-    userPanRef.current.x = 0;
-    userPanRef.current.y = 0;
+    if (focusedCategory) {
+      userPanRef.current.x = 0;
+      userPanRef.current.y = 0;
+      zoomRef.current = 2.6;
+    }
   }, [focusedCategory]);
 
   useEffect(() => {
@@ -601,7 +614,44 @@ const internalPanRef = useRef({ x: 0, y: 0 });
     };
 
     const onKeyDown = (e) => { if (e.key === 'Escape' || e.key === '-') onZoomOut?.(); };
-    const onWheel = (e) => { if (e.deltaY !== 0) onZoomOut?.(); };
+    const onWheel = (e) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const { cx, cy } = getCenter();
+      // Use current cam scale (mid-spring) so transitions are continuous.
+      const oldScale = camRef.current.scale;
+      const factor = Math.exp(-e.deltaY * 0.0015);
+      const newScale = Math.max(0.4, Math.min(4, oldScale * factor));
+      if (newScale === oldScale) return;
+      const wx = (mx - cx - camRef.current.x) / oldScale + cx;
+      const wy = (my - cy - camRef.current.y) / oldScale + cy;
+      const newCamX = mx - cx - (wx - cx) * newScale;
+      const newCamY = my - cy - (wy - cy) * newScale;
+      zoomRef.current = newScale;
+      camRef.current.scale = newScale;
+      camRef.current.x = newCamX;
+      camRef.current.y = newCamY;
+      camRef.current.targetScale = newScale;
+      camRef.current.targetX = newCamX;
+      camRef.current.targetY = newCamY;
+      // Sync userPan so the draw loop's spring target equals current cam.
+      // In focused mode: cam = (cx - catNode.x) * scale + userPan.
+      const exitingFocus = focusedCategory && newScale < 1.2;
+      if (focusedCategory && !exitingFocus) {
+        const catNode = nodesRef.current.find(n => n.isCategory && n.category === focusedCategory);
+        if (catNode) {
+          userPanRef.current.x = newCamX - (cx - catNode.x) * newScale;
+          userPanRef.current.y = newCamY - (cy - catNode.y) * newScale;
+        }
+      } else {
+        userPanRef.current.x = newCamX;
+        userPanRef.current.y = newCamY;
+      }
+      if (exitingFocus) onZoomOut?.();
+      stopMomentum();
+    };
 
     const draw = () => {
       timeRef.current += 1;
@@ -612,9 +662,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       if (focusedCategory) {
         const catNode = nodesRef.current.find(n => n.isCategory && n.category === focusedCategory);
         if (catNode) {
-          const focusScale = 2.6;
-          // Position so cat lands at screen center; userPan is added on top so further
-          // panning during focus still works (it's reset to 0 on focus enter/exit).
+          const focusScale = zoomRef.current;
           camRef.current.targetX = (cx - catNode.x) * focusScale + userPanRef.current.x;
           camRef.current.targetY = (cy - catNode.y) * focusScale + userPanRef.current.y;
           camRef.current.targetScale = focusScale;
@@ -622,7 +670,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       } else {
         camRef.current.targetX = userPanRef.current.x;
         camRef.current.targetY = userPanRef.current.y;
-        camRef.current.targetScale = 1;
+        camRef.current.targetScale = zoomRef.current;
       }
       camRef.current.x += (camRef.current.targetX - camRef.current.x) * 0.08;
       camRef.current.y += (camRef.current.targetY - camRef.current.y) * 0.08;
@@ -727,8 +775,8 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         if (deletingIds.includes(node.id)) continue;
         if (!node.isCategory) continue;
         const isHovEdge = hoveredEdgeRef.current?.id === node.id;
-        const edgeDimmed = isDimmed(node.category);
-        const dimMul = edgeDimmed ? 0.12 : 1;
+        const dimT = dimAmount(node.category, camRef.current.scale);
+        const dimMul = 1 - dimT * (1 - 0.12);
         const ea = isHovEdge ? 0.95 : (0.1 + (node.avgStrength / 100) * 0.3) * dimMul;
         const ew = 0.5 + (node.avgStrength / 100) * 4;
         ctx.beginPath(); ctx.moveTo(youWorldX, youWorldY); ctx.lineTo(node.x, node.y);
@@ -745,14 +793,11 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         if (deletingIds.includes(node.id)) continue;
         if (node.isCategory) continue;
         const isHovEdge = hoveredEdgeRef.current?.id === node.id;
-        const edgeDimmed = isDimmed(node.category);
-        const dimMul = edgeDimmed ? 0.12 : 1;
+        const dimT = dimAmount(node.category, camRef.current.scale);
         {
           const p = node.parentCat;
           if (!p || deletingIds.includes(p.id)) continue;
           const isHovPEdge = hoveredEdgeRef.current?.id === node.id;
-          // Until the AI pipeline produces real scores, edges render neutral
-          // so unscored nodes don't fake a strength color.
           const rgb = node.isScored ? strengthToEdgeColor(node.strength) : '160,160,170';
           const ew = node.isScored ? 0.5 + (node.strength / 100) * 4 : 1;
           ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(node.x, node.y);
@@ -760,9 +805,14 @@ const internalPanRef = useRef({ x: 0, y: 0 });
           if (isHovPEdge && activeTool === 'snip') {
             ctx.setLineDash([6, 4]); ctx.strokeStyle = 'rgba(255,80,80,0.95)';
             ctx.shadowColor = 'rgba(255,80,80,0.8)'; ctx.shadowBlur = 12;
-          } else if (edgeDimmed) {
-            ctx.strokeStyle = `rgba(140,140,150,0.18)`;
-          } else { ctx.strokeStyle = `rgba(${rgb}, ${node.isScored ? 0.55 : 0.32})`; }
+          } else {
+            const baseA = node.isScored ? 0.55 : 0.32;
+            const a = baseA * (1 - dimT) + 0.18 * dimT;
+            const r = parseInt(rgb.split(',')[0]) * (1 - dimT) + 140 * dimT;
+            const g = parseInt(rgb.split(',')[1]) * (1 - dimT) + 140 * dimT;
+            const b = parseInt(rgb.split(',')[2]) * (1 - dimT) + 150 * dimT;
+            ctx.strokeStyle = `rgba(${r|0},${g|0},${b|0},${a})`;
+          }
           ctx.stroke(); ctx.setLineDash([]); ctx.shadowBlur = 0;
         }
       }
@@ -771,11 +821,11 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       for (const node of nodesRef.current) {
         if (deletingIds.includes(node.id)) continue;
         const cat = CATEGORIES[node.category] || CATEGORIES.other;
-        const isFiltered = isDimmed(node.category);
+        const dimT = dimAmount(node.category, camRef.current.scale);
         const isHov = hoveredRef.current?.id === node.id;
-        const nodeAlpha = isFiltered ? 0.18 : 1;
+        const nodeAlpha = 1 - dimT * (1 - 0.18);
         const r = node.radius * (isHov ? 1.12 : 1);
-        const renderColor = isFiltered ? '#6a6f7a' : cat.color;
+        const renderColor = dimT > 0.5 ? '#6a6f7a' : cat.color;
 
         if (node.isCategory) {
           ctx.beginPath(); ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
@@ -936,7 +986,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       window.removeEventListener('keydown', onKeyDown);
       canvas.removeEventListener('wheel', onWheel);
     };
-  }, [activeFilters, focusedCategory, activeTool, initNodes, onNodeClick, onNodeDoubleClick, onSnip, onZoomOut, deletingIds]);
+  }, [activeFilters, focusedCategory, activeTool, initNodes, onNodeClick, onNodeDoubleClick, onSnip, onZoomOut, onZoomIn, deletingIds]);
 
   return <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, zIndex: 1 }} />;
 }

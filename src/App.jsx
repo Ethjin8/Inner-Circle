@@ -303,6 +303,7 @@ function App() {
             activeFilters={activeFilters}
             focusedCategory={focusedCategory}
             onZoomOut={() => setFocusedCategory(null)}
+            onZoomIn={(cat) => setFocusedCategory(cat)}
             onNodeClick={handleNodeClick}
             onNodeDoubleClick={handleNodeDoubleClick}
             activeTool={activeTool}
@@ -413,18 +414,6 @@ function App() {
           )}
         </div>
         <div className="sidebar-tree">
-          {!isSearching && (
-            <div className="tree-group">
-              <div
-                className="tree-item node-cat level-1"
-                style={{ background: 'rgba(255, 255, 255, 0.05)', marginBottom: '2px' }}
-                onClick={() => setFocusedCategory(null)}
-              >
-                <span className="filter-dot" style={{ background: '#e8e8f0', marginLeft: '12px' }} />
-                You
-              </div>
-            </div>
-          )}
           {isSearching && Object.values(peopleByCategory).every((d) => d.people.length === 0) && (
             <div className="sidebar-empty">No matches for "{searchQuery}"</div>
           )}
