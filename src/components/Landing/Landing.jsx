@@ -108,7 +108,7 @@ const drawStarGlow = (ctx, x, y, radius, alpha) => {
   ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
 };
 
-const drawNorthStar = (ctx, w, h, t, yRatio = 0.25) => {
+const drawNorthStar = (ctx, w, h, t, yRatio = 0.45) => {
   const x = w / 2;
   const y = h * yRatio;
   const pulse = 0.75 + 0.25 * Math.sin(t * 0.0008);
@@ -284,7 +284,13 @@ export default function Landing({ onEnter, user }) {
           {error && <div className="signin-error">{error}</div>}
         </div>
       ) : (
-        <div className="landing-hint">Click anywhere to enter</div>
+        <>
+          <div className="landing-overlay">
+            <h1 className="landing-wordmark">Inner Circle</h1>
+            <p className="landing-tagline">Stay in touch with the people who matter most.</p>
+          </div>
+          <div className="landing-hint">Click anywhere to enter</div>
+        </>
       )}
     </div>
   );

@@ -68,8 +68,9 @@
   --strength-weak: 220, 130, 130;
 
   /* ---------- Type ---------- */
-  --font-display: 'Space Grotesk', system-ui, sans-serif;
-  --font-body: 'Inter', system-ui, sans-serif;
+  --font-display: 'Chillax', system-ui, -apple-system, sans-serif;
+  --font-body:    'Geist', system-ui, -apple-system, sans-serif;
+  --font-mono:    'Geist Mono', ui-monospace, monospace;
 
   --text-xs:   11px;
   --text-sm:   12px;
@@ -77,7 +78,22 @@
   --text-md:   14px;
   --text-lg:   16px;
   --text-xl:   20px;
-  --text-2xl:  24px;
+  --text-2xl:  28px;
+  --text-3xl:  44px;
+  --text-4xl:  72px;
+
+  /* ---------- Spacing (8-point base) ---------- */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-24: 96px;
 
   /* ---------- Radius ---------- */
   --radius-xs: 6px;
@@ -85,14 +101,27 @@
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 24px;
+  --radius-full: 9999px;
 
   /* ---------- Motion ---------- */
-  --duration-fast: 120ms;
-  --duration-base: 200ms;
-  --duration-slow: 320ms;
+  --duration-fast:      120ms;
+  --duration-base:      200ms;
+  --duration-slow:      320ms;
+  --duration-cinematic: 800ms;
 
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:     cubic-bezier(0.4, 0, 1, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ---------- Z-index layers ---------- */
+  --z-canvas:         0;
+  --z-floating-pill:  10;
+  --z-chat-dock:      20;
+  --z-toolbar:        30;
+  --z-palette:        40;
+  --z-modal-backdrop: 50;
+  --z-modal:          60;
+  --z-toast:          70;
 
   font-family: var(--font-body);
   font-size: 16px;

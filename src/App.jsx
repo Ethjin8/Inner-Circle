@@ -1,11 +1,16 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import SearchPill from './components/SearchPill/SearchPill';
+import CommandPalette from './components/CommandPalette/CommandPalette';
+import AvatarMenu from './components/AvatarMenu/AvatarMenu';
+import CmdKNudge from './components/CmdKNudge/CmdKNudge';
+import { useRecentPeople } from './hooks/useRecentPeople';
+import { useCommandKey } from './hooks/useCommandKey';
 import StarField from './components/Graph/StarField';
 import ConstellationGraph, { DEMO_PEOPLE } from './components/Graph/ConstellationGraph';
 import PersonModal from './components/PersonModal/PersonModal';
 import AddPersonModal from './components/AddPersonModal/AddPersonModal';
 import MemoryCarousel from './components/MemoryCarousel/MemoryCarousel';
 import Landing from './components/Landing/Landing';
-import SignIn from './components/SignIn/SignIn';
 import GmailDraftEditor from './components/GmailDraftEditor/GmailDraftEditor';
 import CalendarEventCard from './components/CalendarEventCard/CalendarEventCard';
 import { useAuth } from './contexts/AuthContext';
@@ -13,7 +18,6 @@ import { usePeople } from './hooks/usePeople';
 import { usePhotos } from './hooks/usePhotos';
 import { scorePerson } from './services/scoring';
 import ChatModal from './components/Chat/ChatModal';
-import ChatHistory from './components/Chat/ChatHistory';
 import { useChatHistory } from './hooks/useChatHistory';
 import './App.css';
 import './components/Chat/Chat.css';
@@ -100,8 +104,6 @@ function App() {
   const [addPersonInitialMode, setAddPersonInitialMode] = useState('voice');
   const [zoomTarget, setZoomTarget] = useState(null);
   const [focusedCategory, setFocusedCategory] = useState(null);
-  const [expandedCats, setExpandedCats] = useState(new Set());
-  const [expandedPeople, setExpandedPeople] = useState(new Set());
   const [activeTool, setActiveTool] = useState(null); // null | 'snip'
   const [deletingIds, setDeletingIds] = useState([]); // ids being animated out
   const [deletedHistory, setDeletedHistory] = useState([]); // undo stack: [{type:'person'|'category', ids:[]}]
@@ -109,7 +111,7 @@ function App() {
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [pastChatsOpen, setPastChatsOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [showDemo, setShowDemo] = useState(false);
+  const [showDemo, setShowDemo] = useState(false); // testing: show demo people without persisting
   const [demoPeople, setDemoPeople] = useState(DEMO_PEOPLE.map(p => ({ ...p, isDemo: true })));
   const promptInputRef = useRef(null);
   const [mentionRange, setMentionRange] = useState(null); // { start, query } | null
@@ -131,7 +133,20 @@ function App() {
   const [chatInitialAttachedIds, setChatInitialAttachedIds] = useState([]);
   const [activeDraft, setActiveDraft] = useState(null);
   const [activeEvent, setActiveEvent] = useState(null);
-  const { threads: chatThreads, addThread: addChatThread, deleteThread: deleteChatThread } = useChatHistory();
+  const { addThread: addChatThread } = useChatHistory();
+
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const { recentIds, recordOpen } = useRecentPeople();
+
+  const openPalette = useCallback(() => {
+    if (selectedPerson) return;       // disallow during person modal
+    if (landingExiting) return;       // disallow during cinematic transition
+    setPaletteOpen(true);
+  }, [selectedPerson, landingExiting]);
+
+  const closePalette = useCallback(() => setPaletteOpen(false), []);
+
+  useCommandKey(openPalette, { enabled: !selectedPerson && !landingExiting });
 
   const handleChatAction = useCallback((payload) => {
     if (payload?.kind === 'email') setActiveDraft(payload);
@@ -195,37 +210,14 @@ function App() {
     return photos.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
   }, [photosByPerson, displayPeople]);
 
-  const peopleByCategory = useMemo(() => {
-    const map = {};
-    FILTERS.forEach(f => { if (f.key) map[f.key] = { label: f.label, color: f.color, people: [] }; });
-    const q = searchQuery.trim().toLowerCase();
-    displayPeople.forEach(p => {
-      if (q && !p.name.toLowerCase().includes(q)) return;
-      const c = p.relationship?.type;
-      if (c && map[c]) map[c].people.push(p);
+  const countsByCategory = useMemo(() => {
+    const counts = {};
+    displayPeople.forEach((p) => {
+      const k = p.relationship?.type ?? 'other';
+      counts[k] = (counts[k] ?? 0) + 1;
     });
-    return map;
-  }, [displayPeople, searchQuery]);
-
-  const isSearching = searchQuery.trim().length > 0;
-
-  const toggleCat = (cat) => {
-    setExpandedCats(prev => {
-      const next = new Set(prev);
-      if (next.has(cat)) next.delete(cat);
-      else next.add(cat);
-      return next;
-    });
-  };
-
-  const togglePerson = (id) => {
-    setExpandedPeople(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+    return counts;
+  }, [displayPeople]);
 
   const handleNodeClick = useCallback((node, screenPos) => {
     bumpInteraction();
@@ -238,7 +230,16 @@ function App() {
     setSelectedPerson(node);
     setModalPhase('zooming-in');
     modalTimerRef.current = setTimeout(() => setModalPhase('open'), 380);
-  }, [bumpInteraction]);
+    recordOpen(node.id);
+  }, [bumpInteraction, recordOpen]);
+
+  const handlePaletteSelect = useCallback((person) => {
+    // Don't close the palette. While the modal is open `transitioning` is
+    // true (driven by !!selectedPerson), so the palette UI is invisible
+    // behind the modal but stays mounted. When the user closes the modal,
+    // the palette becomes visible again with its query/filters intact.
+    handleNodeClick(person, null);
+  }, [handleNodeClick]);
 
   const handleNodeDoubleClick = useCallback((node) => {
     bumpInteraction();
@@ -573,13 +574,6 @@ function App() {
     setAttachedNodes([]);
   }, [promptText, attachedNodes, handleSnip, displayPeople]);
 
-  const handleOpenThread = useCallback((thread) => {
-    setChatInitialThread(thread);
-    setChatInitialPrompt('');
-    setChatInitialAttachedIds([]);
-    setChatModalOpen(true);
-  }, []);
-
   const stageStyle = zoomTarget
     ? { transformOrigin: `${zoomTarget.x}px ${zoomTarget.y}px` }
     : undefined;
@@ -683,7 +677,9 @@ function App() {
       )}
 
       {!isFirstExperience && <header className="header">
-        <div />
+        <div className="header-slot header-slot-left">
+          <SearchPill onClick={openPalette} disabled={!!selectedPerson} />
+        </div>
 
         {/* Center Toolbar */}
         <div className="toolbar">
@@ -724,218 +720,33 @@ function App() {
           </button>
         </div>
 
-        <div />
+        <div className="header-slot header-slot-right">
+          <AvatarMenu
+            email={user?.email}
+            demoOn={showDemo}
+            onToggleDemo={() => setShowDemo((v) => !v)}
+            onSignOut={async () => { await signOut(); window.location.reload(); }}
+          />
+        </div>
       </header>}
 
-      {!isFirstExperience && <aside className={`sidebar ${viewMode === 'gallery' ? 'hidden' : ''} ${sidebarCollapsed ? 'collapsed' : ''}`}>
-        <div className="sidebar-top">
-          <div className="sidebar-logo">
-            <svg className="logo-glyph" width="20" height="20" viewBox="0 0 14 14" fill="none">
-              <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="0.9" opacity="0.85" />
-              <circle cx="7" cy="7" r="3.5" stroke="currentColor" strokeWidth="0.7" opacity="0.6" />
-              <line x1="0.8" y1="7" x2="13.2" y2="7" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
-              <line x1="7" y1="0.8" x2="7" y2="13.2" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
-              <circle cx="7" cy="7" r="1" fill="currentColor" />
-            </svg>
-            <span className="logo-text collapsible-label">Inner Circle</span>
-          </div>
-          <button
-            type="button"
-            className="sidebar-collapse-btn"
-            onClick={() => setSidebarCollapsed(c => !c)}
-            title={sidebarCollapsed ? 'Open sidebar' : 'Collapse sidebar'}
-            aria-label={sidebarCollapsed ? 'Open sidebar' : 'Collapse sidebar'}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="4" width="18" height="16" rx="2" />
-              <line x1="9" y1="4" x2="9" y2="20" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="sidebar-body">
-        <button
-          type="button"
-          className="sidebar-section-header"
-          onClick={() => { if (sidebarCollapsed) setSidebarCollapsed(false); setExplorerOpen(o => sidebarCollapsed ? true : !o); }}
-          aria-expanded={explorerOpen}
-          title="Explorer"
-        >
-          <svg className="sidebar-section-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
-          </svg>
-          <span className={`chevron collapsible-label ${explorerOpen ? 'expanded' : ''}`}>›</span>
-          <span className="collapsible-label">EXPLORER</span>
-        </button>
-        {!sidebarCollapsed && explorerOpen && (<>
-        <div className="sidebar-search">
-          <svg className="sidebar-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <circle cx="11" cy="11" r="7" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            className="sidebar-search-input"
-            type="text"
-            placeholder="Search nodes..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label="Search nodes"
+      {!isFirstExperience && viewMode === 'graph' && (
+        <>
+          <CommandPalette
+            open={paletteOpen}
+            onClose={closePalette}
+            people={displayPeople}
+            recentIds={recentIds}
+            countsByCategory={countsByCategory}
+            activeCategories={activeFilters}
+            onToggleCategory={toggleBranchHighlight}
+            onClearCategories={() => setActiveFilters(new Set())}
+            onSelect={handlePaletteSelect}
+            transitioning={!!selectedPerson}
           />
-          {searchQuery && (
-            <button
-              type="button"
-              className="sidebar-search-clear"
-              onClick={() => setSearchQuery('')}
-              aria-label="Clear search"
-            >
-              ×
-            </button>
-          )}
-        </div>
-        <div className="sidebar-tree">
-          {isSearching && Object.values(peopleByCategory).every((d) => d.people.length === 0) && (
-            <div className="sidebar-empty">No matches for "{searchQuery}"</div>
-          )}
-          {Object.entries(peopleByCategory).map(([catKey, data]) => {
-            const isExpanded = isSearching || expandedCats.has(catKey);
-            if (data.people.length === 0) return null;
-            const isBranchActive = activeFilters.has(catKey);
-            return (
-              <div key={catKey} className="tree-group cat-group">
-                <div
-                  className="tree-item node-cat level-1"
-                  style={{ background: 'rgba(255, 255, 255, 0.05)' }}
-                  onClick={() => toggleCat(catKey)}
-                >
-                  <div className={`chevron ${isExpanded ? 'expanded' : ''}`}>›</div>
-                  <span className="filter-dot" style={{ background: data.color }} />
-                  <span style={{ flex: 1 }}>{data.label}</span>
-                  <button
-                    type="button"
-                    className={`branch-toggle ${isBranchActive ? 'active' : ''}`}
-                    style={{
-                      borderColor: data.color,
-                      background: isBranchActive ? data.color : 'transparent',
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleBranchHighlight(catKey);
-                    }}
-                    title={isBranchActive ? 'Clear highlight' : `Highlight ${data.label}`}
-                    aria-pressed={isBranchActive}
-                  />
-                </div>
-                {isExpanded && (
-                  <div className="tree-children">
-                    {data.people.map(person => {
-                      const isPersonExpanded = expandedPeople.has(person.id);
-                      return (
-                        <div key={person.id} className="tree-group person-group">
-                          <div
-                            className="tree-item node-person level-2"
-                            style={{ background: 'rgba(255, 255, 255, 0.03)' }}
-                            onClick={() => togglePerson(person.id)}
-                          >
-                            <div className={`chevron ${isPersonExpanded ? 'expanded' : ''}`}>›</div>
-                            <span style={{ flex: 1 }}>{person.name}</span>
-                          </div>
-                          {isPersonExpanded && (
-                            <div className="person-info-panel level-3">
-                              {person.birthday && <div>🎉 {person.birthday}</div>}
-                              <div>
-                                🔥 Strength:{' '}
-                                {person.scoring?.status === 'pending' ? (
-                                  <span className="scoring-pending">scoring…</span>
-                                ) : person.relationship?.strength != null ? (
-                                  <>
-                                    {person.relationship.strength}/100
-                                    {person.scoring?.variance === 'high' && (
-                                      <span className="scoring-uncertain" title="High variance across samples"> · uncertain</span>
-                                    )}
-                                  </>
-                                ) : (
-                                  <span className="scoring-pending">—</span>
-                                )}
-                              </div>
-                              {person.scoring?.status === 'failed' && (
-                                <div className="scoring-failed">
-                                  ⚠ Scoring failed
-                                  <button
-                                    type="button"
-                                    className="scoring-retry"
-                                    onClick={(e) => { e.stopPropagation(); scoreAndPatch(person); }}
-                                  >
-                                    Retry
-                                  </button>
-                                </div>
-                              )}
-                              {person.context?.school && <div>🎓 {person.context.school}</div>}
-                              {person.context?.work && <div>💼 {person.context.work}</div>}
-                              <div className="open-card-btn" onClick={() => handleNodeClick(person)}>
-                                View Full Card ↗
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        </>)}
-        <button
-          type="button"
-          className="sidebar-section-header"
-          onClick={() => { if (sidebarCollapsed) setSidebarCollapsed(false); setPastChatsOpen(o => sidebarCollapsed ? true : !o); }}
-          aria-expanded={pastChatsOpen}
-          title="Past chats"
-        >
-          <svg className="sidebar-section-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
-          <span className={`chevron collapsible-label ${pastChatsOpen ? 'expanded' : ''}`}>›</span>
-          <span className="collapsible-label">PAST CHATS</span>
-          {chatThreads.length > 0 && <span className="sidebar-section-count collapsible-label">{chatThreads.length}</span>}
-        </button>
-        {!sidebarCollapsed && pastChatsOpen && (
-          <ChatHistory
-            threads={chatThreads}
-            onOpenThread={handleOpenThread}
-            onDeleteThread={deleteChatThread}
-          />
-        )}
-        </div>
-
-        <div className="sidebar-footer">
-          <button
-            type="button"
-            className={`sidebar-signout demo-row ${showDemo ? 'active' : ''}`}
-            onClick={() => setShowDemo(s => !s)}
-            title={showDemo ? 'Hide demo people' : 'Show demo people (not saved)'}
-            aria-pressed={showDemo}
-          >
-            <span className="demo-toggle-dot" />
-            <span className="collapsible-label">{showDemo ? 'Demo on' : 'Demo'}</span>
-          </button>
-          <button
-            type="button"
-            className="sidebar-signout"
-            onClick={async () => { await signOut(); window.location.reload(); }}
-            title={user?.email || 'Sign out'}
-            aria-label="Sign out"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-            <span className="collapsible-label">Sign out</span>
-          </button>
-        </div>
-      </aside>}
+          <CmdKNudge />
+        </>
+      )}
 
       {isFirstExperience && (
         <button

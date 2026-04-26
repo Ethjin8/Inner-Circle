@@ -1133,10 +1133,10 @@ const internalPanRef = useRef({ x: 0, y: 0 });
           ? hexWithAlpha(renderColor, 0.92 * nodeAlpha)
           : `rgba(232, 232, 240, ${0.95 * nodeAlpha})`;
         if (node.isCategory) {
-          ctx.font = `600 11px 'Space Grotesk','Inter',sans-serif`;
+          ctx.font = `500 11px 'Geist',system-ui,sans-serif`;
           if ('letterSpacing' in ctx) ctx.letterSpacing = '0.22em';
         } else {
-          ctx.font = `500 12px 'Space Grotesk','Inter',sans-serif`;
+          ctx.font = `400 12px 'Geist',system-ui,sans-serif`;
           if ('letterSpacing' in ctx) ctx.letterSpacing = '0.02em';
         }
         ctx.textAlign = 'center';
@@ -1165,7 +1165,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
             ctx.beginPath(); ctx.arc(gx, gy, coreR * 0.6, 0, Math.PI * 2);
             ctx.fillStyle = `rgba(255,140,120,${0.95 * nodeAlpha})`; ctx.fill();
             ctx.fillStyle = `rgba(11,15,25,${0.95 * nodeAlpha})`;
-            ctx.font = `700 ${Math.max(8, coreR * 0.7)}px 'Inter',sans-serif`;
+            ctx.font = `600 ${Math.max(8, coreR * 0.7)}px 'Geist',system-ui,sans-serif`;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText('!', gx, gy + 0.5);
             ctx.restore();
@@ -1188,8 +1188,8 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       }
 
       // YOU drawn in world space, last so it stays on top.
-      // First-experience preserves the pulsing "+" disc; otherwise we render
-      // YOU as the brightest star at the heart of the constellation.
+      // YOU is the brightest star at the heart of the constellation; for
+      // first-experience users we drop the dim factor and the "YOU" label.
       {
         const youHov = !!hoveredRef.current?.isCenter;
         const youDim = (!isFirstExperience && neighborSet && !neighborSet.has('you')) ? 0.40 : 1;
@@ -1206,7 +1206,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         }
         if (!isFirstExperience) {
           ctx.fillStyle = `rgba(232,232,240,${0.95 * youDim})`;
-          ctx.font = "600 11px 'Space Grotesk','Inter',sans-serif";
+          ctx.font = "500 11px 'Geist',system-ui,sans-serif";
           if ('letterSpacing' in ctx) ctx.letterSpacing = '0.22em';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'top';
@@ -1225,7 +1225,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         const firstAlpha = baseAlpha * (1 - swapT);
         const secondAlpha = baseAlpha * swapT;
 
-        ctx.font = "400 35px 'Inter',sans-serif";
+        ctx.font = "300 35px 'Geist',system-ui,sans-serif";
         ctx.textAlign = 'center'; ctx.textBaseline = 'top';
         const greetingOffset = 40;
         const baseY = youWorldY + 44 + greetingOffset;
@@ -1256,7 +1256,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
           const sx = (hov.x - tcx) * camRef.current.scale + tcx + camRef.current.x;
           const sy = (hov.y - tcy) * camRef.current.scale + tcy + camRef.current.y;
           const label = 'Shift+click to add to context';
-          ctx.font = "500 8px 'Inter',sans-serif";
+          ctx.font = "500 8px 'Geist',system-ui,sans-serif";
           const tw = ctx.measureText(label).width;
           const ph = 8; const pv = 6;
           const bw = tw + ph * 2; const bh = 12 + pv * 2;

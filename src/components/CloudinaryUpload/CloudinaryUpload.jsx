@@ -37,22 +37,30 @@ export default function CloudinaryUpload({ personId, photos = [], onPhotosChange
         showAdvancedOptions: false,
         cropping: false,
         defaultSource: 'local',
-        styles: { 
-          palette: { 
-            window: '#0d1117', 
-            windowBorder: '#1e2a3a', 
-            tabIcon: '#7df9ff', 
-            menuIcons: '#b0c4de', 
-            textDark: '#333', 
-            textLight: '#e8e8f0', 
-            link: '#7df9ff', 
-            action: '#7df9ff', 
-            inactiveTabIcon: '#5a6a7a', 
-            error: '#F44235', 
-            inProgress: '#0078FF', 
-            complete: '#20B832', 
-            sourceBg: '#12181f' 
-          } 
+        showPoweredBy: false,
+        styles: {
+          palette: {
+            window:           '#0e0e0e',                  // --bg-deep
+            windowBorder:     'rgba(255,255,255,0.10)',   // --border-default
+            tabIcon:          '#e8e8f0',                  // --text-primary
+            inactiveTabIcon:  '#55556a',                  // --text-muted
+            menuIcons:        '#8a8a9a',                  // --text-secondary
+            textLight:        '#e8e8f0',                  // --text-primary
+            textDark:         '#0e0e0e',                  // text on cyan action btn
+            link:             '#7df9ff',                  // --accent
+            action:           '#7df9ff',                  // --accent
+            inProgress:       '#7df9ff',                  // --accent
+            complete:         '#5fd496',                  // --celestial-coworker (green)
+            error:            '#f06d6d',                  // --celestial-professional (coral)
+            sourceBg:         '#0e0e0e',                  // --bg-deep
+          },
+          fonts: {
+            default: null,
+            "'Geist', sans-serif": {
+              url: 'https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap',
+              active: true,
+            },
+          },
         },
       },
       (error, result) => {
