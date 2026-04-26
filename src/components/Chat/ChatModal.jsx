@@ -15,7 +15,7 @@ import { makeThread } from '../../hooks/useChatHistory';
 export default function ChatModal({
   open, onClose, people,
   initialThread, initialPrompt = '', initialAttachedNodeIds = [],
-  addThread,
+  addThread, onAction,
 }) {
   const [messages, setMessages] = useState([]);
   const [attachedNodeIds, setAttachedNodeIds] = useState([]);
@@ -106,6 +106,12 @@ export default function ChatModal({
             return next;
           });
         } else if (ev.type === 'tool-result') {
+          // Action tools (draft_email / create_calendar_event) carry a payload
+          // the parent renders as a modal. Fire-and-forget — the chat stream
+          // continues independently and the model still gets its tool_result.
+          if (ev.output && !ev.output.error && (ev.output.kind === 'email' || ev.output.kind === 'calendar')) {
+            try { onAction?.(ev.output); } catch (err) { console.error('onAction failed:', err); }
+          }
           const idx = localToolEvents.findLastIndex((e) => e.name === ev.name && e.status === 'running');
           const summary = summarizeToolOutput(ev.output);
           if (idx >= 0) {
@@ -165,7 +171,7 @@ export default function ChatModal({
         console.error('Save thread (final) failed:', err);
       }
     }
-  }, [messages, attachedNodeIds, people, threadId, addThread]);
+  }, [messages, attachedNodeIds, people, threadId, addThread, onAction]);
 
   // Reset state on modal open, then auto-send if there's a seed prompt.
   // Crucially we pass an explicit empty base + null threadId into send() so
@@ -292,6 +298,8 @@ export default function ChatModal({
 function summarizeToolOutput(output) {
   if (!output) return '';
   if (output.error) return output.error;
+  if (output.kind === 'email') return `draft ready${output.to ? ` for ${output.to}` : ''}`;
+  if (output.kind === 'calendar') return `event ${output.title}`;
   if (Array.isArray(output)) return `${output.length} match${output.length === 1 ? '' : 'es'}`;
   if (output.name) return `${output.name}`;
   return 'done';

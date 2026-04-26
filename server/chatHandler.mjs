@@ -1,7 +1,7 @@
 // server/chatHandler.mjs
 import Anthropic from '@anthropic-ai/sdk';
 import { defaultEmbedCache } from './embedCache.mjs';
-import { getPersonDetails, findPeopleByAttribute, semanticSearch } from './chatTools.mjs';
+import { getPersonDetails, findPeopleByAttribute, semanticSearch, draftEmail, createCalendarEvent } from './chatTools.mjs';
 
 const MODEL = 'claude-sonnet-4-6';
 const MAX_TOKENS = 2048;
@@ -40,6 +40,37 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: 'draft_email',
+    description: 'Open a Gmail compose draft pre-filled with a personalized email to someone in the constellation. Use when the user asks to write, draft, send, or message someone. Look up the person via the read tools first so the body can reference real shared memories, hobbies, or context. The user reviews and edits before sending.',
+    input_schema: {
+      type: 'object',
+      required: ['body'],
+      properties: {
+        to: { type: 'string', description: "Recipient email address. Leave empty if unknown — the user will fill it in." },
+        subject: { type: 'string', description: 'Short, warm subject line.' },
+        body: { type: 'string', description: 'Full email body. Friendly, concrete, references specific shared context. Sign off naturally.' },
+        summary: { type: 'string', description: 'One sentence describing the email for the chat reply.' },
+      },
+    },
+  },
+  {
+    name: 'create_calendar_event',
+    description: 'Open an Add-to-Google-Calendar card for a meet-up, call, or coffee with someone in the constellation. Use when the user asks to schedule, plan, set up, meet, call, or grab coffee. If no time is specified, suggest a sensible time next week. The user reviews before adding to their calendar.',
+    input_schema: {
+      type: 'object',
+      required: ['title', 'startDate'],
+      properties: {
+        title: { type: 'string', description: 'Event title, e.g. "Coffee with Jake".' },
+        description: { type: 'string', description: 'What the event is about. Reference shared interests / what to talk about.' },
+        startDate: { type: 'string', description: 'ISO 8601 start time, e.g. 2026-04-28T10:00:00Z.' },
+        endDate: { type: 'string', description: 'ISO 8601 end time. Defaults to start+1h if omitted.' },
+        location: { type: 'string', description: 'Where, if relevant.' },
+        attendeeName: { type: 'string', description: "The person's name from the constellation." },
+        summary: { type: 'string', description: 'One sentence describing the event for the chat reply.' },
+      },
+    },
+  },
 ];
 
 function buildSystemPrompt(people, attachedNodeIds) {
@@ -53,6 +84,8 @@ function buildSystemPrompt(people, attachedNodeIds) {
     "- Missing or null fields mean 'unknown', not 'zero'. Do not invent facts.",
     "- When a question implies people not in attached_people (e.g. 'who else might like this', 'compare to X'), use the tools.",
     "- Use semantic_search for fuzzy/free-text matches, find_people_by_attribute for structured filters, get_person_details to pull full data on someone you found.",
+    "- ACTION TOOLS: when the user asks to email/message/write someone, call draft_email. When they ask to schedule/plan/meet/call/coffee with someone, call create_calendar_event. Pull personalization signals first via the read tools — reference real shared memories, hobbies, and context in the draft. Today's date is " + new Date().toISOString().slice(0, 10) + "; pick a sensible near-future time if the user doesn't specify one.",
+    "- After calling an action tool, give a one-line confirmation in your reply (e.g. 'Drafted a coffee invite to Jake — open the editor to tweak and send.'). The user sees the editable draft as a modal, so don't paste the full body into chat.",
     "- Keep answers concrete and actionable. Cite specific fields ('Mom's gardening hobby suggests...') rather than vague generalities.",
     "- The user's chat is informal. Match that tone; don't over-format.",
     "",
@@ -76,6 +109,8 @@ async function executeTool(name, input, ctx) {
       return { error: `search unavailable: ${err.message}` };
     }
   }
+  if (name === 'draft_email') return draftEmail(input);
+  if (name === 'create_calendar_event') return createCalendarEvent(input);
   return { error: `unknown tool: ${name}` };
 }
 

@@ -38,6 +38,45 @@ function cosine(a, b) {
   return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
+// Action tools. The server doesn't actually send mail or write a calendar —
+// it validates the model's args and echoes a structured payload. The client
+// reads the resulting tool-result event and opens the matching action modal
+// (GmailDraftEditor / CalendarEventCard). Returning the same shape the model
+// produced also lets it reference the action in its follow-up text.
+
+export function draftEmail(args) {
+  const { to = '', subject = '', body = '', summary = '' } = args || {};
+  if (!body.trim()) return { error: 'body is required' };
+  return {
+    kind: 'email',
+    to: String(to),
+    subject: String(subject || 'Catching up'),
+    body: String(body),
+    summary: String(summary),
+  };
+}
+
+export function createCalendarEvent(args) {
+  const { title = '', description = '', startDate, endDate, location = '', attendeeName = '', summary = '' } = args || {};
+  if (!title.trim()) return { error: 'title is required' };
+  if (!startDate || isNaN(Date.parse(startDate))) return { error: 'startDate must be ISO 8601' };
+  // Default endDate to 1h after start if missing/invalid.
+  let end = endDate;
+  if (!end || isNaN(Date.parse(end))) {
+    end = new Date(Date.parse(startDate) + 60 * 60 * 1000).toISOString();
+  }
+  return {
+    kind: 'calendar',
+    title: String(title),
+    description: String(description),
+    startDate: new Date(startDate).toISOString(),
+    endDate: new Date(end).toISOString(),
+    location: String(location),
+    attendeeName: String(attendeeName),
+    summary: String(summary),
+  };
+}
+
 export async function semanticSearch(args, { people, embedCache }) {
   const { query, limit = 5 } = args || {};
   const queryVec = await embedCache.embedQuery(query);

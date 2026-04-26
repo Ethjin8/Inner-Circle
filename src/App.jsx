@@ -11,6 +11,8 @@ import { usePhotos } from './hooks/usePhotos';
 import { scorePerson } from './services/scoring';
 import ChatModal from './components/Chat/ChatModal';
 import ChatHistory from './components/Chat/ChatHistory';
+import GmailDraftEditor from './components/GmailDraftEditor/GmailDraftEditor';
+import CalendarEventCard from './components/CalendarEventCard/CalendarEventCard';
 import { useChatHistory } from './hooks/useChatHistory';
 import './App.css';
 import './components/Chat/Chat.css';
@@ -59,7 +61,14 @@ function App() {
   const [chatInitialThread, setChatInitialThread] = useState(null);
   const [chatInitialPrompt, setChatInitialPrompt] = useState('');
   const [chatInitialAttachedIds, setChatInitialAttachedIds] = useState([]);
+  const [activeDraft, setActiveDraft] = useState(null);     // {to, subject, body, summary} | null
+  const [activeEvent, setActiveEvent] = useState(null);     // calendar event | null
   const { threads: chatThreads, addThread: addChatThread, deleteThread: deleteChatThread } = useChatHistory();
+
+  const handleChatAction = useCallback((payload) => {
+    if (payload?.kind === 'email') setActiveDraft(payload);
+    else if (payload?.kind === 'calendar') setActiveEvent(payload);
+  }, []);
 
   const displayPeople = useMemo(() => (
     showDemo ? [...people, ...DEMO_PEOPLE.map(p => ({ ...p, isDemo: true }))] : people
@@ -573,7 +582,20 @@ function App() {
         initialPrompt={chatInitialPrompt}
         initialAttachedNodeIds={chatInitialAttachedIds}
         addThread={addChatThread}
+        onAction={handleChatAction}
       />
+      {activeDraft && (
+        <GmailDraftEditor
+          draft={activeDraft}
+          onClose={() => setActiveDraft(null)}
+        />
+      )}
+      {activeEvent && (
+        <CalendarEventCard
+          event={activeEvent}
+          onClose={() => setActiveEvent(null)}
+        />
+      )}
       <AddPersonModal
         open={addPersonOpen}
         onClose={() => setAddPersonOpen(false)}
