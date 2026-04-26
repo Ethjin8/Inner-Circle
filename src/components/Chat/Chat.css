@@ -1,22 +1,20 @@
 /* src/components/Chat/Chat.css
-   Aligned with docs/design-system.md:
-   - Flat true-black surfaces (no gradients, no glassy fills)
-   - Hierarchy via 1px borders, not opacity
-   - Outlined buttons only (no filled chrome buttons)
-   - No accent cyan in message bubbles — accent is reserved for tab underlines / focus rings
+   Philosophy: editorial, intimate, hand-bound notebook.
+   Q&A format — no bubbles, no role labels, no ChatGPT patterns.
+   Hierarchy from typography (size + weight), not position or color.
 */
 
 /* ===== OVERLAY ===== */
 .chat-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 80; /* above app header (z:70) */
+  z-index: 80;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   animation: chat-overlay-in var(--duration-slow) var(--ease-out) both;
 }
 
@@ -25,10 +23,11 @@
   to   { opacity: 1; }
 }
 
-/* ===== MODAL PANEL ===== */
+/* ===== MODAL PANEL =====
+   Focused width — closer to a letter or notebook page than a chat app. */
 .chat-modal {
-  width: min(720px, 92vw);
-  height: min(80vh, 800px);
+  width: min(600px, 92vw);
+  height: min(78vh, 800px);
   display: flex;
   flex-direction: column;
   background: var(--surface-3);
@@ -42,37 +41,42 @@
 }
 
 @keyframes chat-modal-in {
-  from { opacity: 0; transform: translateY(8px) scale(0.985); }
-  to   { opacity: 1; transform: translateY(0)   scale(1); }
+  from { opacity: 0; transform: translateY(8px) scale(0.984); }
+  to   { opacity: 1; transform: translateY(0)   scale(1);     }
 }
 
-/* ===== HEADER ===== */
+/* ===== HEADER =====
+   Minimal chrome — just session controls. No title competes with the conversation. */
 .chat-modal-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 20px;
+  justify-content: space-between;
+  padding: 12px 16px 12px 20px;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 
-/* Editorial title — display font at modal subheader scale (DS §2 hierarchy patterns). */
-.chat-modal-title {
-  flex: 1;
-  font-family: var(--font-display);
-  font-size: var(--text-md);
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: var(--text-secondary);
-  text-align: center;
+/* Left side — small context label when present, or empty */
+.chat-modal-context-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-/* DS §10 ghost buttons — outlined, no fill */
+/* Right side — controls */
+.chat-modal-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
 .chat-new-btn,
 .chat-close-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   background: transparent;
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
@@ -83,7 +87,9 @@
   font-weight: 500;
   line-height: 1;
   cursor: pointer;
-  transition: color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), background var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
 }
 
 .chat-new-btn:hover,
@@ -94,21 +100,21 @@
 }
 
 .chat-close-btn {
-  padding: 6px 8px;
-  border: 1px solid transparent;
+  padding: 5px 7px;
+  border-color: transparent;
 }
 
 .chat-close-btn:hover {
   border-color: var(--border-default);
 }
 
-/* ===== ATTACHED CHIPS (DS §10 chip pattern) ===== */
+/* ===== ATTACHED CHIPS ===== */
 .chat-attached {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
-  padding: 10px 20px;
+  padding: 8px 20px;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
@@ -118,13 +124,13 @@
   color: var(--text-muted);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  margin-right: 4px;
+  margin-right: 2px;
 }
 
 .chat-attached-chip {
   border: 1px solid var(--border-default);
   border-radius: 999px;
-  padding: 3px 10px;
+  padding: 2px 9px;
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
@@ -136,161 +142,312 @@
   flex: 1;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 24px 20px 16px;
+  /* Fade masks signal more content above/below without chrome */
+  mask-image: linear-gradient(to bottom,
+    transparent 0, #000 40px, #000 calc(100% - 40px), transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(to bottom,
+    transparent 0, #000 40px, #000 calc(100% - 40px), transparent 100%
+  );
+}
+
+.chat-scroller::-webkit-scrollbar { width: 4px; }
+.chat-scroller::-webkit-scrollbar-track { background: transparent; }
+.chat-scroller::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+}
+
+/* The conversation column — generous lateral padding, controlled line length */
+.chat-col {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: 40px 40px 28px;
 }
 
-.chat-scroller::-webkit-scrollbar { width: 8px; }
-.chat-scroller::-webkit-scrollbar-track { background: transparent; }
-.chat-scroller::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 4px;
-}
-
+/* ===== EMPTY STATE ===== */
 .chat-empty {
-  margin-top: 40px;
-  text-align: center;
-  font-style: italic;
-  font-size: var(--text-base);
-  color: var(--text-muted);
-}
-
-/* ===== MESSAGES =====
-   Equal-weight bubbles distinguished by alignment + subtle border, not by accent. */
-.msg {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  padding: 8px 0 0;
 }
 
-.msg-user     { align-items: flex-end;   }
-.msg-assistant { align-items: flex-start; }
-
-.msg-bubble {
-  max-width: 78%;
-  padding: 10px 14px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  font-family: var(--font-body);
-  font-size: var(--text-base);
-  line-height: 1.55;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+/* Large, light heading — editorial, not a chatbot greeting */
+.chat-empty-headline {
+  font-size: 28px;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   color: var(--text-primary);
 }
 
-/* User: outline only — keeps the page calm, no cyan accent */
-.msg-user .msg-bubble {
+.chat-empty-sub {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+/* Suggestion list — em-dash prefixed text links, not chip buttons */
+.chat-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 16px;
+}
+
+/* Each suggestion: left-flush, em dash as prefix, text-link style */
+.chat-suggestion {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   background: transparent;
-  border-color: var(--border-strong);
+  border: none;
+  padding: 7px 0;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--text-muted);
+  text-align: left;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: color var(--duration-fast) var(--ease-out);
+  line-height: 1.4;
 }
 
-/* Assistant: subtle fill, softer border */
-.msg-assistant .msg-bubble {
-  background: rgba(255, 255, 255, 0.03);
-  border-color: var(--border-subtle);
+.chat-suggestion:last-child {
+  border-bottom: none;
 }
 
-/* ===== TOOL STATUS =====
-   No emoji — DS §6 forbids emoji in chrome. Inline SVG indicator + Geist text. */
+.chat-suggestion::before {
+  content: '—';
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  opacity: 0.5;
+  transform: translateY(-0.5px);
+}
+
+.chat-suggestion:hover {
+  color: var(--text-secondary);
+}
+
+.chat-suggestion:hover::before {
+  opacity: 0.8;
+}
+
+/* ===== EXCHANGE SEPARATOR =====
+   Inserted between an agent answer and the next user question.
+   Acts as a visual paragraph break — like a section rule in print. */
+.chat-sep {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--border-default);
+  flex-shrink: 0;
+  margin: 16px 0 4px;
+}
+
+.chat-sep::before,
+.chat-sep::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+/* ===== MESSAGES (Q&A editorial format) ===== */
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.msg {
+  animation: msg-in var(--duration-base) var(--ease-out) both;
+}
+
+/* User question — display-scale, ultralight weight.
+   The contrast with the body-size answer communicates who's speaking
+   without role labels or positional bubbles. */
+.msg-q { }
+
+.msg-q-text {
+  font-size: 22px;
+  font-weight: 300;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* Agent answer — body text beneath the question */
+.msg-a {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.msg-a-body {
+  color: var(--text-secondary);
+}
+
+/* ===== COPY ACTION ===== */
+.msg-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.msg:hover .msg-actions { opacity: 1; }
+
+.msg-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
+}
+
+.msg-copy:hover {
+  color: var(--text-secondary);
+  border-color: var(--border-default);
+}
+
+.msg-copy.copied { color: var(--text-secondary); }
+
+/* ===== TOOL STATUS ===== */
 .tool-status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 0;
-  font-family: var(--font-body);
+  padding: 1px 0;
   font-size: var(--text-xs);
   color: var(--text-muted);
   font-feature-settings: 'tnum';
 }
 
 .tool-status.running { font-style: italic; }
-.tool-status.done    { color: var(--text-secondary); }
+.tool-status.done    { color: var(--border-strong); }
 
 .tool-status-icon {
-  width: 12px;
-  height: 12px;
+  width: 11px;
+  height: 11px;
   flex-shrink: 0;
 }
 
-.tool-status-name { color: inherit; }
+/* ===== STREAMING DOTS ===== */
+@keyframes msg-dot-pulse {
+  0%, 60%, 100% { opacity: 0.15; transform: translateY(0); }
+  30%            { opacity: 0.8;  transform: translateY(-3px); }
+}
+
+.msg-streaming {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 0 2px;
+}
+
+.msg-streaming span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  animation: msg-dot-pulse 1.4s ease-in-out infinite;
+}
+
+.msg-streaming span:nth-child(2) { animation-delay: 0.16s; }
+.msg-streaming span:nth-child(3) { animation-delay: 0.32s; }
 
 /* ===== ERROR ===== */
 .chat-error {
-  font-family: var(--font-body);
   font-size: var(--text-sm);
   color: rgba(255, 140, 120, 0.95);
-  padding: 8px 12px;
-  border: 1px solid rgba(255, 140, 120, 0.32);
-  border-radius: var(--radius-sm);
-  background: transparent;
+  padding: 8px 0;
+  border-top: 1px solid rgba(255, 140, 120, 0.2);
 }
 
-/* ===== INPUT (DS §10 input pattern) ===== */
+/* ===== INPUT =====
+   Clean pill at the bottom. Focus ring uses --accent per DS §3. */
 .chat-input-form {
-  display: flex;
-  gap: 8px;
-  padding: 12px 20px 16px;
+  padding: 12px 20px 18px;
   border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
+}
+
+.chat-input-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 0 16px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: transparent;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+
+/* DS §3: --accent is the right token for a focus ring */
+.chat-input-pill:focus-within {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 2px rgba(125, 249, 255, 0.08);
 }
 
 .chat-input {
   flex: 1;
   background: transparent;
   color: var(--text-primary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  padding: 9px 12px;
+  border: none;
+  padding: 12px 0;
   font-family: var(--font-body);
   font-size: var(--text-md);
   outline: none;
-  transition: border-color var(--duration-fast) var(--ease-out);
+  min-width: 0;
 }
 
 .chat-input::placeholder { color: var(--text-muted); }
+.chat-input:disabled { color: var(--text-secondary); cursor: not-allowed; }
 
-.chat-input:focus {
-  border-color: var(--border-strong);
-}
-
-.chat-input:disabled {
-  color: var(--text-secondary);
-  cursor: not-allowed;
-}
-
-/* DS §10 primary button — outlined, no fill */
 .chat-send-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   background: transparent;
-  color: var(--text-primary);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  padding: 8px 16px;
-  font-family: var(--font-body);
-  font-size: var(--text-base);
-  font-weight: 500;
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
 }
 
-.chat-send-btn:not(:disabled):hover { background: rgba(255, 255, 255, 0.04); }
-.chat-send-btn:not(:disabled):active { background: rgba(255, 255, 255, 0.08); }
+.chat-send-btn:not(:disabled):hover {
+  color: var(--text-secondary);
+  border-color: var(--border-default);
+  background: rgba(255, 255, 255, 0.04);
+}
 
 .chat-send-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.25;
   cursor: not-allowed;
 }
 
 /* ===== HISTORY LIST ===== */
-.chat-history-list {
-  padding: 4px 0 8px;
-}
+.chat-history-list { padding: 4px 0 8px; }
 
 .chat-history-empty {
   padding: 16px;
-  font-family: var(--font-body);
   font-size: var(--text-sm);
   color: var(--text-muted);
   text-align: center;
@@ -371,56 +528,53 @@
   outline-offset: 2px;
 }
 
+/* ===== REDUCED MOTION ===== */
 @media (prefers-reduced-motion: reduce) {
   .chat-modal,
-  .chat-modal-overlay {
+  .chat-modal-overlay,
+  .msg {
     animation: none;
   }
   .chat-history-item, .chat-history-item-delete { transition: none; }
 }
 
-/* ===== MARKDOWN (assistant messages only) =====
-   Stays inside .msg-bubble so spacing is local, not global. */
-.md-root > * + * { margin-top: 8px; }
-.md-root > .md-li + .md-li { margin-top: 4px; }
+/* ===== MARKDOWN (inside .msg-a-body) ===== */
+/* Base font-size is --text-md (14px) from the body wrapper. */
+.md-root > * + * { margin-top: 14px; }
 
-.md-p { margin: 0; }
+.md-p {
+  margin: 0;
+  line-height: 1.75;
+}
 
 .md-h {
   margin: 0;
-  font-family: var(--font-display);
-  font-weight: 500;
-  line-height: 1.25;
   color: var(--text-primary);
-  letter-spacing: 0.01em;
+  line-height: 1.25;
 }
-.md-h1 { font-size: var(--text-lg); }
-.md-h2 { font-size: var(--text-md); }
+.md-h1 { font-size: var(--text-lg);   font-weight: 500; letter-spacing: -0.01em; }
+.md-h2 { font-size: var(--text-md);   font-weight: 500; }
 .md-h3 { font-size: var(--text-base); font-weight: 600; }
 
-.md-ul,
-.md-ol {
+.md-ul, .md-ol {
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
-/* Editorial dash bullets (matches PersonModal's pm-list) */
 .md-ul { list-style: none; }
 .md-ul .md-li {
   position: relative;
   padding-left: 14px;
-  font-size: var(--text-base);
-  line-height: 1.55;
-  color: var(--text-primary);
+  line-height: 1.7;
 }
 .md-ul .md-li::before {
   content: '';
   position: absolute;
   left: 0;
-  top: 0.7em;
+  top: 0.71em;
   width: 6px;
   height: 1px;
   background: var(--text-muted);
@@ -428,51 +582,44 @@
 
 .md-ol {
   list-style: decimal;
-  padding-left: 22px;
+  padding-left: 20px;
 }
-.md-ol .md-li {
-  font-size: var(--text-base);
-  line-height: 1.55;
-  color: var(--text-primary);
-}
+.md-ol .md-li { line-height: 1.7; }
 .md-ol .md-li::marker { color: var(--text-muted); }
 
 .md-bold   { font-weight: 600; color: var(--text-primary); }
 .md-italic { font-style: italic; }
 
-/* DS §3: links are bright-text + underline, not accent-colored */
 .md-link {
-  color: var(--text-primary);
+  color: var(--text-secondary);
   text-decoration: underline;
   text-decoration-color: var(--border-strong);
   text-underline-offset: 2px;
-  transition: text-decoration-color var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out);
 }
-.md-link:hover { text-decoration-color: var(--text-primary); }
+.md-link:hover { color: var(--text-primary); }
 
 .md-code {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 0.92em;
-  padding: 1px 6px;
+  font-size: 0.9em;
+  padding: 1px 5px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-subtle);
-  color: var(--text-primary);
 }
 
 .md-pre {
   margin: 0;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border-default);
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   overflow-x: auto;
 }
 
 .md-code-block {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 0.92em;
-  color: var(--text-primary);
+  font-size: 0.9em;
   white-space: pre;
   background: transparent;
   border: none;

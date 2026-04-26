@@ -155,7 +155,7 @@ function median(nums) {
 let _client = null;
 function getClient() {
   if (_client) return _client;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set on the server');
   _client = new Anthropic({ apiKey });
   return _client;

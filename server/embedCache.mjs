@@ -21,7 +21,7 @@ function hashString(s) {
 
 // Real Voyage embed function. Batch endpoint takes up to 128 strings.
 async function voyageEmbed(texts) {
-  const apiKey = process.env.VOYAGE_API_KEY;
+  const apiKey = process.env.VOYAGE_API_KEY?.trim();
   if (!apiKey) throw new Error('VOYAGE_API_KEY not set');
   const res = await fetch('https://api.voyageai.com/v1/embeddings', {
     method: 'POST',

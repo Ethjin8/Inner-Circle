@@ -1,13 +1,9 @@
 // src/components/Chat/MessageBubble.jsx
-// Renders a single conversation entry. Two shapes:
-//   { role: 'user',      content }
-//   { role: 'assistant', content, toolEvents?: [{ name, status, summary? }] }
-// During streaming the in-memory message also carries `text` (live buffer) and
-// `streaming: true`; reloaded threads only have `content`.
+// Q&A editorial format — no bubbles, no role labels.
+// User questions render as large light headings; agent answers as body text beneath.
 import { useState } from 'react';
 import { Markdown } from '../../utils/markdown';
 
-// DS §6: no emoji in chrome — inline SVGs at 12-14px, stroke 1.5, currentColor.
 function ToolIcon({ status }) {
   const common = {
     width: 12, height: 12, viewBox: '0 0 24 24',
@@ -31,27 +27,26 @@ function StreamingDots() {
 
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false);
-  const onCopy = async () => {
+  const handle = async () => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1400);
-    } catch { /* clipboard unavailable */ }
+    } catch { /* unavailable */ }
   };
   return (
     <button
       type="button"
       className={`msg-copy ${copied ? 'copied' : ''}`}
-      onClick={onCopy}
-      aria-label={copied ? 'Copied' : 'Copy message'}
-      title={copied ? 'Copied' : 'Copy'}
+      onClick={handle}
+      aria-label={copied ? 'Copied' : 'Copy'}
     >
       {copied ? (
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <polyline points="20 6 9 17 4 12" />
         </svg>
       ) : (
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <rect x="9" y="9" width="13" height="13" rx="2" />
           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
         </svg>
@@ -60,26 +55,26 @@ function CopyButton({ text }) {
   );
 }
 
-export default function MessageBubble({ message }) {
+// User question — rendered as a large editorial heading.
+export function QuestionBubble({ message }) {
+  const body = message.text ?? message.content ?? '';
+  if (!body) return null;
+  return (
+    <div className="msg msg-q">
+      <p className="msg-q-text">{body}</p>
+    </div>
+  );
+}
+
+// Agent answer — rendered as flowing body text with optional tool metadata.
+export function AnswerBubble({ message }) {
   const body = message.text ?? message.content ?? '';
   const toolEvents = message.toolEvents || [];
 
-  if (message.role === 'user') {
-    if (!body) return null;
-    return (
-      <div className="msg msg-user">
-        <span className="msg-role">You</span>
-        <div className="msg-bubble">{body}</div>
-      </div>
-    );
-  }
-
-  // Assistant: skip entirely if there's nothing to show.
   if (!body && !toolEvents.length && !message.streaming) return null;
 
   return (
-    <div className="msg msg-assistant">
-      <span className="msg-role">Agent</span>
+    <div className="msg msg-a">
       {toolEvents.map((ev, i) => (
         <div key={i} className={`tool-status ${ev.status}`}>
           <ToolIcon status={ev.status} />
@@ -91,18 +86,28 @@ export default function MessageBubble({ message }) {
         </div>
       ))}
       {(body || message.streaming) && (
-        <div className="msg-bubble md-root">
+        <div className="msg-a-body md-root">
           {body ? <Markdown source={body} /> : <StreamingDots />}
-          {body && !message.streaming && <CopyButton text={body} />}
+        </div>
+      )}
+      {body && !message.streaming && (
+        <div className="msg-actions">
+          <CopyButton text={body} />
         </div>
       )}
     </div>
   );
 }
 
+// Default export dispatches to the correct component.
+export default function MessageBubble({ message }) {
+  if (message.role === 'user') return <QuestionBubble message={message} />;
+  return <AnswerBubble message={message} />;
+}
+
 function humanizeTool(name) {
-  if (name === 'get_person_details')        return 'Fetching person details';
-  if (name === 'find_people_by_attribute')  return 'Filtering constellation';
-  if (name === 'semantic_search')           return 'Searching constellation';
+  if (name === 'get_person_details')        return 'Fetching profile';
+  if (name === 'find_people_by_attribute')  return 'Searching constellation';
+  if (name === 'semantic_search')           return 'Searching memories';
   return name;
 }

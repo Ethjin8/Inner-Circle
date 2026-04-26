@@ -203,7 +203,7 @@ export function chatMiddleware() {
       res.setHeader('Connection', 'keep-alive');
       res.flushHeaders?.();
 
-      const apiKey = process.env.ANTHROPIC_API_KEY;
+      const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
       if (!apiKey) {
         sseWrite(res, 'error', { message: 'ANTHROPIC_API_KEY not set' });
         res.end();

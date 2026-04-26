@@ -12,6 +12,12 @@ import { makeThread } from '../../hooks/useChatHistory';
 //   initialAttachedNodeIds: string[]                            (chips at modal open)
 //   addThread: (thread) => Promise<void>                        (from useChatHistory)
 
+const SUGGESTIONS = [
+  "Who haven't I been in touch with for a while?",
+  "Who shares interests or a background with me?",
+  "Who should I reach out to this week?",
+];
+
 export default function ChatModal({
   open, onClose, people,
   initialThread, initialPrompt = '', initialAttachedNodeIds = [],
@@ -264,53 +270,80 @@ export default function ChatModal({
     >
       <div className="chat-modal" onMouseDown={(e) => e.stopPropagation()}>
         <header className="chat-modal-header">
-          <button className="chat-new-btn" onClick={handleNewChat} aria-label="Start a new chat">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            <span>New chat</span>
-          </button>
-          <span className="chat-modal-title">Constellation Chat</span>
-          <button className="chat-close-btn" onClick={handleClose} aria-label="Close">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+          {attachedNodeIds.length > 0 ? (
+            <div className="chat-attached" style={{ border: 'none', padding: '0', flex: 1 }}>
+              <span className="chat-attached-label">With:</span>
+              {attachedNodeIds.map((id) => {
+                const p = people.find((x) => x.id === id);
+                return <span key={id} className="chat-attached-chip">{p?.name ?? id}</span>;
+              })}
+            </div>
+          ) : (
+            <span className="chat-modal-context-label">Constellation Chat</span>
+          )}
+          <div className="chat-modal-controls">
+            <button className="chat-new-btn" onClick={handleNewChat} aria-label="Start a new chat">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              <span>New</span>
+            </button>
+            <button className="chat-close-btn" onClick={handleClose} aria-label="Close">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
         </header>
 
-        {attachedNodeIds.length > 0 && (
-          <div className="chat-attached">
-            <span className="chat-attached-label">Context:</span>
-            {attachedNodeIds.map((id) => {
-              const p = people.find((x) => x.id === id);
-              return <span key={id} className="chat-attached-chip">{p?.name ?? id}</span>;
-            })}
-          </div>
-        )}
-
         <div className="chat-scroller" ref={scrollerRef}>
-          {messages.length === 0 && (
-            <div className="chat-empty">Ask anything about the people in your constellation.</div>
-          )}
-          {messages.map((m, i) => <MessageBubble key={i} message={m} />)}
-          {errorMsg && <div className="chat-error">{errorMsg}</div>}
+          <div className="chat-col">
+            {messages.length === 0 && (
+              <div className="chat-empty">
+                <p className="chat-empty-headline">Your constellation.</p>
+                <p className="chat-empty-sub">Ask about the people in your life — who to reach out to, what you know, who you might be forgetting.</p>
+                <div className="chat-suggestions">
+                  {SUGGESTIONS.map((s) => (
+                    <button key={s} type="button" className="chat-suggestion" onClick={() => send(s)}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {messages.map((m, i) => (
+              <div key={i}>
+                {/* Insert a visual break between each agent answer and the next user question */}
+                {i > 0 && messages[i - 1].role === 'assistant' && m.role === 'user' && (
+                  <div className="chat-sep" aria-hidden="true" />
+                )}
+                <MessageBubble message={m} />
+              </div>
+            ))}
+            {errorMsg && <div className="chat-error">{errorMsg}</div>}
+          </div>
         </div>
 
         <form className="chat-input-form" onSubmit={handleSubmit}>
-          <input
-            className="chat-input"
-            type="text"
-            placeholder={streaming ? 'Streaming…' : 'Ask a follow-up…'}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            disabled={streaming}
-            autoFocus
-          />
-          <button className="chat-send-btn" type="submit" disabled={streaming || !input.trim()}>
-            Send
-          </button>
+          <div className="chat-input-pill">
+            <input
+              className="chat-input"
+              type="text"
+              placeholder={streaming ? 'Thinking…' : 'Ask about your constellation…'}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              disabled={streaming}
+              autoFocus
+            />
+            <button className="chat-send-btn" type="submit" disabled={streaming || !input.trim()} aria-label="Send">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <line x1="12" y1="19" x2="12" y2="5" />
+                <polyline points="5 12 12 5 19 12" />
+              </svg>
+            </button>
+          </div>
         </form>
       </div>
     </div>

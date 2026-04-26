@@ -49,7 +49,7 @@
   --text-muted: #55556a;
 
   --accent-cream: #e8e8f0;
-  --accent: #7df9ff; /* primary action / active-tab cyan */
+  --accent: #e8e8f0; /* primary action / active state - white */
 
   /* ---------- Celestial palette (graph) ----------
      Hues spaced ~50° apart around the wheel so adjacent categories
