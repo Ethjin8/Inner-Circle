@@ -520,6 +520,14 @@ export default function ConstellationGraph({ activeFilters, focusedCategory, onZ
       if (activeTool === 'snip') { const edge = hitTestEdge(mx, my); if (edge) onSnip?.(edge); return; }
       const node = hitTest(mx, my);
       if (!node || node.isCenter) return;
+
+      // Shift-click is a fast alias for double-click: skip the 250ms wait.
+      if (e.shiftKey) {
+        if (clickTimerRef.current) { clearTimeout(clickTimerRef.current); clickTimerRef.current = null; }
+        onNodeDoubleClick?.(node);
+        return;
+      }
+
       if (clickTimerRef.current) {
         clearTimeout(clickTimerRef.current); clickTimerRef.current = null;
         onNodeDoubleClick?.(node);
