@@ -1,0 +1,109 @@
+.legend {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-6, 24px);
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2, 8px);
+  max-width: calc(100vw - var(--space-6, 24px) * 2);
+  pointer-events: auto;
+  transition: opacity var(--duration-slow, 320ms) var(--ease-out, ease);
+}
+
+.legend-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: 4px 10px;
+  background: var(--surface-1, #0e0e0e);
+  border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10));
+  border-radius: var(--radius-full, 9999px);
+  color: var(--text-secondary);
+  font: 500 var(--text-sm, 12px)/1.4 var(--font-body, 'Geist', sans-serif);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast, 120ms) var(--ease-out, ease),
+    border-width var(--duration-fast, 120ms) var(--ease-out, ease),
+    color var(--duration-fast, 120ms) var(--ease-out, ease);
+}
+
+.legend-chip:hover {
+  border-color: var(--border-strong, rgba(255, 255, 255, 0.18));
+  color: var(--text-primary);
+}
+
+.legend-chip.is-active {
+  border-color: var(--chip-color);
+  border-width: 1.5px;
+  /* Keep padding visually identical despite border bump */
+  padding: calc(4px - 0.5px) calc(10px - 0.5px);
+  color: var(--text-primary);
+}
+
+.legend-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.legend-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--chip-color);
+  flex-shrink: 0;
+}
+
+.legend-chip-name {
+  letter-spacing: 0;
+}
+
+.legend-chip-count {
+  font-family: var(--font-mono, 'Geist Mono', ui-monospace, monospace);
+  font-size: var(--text-xs, 11px);
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.legend-chip.is-active .legend-chip-count {
+  color: var(--text-primary);
+}
+
+.legend-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: var(--space-2, 8px);
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-xs, 6px);
+  transition:
+    color var(--duration-fast, 120ms) var(--ease-out, ease),
+    background var(--duration-fast, 120ms) var(--ease-out, ease),
+    opacity var(--duration-base, 200ms) var(--ease-out, ease);
+}
+
+.legend-clear:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.legend-clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .legend, .legend-chip, .legend-clear { transition: none; }
+}
