@@ -17,11 +17,6 @@ const CATEGORIES = {
   other:        { color: '#bdc1c6' }, // neutral
 };
 
-function strengthToEdgeColor(strength) {
-  if (strength >= 65) return '120, 220, 170';   // sage green
-  if (strength >= 40) return '240, 210, 110';    // soft amber
-  return '220, 130, 130';                         // dusty rose
-}
 
 function daysSince(iso) {
   if (!iso) return Infinity;
@@ -1173,7 +1168,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
           const p = node.parentCat;
           if (!p || deletingIds.includes(p.id)) continue;
           const isHovPEdge = hoveredEdgeRef.current?.id === node.id;
-          const rgb = node.isScored ? strengthToEdgeColor(node.strength) : '160,160,170';
+          const rgb = '160,160,170';
           const ew = 1.0;
           const eMul = edgeAlphaMul(p.id, node.id, node.category);
           ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(node.x, node.y);

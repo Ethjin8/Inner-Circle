@@ -4,7 +4,7 @@
   left: 16px;
   bottom: 100px;
   width: 256px;
-  background: rgba(10, 10, 15, 0.85);
+  background: rgba(12, 12, 12, 0.2);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -60,7 +60,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(10, 10, 15, 0.85);
+  background: rgba(12, 12, 12, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -91,7 +91,7 @@
 .explorer-reveal:hover {
   color: var(--text-primary);
   border-color: rgba(255, 255, 255, 0.28);
-  background: rgba(20, 20, 28, 0.9);
+  background: rgba(22, 22, 22, 0.9);
 }
 
 .explorer-add-btn {
