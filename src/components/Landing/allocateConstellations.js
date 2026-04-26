@@ -5,7 +5,6 @@ const MIN_STARS = 3;
 const MAX_GROUPS = 2;
 
 const colorByType = Object.fromEntries(RELATIONSHIP_TYPES.map((t) => [t.key, t.color]));
-const labelByType = Object.fromEntries(RELATIONSHIP_TYPES.map((t) => [t.key, t.label]));
 
 // Pick a random unused constellation tied at the largest starCount <= count.
 const pickBestFit = (used, count) => {
@@ -50,7 +49,7 @@ export const allocateConstellations = (people) => {
     leftover.push(...extras);
     groups.push({
       shapeName: shape.name,
-      label: labelByType[type.key],
+      label: shape.name,
       stars: peopleToStars(assigned, shape),
       edges: shape.edges,
     });
