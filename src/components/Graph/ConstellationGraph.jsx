@@ -1136,30 +1136,20 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       // YOU drawn in world space, last so it stays on top.
       // First-experience preserves the pulsing "+" disc; otherwise we render
       // YOU as the brightest star at the heart of the constellation.
-      if (isFirstExperience) {
-        const bpm = 30;
-        const pulse = (Math.sin(timeRef.current * (bpm / 60) * 0.05) + 1) / 2;
-        const youRadius = 44 * (1 + 0.12 * pulse);
-        ctx.beginPath(); ctx.arc(youWorldX, youWorldY, youRadius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(232,232,240,1)'; ctx.fill();
-        ctx.strokeStyle = 'rgba(232,232,240,0.95)'; ctx.lineWidth = 2; ctx.stroke();
-        const plusAlpha = 0.3 + 0.7 * pulse;
-        ctx.fillStyle = `rgba(11,15,25,${plusAlpha})`;
-        ctx.font = "300 64px 'Inter',sans-serif";
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('+', youWorldX, youWorldY);
-      } else {
+      {
         const youHov = !!hoveredRef.current?.isCenter;
-        const youDim = (neighborSet && !neighborSet.has('you')) ? 0.40 : 1;
+        const youDim = (!isFirstExperience && neighborSet && !neighborSet.has('you')) ? 0.40 : 1;
         const youDrawR = 44;
         drawStarNode(ctx, { x: youWorldX, y: youWorldY }, youDrawR, '#ffffff', youDim, youHov);
-        ctx.fillStyle = `rgba(232,232,240,${0.95 * youDim})`;
-        ctx.font = "600 11px 'Space Grotesk','Inter',sans-serif";
-        if ('letterSpacing' in ctx) ctx.letterSpacing = '0.22em';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText('YOU', youWorldX, youWorldY + youDrawR * 0.48 + 14);
-        if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+        if (!isFirstExperience) {
+          ctx.fillStyle = `rgba(232,232,240,${0.95 * youDim})`;
+          ctx.font = "600 11px 'Space Grotesk','Inter',sans-serif";
+          if ('letterSpacing' in ctx) ctx.letterSpacing = '0.22em';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          ctx.fillText('YOU', youWorldX, youWorldY + youDrawR * 0.48 + 14);
+          if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+        }
       }
 
       if (isFirstExperience) {
