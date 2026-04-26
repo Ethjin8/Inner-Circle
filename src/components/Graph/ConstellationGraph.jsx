@@ -957,7 +957,7 @@ const internalPanRef = useRef({ x: 0, y: 0 });
         const greetingOffset = 40;
         const lineHeight = 50;
         const baseY = youWorldY + 44 + greetingOffset;
-        ctx.fillText(`Talk to me, ${userName}`, youWorldX, baseY);
+        ctx.fillText(`Talk to me, ${userName}.`, youWorldX, baseY);
       }
 
       ctx.restore();
