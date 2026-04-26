@@ -36,7 +36,7 @@ const CATEGORY_COLORS = {
 
 function App() {
   const { user, loading: authLoading, signOut } = useAuth();
-  const { people, addPerson, updatePerson, removePeople, restorePeople } = usePeople();
+  const { people, setPeople, addPerson, updatePerson, removePeople, restorePeople } = usePeople();
   const { photosByPerson, setPhotosForPerson } = usePhotos();
 
   const [activeFilters, setActiveFilters] = useState(() => new Set());
@@ -207,18 +207,14 @@ function App() {
     );
     scorePerson(person)
       .then((scoring) => {
-        setPeople((prev) =>
-          prev.map((p) =>
-            p.id === person.id
-              ? {
-                  ...p,
-                  scoring,
-                  relationship: { ...(p.relationship || {}), strength: scoring.aggregate },
-                  updated_at: scoring.scored_at,
-                }
-              : p,
-          ),
-        );
+        const patched = {
+          ...person,
+          scoring,
+          relationship: { ...(person.relationship || {}), strength: scoring.aggregate },
+          updated_at: scoring.scored_at,
+        };
+        setPeople((prev) => prev.map((p) => (p.id === person.id ? { ...p, ...patched } : p)));
+        updatePerson(patched);
       })
       .catch((err) => {
         console.error('Scoring failed for', person.name, err);
@@ -583,10 +579,13 @@ function App() {
         open={addPersonOpen}
         onClose={() => setAddPersonOpen(false)}
         onAdd={(person) => {
-          // Insert with no strength yet — the renderer treats unscored nodes
-          // as neutral grey so they don't fake a connection level. The AI
-          // pipeline runs async via scoreAndPatch and fills it in.
-          setPeople((prev) => [...prev, { ...person, scoring: { status: 'pending' } }]);
+          // Optimistic local insert (renderer treats unscored nodes as
+          // neutral grey) + Firestore persist. The AI pipeline runs async
+          // via scoreAndPatch and fills in the score; updatePerson there
+          // persists the score back to Firestore.
+          const pending = { ...person, scoring: { status: 'pending' } };
+          setPeople((prev) => [...prev, pending]);
+          addPerson(pending);
           scoreAndPatch(person);
         }}
       />
