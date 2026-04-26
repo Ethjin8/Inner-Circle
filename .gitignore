@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+.worktrees
+.claude
 
 serviceAccount.json
 # Editor directories and files

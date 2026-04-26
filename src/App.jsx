@@ -12,7 +12,11 @@ import { useAuth } from './contexts/AuthContext';
 import { usePeople } from './hooks/usePeople';
 import { usePhotos } from './hooks/usePhotos';
 import { scorePerson } from './services/scoring';
+import ChatModal from './components/Chat/ChatModal';
+import ChatHistory from './components/Chat/ChatHistory';
+import { useChatHistory } from './hooks/useChatHistory';
 import './App.css';
+import './components/Chat/Chat.css';
 
 const FILTERS = [
   { key: null, label: 'All' },
@@ -67,9 +71,6 @@ function App() {
   const [deletedHistory, setDeletedHistory] = useState([]); // undo stack: [{type:'person'|'category', ids:[]}]
   const [searchQuery, setSearchQuery] = useState('');
   const [showDemo, setShowDemo] = useState(false); // testing: show demo people without persisting
-  const [gmailDraft, setGmailDraft] = useState(null);
-  const [calendarEvent, setCalendarEvent] = useState(null);
-  const [isAiLoading, setIsAiLoading] = useState(false);
   const promptInputRef = useRef(null);
   const [autoExpanded, setAutoExpanded] = useState(false);
   const [interactionTick, setInteractionTick] = useState(0);
@@ -79,6 +80,19 @@ function App() {
     setAutoExpanded(false);
   }, []);
   const isPromptExpanded = promptText.length > 0 || attachedNodes.length > 0 || autoExpanded;
+
+  const [chatModalOpen, setChatModalOpen] = useState(false);
+  const [chatInitialThread, setChatInitialThread] = useState(null);
+  const [chatInitialPrompt, setChatInitialPrompt] = useState('');
+  const [chatInitialAttachedIds, setChatInitialAttachedIds] = useState([]);
+  const [activeDraft, setActiveDraft] = useState(null);
+  const [activeEvent, setActiveEvent] = useState(null);
+  const { threads: chatThreads, addThread: addChatThread, deleteThread: deleteChatThread } = useChatHistory();
+
+  const handleChatAction = useCallback((payload) => {
+    if (payload?.kind === 'email') setActiveDraft(payload);
+    else if (payload?.kind === 'calendar') setActiveEvent(payload);
+  }, []);
 
   const displayPeople = useMemo(() => (
     showDemo ? [...people, ...DEMO_PEOPLE.map(p => ({ ...p, isDemo: true }))] : people
@@ -256,34 +270,20 @@ function App() {
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     if (!promptText.trim() && attachedNodes.length === 0) return;
-
-    setIsAiLoading(true);
-    setGmailDraft(null);
-
-    try {
-      const response = await fetch('http://localhost:3001/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: promptText,
-          contextNodes: attachedNodes,
-        })
-      });
-
-      const data = await response.json();
-      if (data.type === 'calendar') {
-        setCalendarEvent(data);
-      } else if (data.type === 'email' || data.subject || data.body) {
-        setGmailDraft(data);
-      }
-    } catch (err) {
-      console.error('AI Error:', err);
-    } finally {
-      setIsAiLoading(false);
-      setPromptText('');
-      setAttachedNodes([]);
-    }
+    setChatInitialThread(null);
+    setChatInitialPrompt(promptText);
+    setChatInitialAttachedIds(attachedNodes.map((n) => n.id));
+    setChatModalOpen(true);
+    setPromptText('');
+    setAttachedNodes([]);
   }, [promptText, attachedNodes]);
+
+  const handleOpenThread = useCallback((thread) => {
+    setChatInitialThread(thread);
+    setChatInitialPrompt('');
+    setChatInitialAttachedIds([]);
+    setChatModalOpen(true);
+  }, []);
 
   const stageStyle = zoomTarget
     ? { transformOrigin: `${zoomTarget.x}px ${zoomTarget.y}px` }
@@ -613,6 +613,11 @@ function App() {
           </div>
         )}
         <div className="prompt-switcher">
+          <ChatHistory
+            threads={chatThreads}
+            onOpenThread={handleOpenThread}
+            onDeleteThread={deleteChatThread}
+          />
           <button
             className="prompt-add-button"
             onClick={() => { setAddPersonIsSelf(false); setAddPersonOpen(true); }}
@@ -629,31 +634,48 @@ function App() {
               ref={promptInputRef}
               className="prompt-input"
               type="text"
-              placeholder={isAiLoading ? "Thinking..." : "Ask about your connections..."}
+              placeholder="Ask about your connections..."
               value={promptText}
               onChange={(e) => setPromptText(e.target.value)}
-              disabled={isAiLoading}
               tabIndex={isPromptExpanded ? 0 : -1}
             />
             <button
               className="prompt-submit"
               type="submit"
-              disabled={isAiLoading || (!promptText.trim() && attachedNodes.length === 0)}
+              disabled={!promptText.trim() && attachedNodes.length === 0}
               tabIndex={isPromptExpanded ? 0 : -1}
             >
-              {isAiLoading ? (
-                <div className="ai-loader" />
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </button>
           </form>
         </div>
         <div className="prompt-hint">Click a node to view details — double-click to attach as context</div>
       </div>}
 
+      <ChatModal
+        open={chatModalOpen}
+        onClose={() => setChatModalOpen(false)}
+        people={displayPeople}
+        initialThread={chatInitialThread}
+        initialPrompt={chatInitialPrompt}
+        initialAttachedNodeIds={chatInitialAttachedIds}
+        addThread={addChatThread}
+        onAction={handleChatAction}
+      />
+      {activeDraft && (
+        <GmailDraftEditor
+          draft={activeDraft}
+          onClose={() => setActiveDraft(null)}
+        />
+      )}
+      {activeEvent && (
+        <CalendarEventCard
+          event={activeEvent}
+          onClose={() => setActiveEvent(null)}
+        />
+      )}
       <AddPersonModal
         open={addPersonOpen}
         isSelf={addPersonIsSelf}
@@ -669,20 +691,6 @@ function App() {
           scoreAndPatch(person);
         }}
       />
-
-      {gmailDraft && (
-        <GmailDraftEditor
-          draft={gmailDraft}
-          onClose={() => setGmailDraft(null)}
-        />
-      )}
-
-      {calendarEvent && (
-        <CalendarEventCard
-          event={calendarEvent}
-          onClose={() => setCalendarEvent(null)}
-        />
-      )}
     </div>
     )}
     </>

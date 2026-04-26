@@ -112,7 +112,12 @@ async function scoreOnce(client, person, systemPrompt) {
     temperature: 1.0,
     thinking: { type: 'adaptive' },
     output_config: { effort: EFFORT },
-    system: systemPrompt,
+    // Cache the system prompt (anchors doc + rubric instructions). It is
+    // byte-identical across all samples and all rescores, so subsequent calls
+    // within the 5-minute TTL pay ~10% of normal input cost on this prefix.
+    system: [
+      { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } },
+    ],
     tools: [SUBMIT_SCORE_TOOL],
     messages: [
       {
@@ -124,6 +129,11 @@ async function scoreOnce(client, person, systemPrompt) {
       },
     ],
   });
+
+  const u = resp.usage || {};
+  console.log(
+    `[scorePerson] usage input=${u.input_tokens ?? 0} cache_write=${u.cache_creation_input_tokens ?? 0} cache_read=${u.cache_read_input_tokens ?? 0} output=${u.output_tokens ?? 0}`,
+  );
 
   const toolUse = resp.content.find((c) => c.type === 'tool_use');
   if (!toolUse) throw new Error('No tool_use block — model did not call submit_score');

@@ -610,9 +610,11 @@ const internalPanRef = useRef({ x: 0, y: 0 });
       if (!node) return;
       if (node.isCenter) { onCenterClick?.(); return; }
       if (e.shiftKey && !node.isCategory) {
+        if (clickTimerRef.current) { clearTimeout(clickTimerRef.current); clickTimerRef.current = null; }
         onNodeDoubleClick?.(node);
         return;
       }
+
       if (clickTimerRef.current) {
         clearTimeout(clickTimerRef.current); clickTimerRef.current = null;
         onNodeDoubleClick?.(node);

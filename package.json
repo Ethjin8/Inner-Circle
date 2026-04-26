@@ -8,7 +8,6 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "server": "node server/index.mjs",
     "test": "node --test src/**/*.test.mjs",
     "score": "node scripts/score.mjs",
     "score:validate": "node scripts/score.mjs data/validation/01_acquaintance.json data/validation/02_classmate.json data/validation/03_friend.json data/validation/04_close_friend.json data/validation/05_inner_circle.json data/validation/06_structured_only.json"
