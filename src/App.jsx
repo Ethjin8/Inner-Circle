@@ -643,7 +643,7 @@ function App() {
   return (
     <>
     {(view === 'landing' || landingExiting) && (
-      <Landing user={user} onEnter={handleEnterFromLanding} />
+      <Landing user={user} people={displayPeople} onEnter={handleEnterFromLanding} />
     )}
     {view === 'app' && (
     <div className="app">
@@ -799,16 +799,6 @@ function App() {
           </div>
         )}
         <div className="prompt-switcher">
-          <button
-            className="prompt-add-button"
-            onClick={() => setAddPersonOpen(true)}
-            aria-label="Add person"
-            title="Add person"
-          >
-            <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-              <path d="M10 4v12M4 10h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          </button>
           <form className="prompt-form" onSubmit={handleSubmit}>
             {slashRange && slashMatches.length > 0 && (
               <ScrollFadePicker activeIndex={slashIndex}>
@@ -880,16 +870,31 @@ function App() {
                 tabIndex={isPromptExpanded ? 0 : -1}
               />
             </div>
-            <button
-              className="prompt-submit"
-              type="submit"
-              disabled={!promptText.trim() && attachedNodes.length === 0}
-              tabIndex={isPromptExpanded ? 0 : -1}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
+            {(() => {
+              const isAdd = !promptText.trim() && attachedNodes.length === 0;
+              return (
+                <button
+                  className={`prompt-submit ${isAdd ? 'is-add' : ''}`}
+                  type={isAdd ? 'button' : 'submit'}
+                  onClick={isAdd ? () => setAddPersonOpen(true) : undefined}
+                  aria-label={isAdd ? 'Add person' : 'Send'}
+                  title={isAdd ? 'Add person' : 'Send'}
+                  tabIndex={isPromptExpanded ? 0 : -1}
+                >
+                  <span className="prompt-submit-icon prompt-submit-icon--add" aria-hidden>
+                    <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+                      <circle cx="10" cy="7" r="3.2" stroke="currentColor" strokeWidth="1.6" />
+                      <path d="M3.8 16.5c1.2-2.6 3.6-4.1 6.2-4.1s5 1.5 6.2 4.1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                    </svg>
+                  </span>
+                  <span className="prompt-submit-icon prompt-submit-icon--send" aria-hidden>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </button>
+              );
+            })()}
           </form>
         </div>
         <div className="prompt-hint">Click a node to view details — double-click to attach as context</div>
